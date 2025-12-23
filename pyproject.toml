@@ -1,0 +1,13 @@
+[project]
+name = "pos-system"
+version = "0.1.0"
+description = "POS system 2.0"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.3.1",
+    "fastapi>=0.124.4",
+    "pydantic[email]>=2.12.5",
+    "ruff>=0.14.9",
+    "uvicorn>=0.38.0",
+]
