@@ -10,7 +10,7 @@
 
 # @product_router.get("", status_code=status.HTTP_200_OK)
 # async def get_products(
-#     current_user: user_schema.User = Depends(get_current_user), 
+#     current_user: user_schema.User = Depends(get_current_user),
 # ):
 #     products = await crud.get_products()
 #     return {"products": products}

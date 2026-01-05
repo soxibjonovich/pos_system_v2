@@ -9,7 +9,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     pin: int = Field(..., ge=1000, le=999999)
-    
+
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v):
@@ -22,7 +22,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     full_name: str | None = Field(None, min_length=2, max_length=100)
     pin: int | None = Field(None, ge=1000, le=999999)
-    
+
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v):
@@ -37,5 +37,5 @@ class UserResponse(UserBase):
     id: int
     role: str
     status: str
-    
+
     model_config = {"from_attributes": True}

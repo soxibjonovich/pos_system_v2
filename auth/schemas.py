@@ -9,7 +9,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     pin: int = Field(...)
-    
+
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v):
@@ -25,14 +25,14 @@ class UserResponse(UserBase):
     role: str
     status: str
     last_login: datetime | None = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
 class UserLogin(BaseModel):
     username: str = Field(..., min_length=2, max_length=50)
     pin: int = Field(..., ge=1000, le=999999)
-    
+
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v):

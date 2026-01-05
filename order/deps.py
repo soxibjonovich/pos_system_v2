@@ -1,12 +1,8 @@
 from authx import TokenPayload
 from fastapi import Depends, HTTPException, status
-
-from admin.crud import users as crud
-from admin.schemas.users import User
-
-
+from order import crud
+from order.schemas import User
 from config import auth
-
 from enum import Enum
 
 
@@ -20,19 +16,17 @@ async def get_current_user(
 ) -> User:
     try:
         username: str = token.sub
-        print(username)
         if not username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token payload",
                 headers={"WWW-Authenticate": "Bearer"},
             )
-
         user = await crud.get_user_by_username(username)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not authorized",
+                detail="User not found or not authorized",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -41,7 +35,9 @@ async def get_current_user(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Auth error: {e}")
+        print(
+            f"Auth error: {e}"
+        )  # Log it for debugging (but make sure to sanitize any sensitive info)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate credentials",
@@ -49,17 +45,13 @@ async def get_current_user(
         )
 
 
-async def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role != UserRole.ADMIN:
+async def has_role(current_user: User, required_roles: list[UserRole]):
+    if current_user.role not in required_roles:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
+            status_code=status.HTTP_403_FORBIDDEN, detail="Access denied"
         )
     return current_user
 
 
 async def get_current_staff(current_user: User = Depends(get_current_user)) -> User:
-    if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Staff access required"
-        )
-    return current_user
+    return await has_role(current_user, [UserRole.STAFF.value])

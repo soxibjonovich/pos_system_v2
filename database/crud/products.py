@@ -48,15 +48,17 @@ async def update_product(db: AsyncSession, product: schema.Product) -> Product:
     return old_product
 
 
-async def delete_product(db: AsyncSession, id: int) -> bool:
-    try:
-        product = await get_product_by_id(db, id)
-        if not product:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT, detail="Product is not found."
-            )
-        await db.delete(product)
-        await db.commit()
-        return True
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=e)
+async def delete_product(db: AsyncSession, id: int):
+    """Удалить продукт по ID. Возвращает результат операции."""
+    product = await get_product_by_id(db, id)
+
+    if not product:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found."
+        )
+
+    # Удаление
+    await db.delete(product)
+    await db.commit()
+
+    return {"message": "Product deleted successfully", "id": id}

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from contextlib import asynccontextmanager
-from database.api import users, products
+from database.api import users, products, order
 from database.database import engine, Base
 
 
@@ -35,16 +35,13 @@ async def health():
 
 app.include_router(users.user_router, prefix="/users", tags=["Users"])
 app.include_router(products.product_router, prefix="/products", tags=["Products"])
+app.include_router(order.order_router, prefix="/orders", tags=["Orders"])
 
 
 def run_database():
     import uvicorn
-    uvicorn.run(
-        "database:app",
-        host="0.0.0.0",
-        port=8003,
-        log_level="error"
-    )
+
+    uvicorn.run("database:app", host="0.0.0.0", port=8002, log_level="error")
 
 
 if __name__ == "__main__":

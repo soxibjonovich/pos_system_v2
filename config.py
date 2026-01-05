@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///db.sqlite3"
     SECRET_KEY: str = "something"
     ALGORITHM: str = "HS256"
-    WHITE_LIST: dict[str, str] = {} #deprecated
-    
+    WHITE_LIST: dict[str, str] = {}  # deprecated
+
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
 

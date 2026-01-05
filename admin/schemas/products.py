@@ -6,10 +6,11 @@ class ProductBase(BaseModel):
     description: str | None = Field()
     quantity: int = Field()
     price: float = Field()
-    
+
 
 class Product(ProductBase):
     pass
-    
+
+
 class Products(BaseModel):
     products: list[Product]

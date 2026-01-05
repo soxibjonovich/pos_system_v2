@@ -28,10 +28,11 @@ async def get_user_by_id(id: int, db: AsyncSession = Depends(get_db)):
     return user
 
 
-@user_router.post("", response_model=users_schema.UserResponse, status_code=status.HTTP_201_CREATED)
+@user_router.post(
+    "", response_model=users_schema.UserResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_user(
-    user: users_schema.UserCreate,
-    db: AsyncSession = Depends(get_db)
+    user: users_schema.UserCreate, db: AsyncSession = Depends(get_db)
 ):
     return await users_crud.create_user(db, user)
 

@@ -1,80 +1,135 @@
 import multiprocessing
 import sys
 import signal
+import subprocess
 from typing import List
 
+
 def start_admin():
-    """Запуск админ сервиса на порту 8004"""
+    """Запуск админ сервиса на порту 8001"""
     from admin import run_admin
-    
-    print("[*] Starting Admin Service on port 8004...")
+
     run_admin()
 
+
 def start_db():
-    """Запуск базы данных на порту 8003"""
+    """Запуск базы данных на порту 8002"""
     from database import run_database
 
-    print("[*] Starting Database Service on port 8003...")
     run_database()
 
 
 def start_auth():
-    """Запуск сервиса авторизации на порту 8001"""
+    """Запуск сервиса авторизации на порту 8003"""
     from auth import run_auth
 
-    print("[*] Starting Auth Service on port 8001...")
     run_auth()
 
 
-def signal_handler(signum, frame, processes: List[multiprocessing.Process]):
+def start_order():
+    """Запуск сервиса ордеров на порту 8004"""
+    from order import run_order
+
+    run_order()
+
+
+def start_redis():
+    """Запуск Redis сервиса"""
+    print("\033[92m[*] Starting Redis Server...\033[0m")  # Green for success
+    redis_proc = subprocess.Popen(
+        ["redis-server", "--loglevel", "warning"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    redis_proc.wait()
+    return redis_proc
+
+
+def stop_redis(redis_proc):
+    """Gracefully stop Redis"""
+    if redis_proc:
+        print("\033[91m[*] Stopping Redis Server...\033[0m")  # Red for action
+        redis_proc.terminate()  # Attempt graceful shutdown
+        try:
+            redis_proc.wait(timeout=5)  # Wait for termination
+        except subprocess.TimeoutExpired:
+            print(
+                "\033[91m[*] Redis did not shut down gracefully. Force killing...\033[0m"
+            )
+            redis_proc.kill()  # Force kill if not terminated
+        print("\033[92m[*] Redis Server stopped.\033[0m")  # Green for success
+
+
+def signal_handler(signum, frame, processes: List[multiprocessing.Process], redis_proc):
     """Обработчик сигналов для graceful shutdown"""
-    print("\n[*] Received shutdown signal. Terminating services...")
+    print("\n\033[93m[*] Received shutdown signal. Terminating services...\033[0m")
+
+    # Stop Redis before terminating other processes
+    stop_redis(redis_proc)
+
     for proc in processes:
         if proc.is_alive():
+            print(f"\033[93m[*] Stopping {proc.name}...\033[0m")
             proc.terminate()
             proc.join(timeout=3)
             if proc.is_alive():
-                proc.kill()
+                proc.kill()  # Force kill if not terminated
+            print(f"\033[92m[*] {proc.name} stopped.\033[0m")
+
+    print("\033[92m[*] All services stopped.\033[0m")
     sys.exit(0)
 
 
 def main():
     """Основная функция запуска микросервисов"""
     print("=" * 60)
-    print("🚀 Launching Micro Services")
+    print("\033[94m🚀 Launching Micro Services...\033[0m")
     print("=" * 60)
 
-    # Создаем процессы
-    db_proc = multiprocessing.Process(target=start_db, name="database")
-    auth_proc = multiprocessing.Process(target=start_auth, name="auth")
-    admin_proc = multiprocessing.Process(target=start_admin, name="admin")
-    processes = [db_proc, auth_proc, admin_proc]
+    # Create processes for each service
+    db_proc = multiprocessing.Process(target=start_db, name="Database")
+    auth_proc = multiprocessing.Process(target=start_auth, name="Auth")
+    admin_proc = multiprocessing.Process(target=start_admin, name="Admin")
+    order_proc = multiprocessing.Process(target=start_order, name="Order")
+
+    # Redis will be handled separately (start and stop)
+    redis_proc = None
+
+    processes = [db_proc, auth_proc, admin_proc, order_proc]
 
     try:
-        # Запускаем сервисы
-        auth_proc.start()
+        # Start Redis first
+        redis_proc = start_redis()
+
+        # Start all other services
         db_proc.start()
+        auth_proc.start()
         admin_proc.start()
+        order_proc.start()
 
-        print("✅ All services started successfully!")
-        for service in [db_proc, auth_proc, admin_proc]:
-            print(f"[*] {service.name} -> {service.pid}")
+        print("\033[92m✅ All services started successfully!\033[0m")
+        for service in [db_proc, auth_proc, admin_proc, order_proc]:
+            print(f"\033[94m[*] {service.name} -> PID: {service.pid}\033[0m")
 
-        # Регистрируем обработчик сигналов
-        signal.signal(signal.SIGINT, lambda s, f: signal_handler(s, f, processes))
-        signal.signal(signal.SIGTERM, lambda s, f: signal_handler(s, f, processes))
+        # Register signal handlers
+        signal.signal(
+            signal.SIGINT, lambda s, f: signal_handler(s, f, processes, redis_proc)
+        )
+        signal.signal(
+            signal.SIGTERM, lambda s, f: signal_handler(s, f, processes, redis_proc)
+        )
 
-        # Ждем завершения процессов
+        # Wait for all processes to finish
         for proc in processes:
             proc.join()
 
     except KeyboardInterrupt:
-        print("\n[*] KeyboardInterrupt received. Shutting down...")
+        print("\n\033[93m[*] KeyboardInterrupt received. Shutting down...\033[0m")
     except Exception as e:
-        print(f"❌ Error starting services: {e}")
+        print(f"\033[91m❌ Error starting services: {e}\033[0m")
     finally:
         # Graceful shutdown
-        print("[*] Shutting down services...")
+        print("\033[93m[*] Shutting down services...\033[0m")
         for proc in processes:
             if proc.is_alive():
                 proc.terminate()
@@ -82,10 +137,14 @@ def main():
                 if proc.is_alive():
                     proc.kill()
 
-        print("👋 All services stopped.")
+        # Ensure Redis is also shut down
+        stop_redis(redis_proc)
+
+        print("\033[92m👋 All services stopped.\033[0m")
         sys.exit(0)
 
 
 if __name__ == "__main__":
-    multiprocessing.set_start_method("spawn", force=True)  # Для совместимости
+    # Set the start method for multiprocessing (necessary on macOS)
+    multiprocessing.set_start_method("spawn", force=True)
     main()
