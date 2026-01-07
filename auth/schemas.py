@@ -46,6 +46,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_at: int
+    role: str
 
 
 class TokenVerifyRequest(BaseModel):

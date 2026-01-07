@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     VERSION: str = "1.3"
     API_V1_STR: str = "/api/v1"
     DATABASE_URL: str = "sqlite+aiosqlite:///db.sqlite3"
+    RABBITMQ_URL: str = "amqp://guest:guest@localhost:5672/"
     SECRET_KEY: str = "something"
     ALGORITHM: str = "HS256"
     WHITE_LIST: dict[str, str] = {}  # deprecated

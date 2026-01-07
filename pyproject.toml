@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "aio-pika>=9.5.8",
     "aiosqlite>=0.22.1",
     "alembic>=1.17.2",
     "authx>=1.4.3",
@@ -19,4 +20,5 @@ dependencies = [
     "ruff>=0.14.10",
     "sqlalchemy>=2.0.45",
     "uvicorn>=0.40.0",
+    "websockets>=15.0.1",
 ]

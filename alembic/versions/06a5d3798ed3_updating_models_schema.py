@@ -1,8 +1,8 @@
-"""updating models
+"""updating models schema
 
-Revision ID: 3343ebe1e301
+Revision ID: 06a5d3798ed3
 Revises: 
-Create Date: 2026-01-05 21:54:05.785378
+Create Date: 2026-01-06 13:55:07.753899
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '3343ebe1e301'
+revision: str = '06a5d3798ed3'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -27,13 +27,16 @@ def upgrade() -> None:
     sa.Column('description', sa.Text(), nullable=True),
     sa.Column('quantity', sa.Integer(), nullable=False),
     sa.Column('price', sa.Numeric(precision=10, scale=2), nullable=False),
-    sa.Column('is_active', sa.Boolean(), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
+    sa.Column('cost', sa.Numeric(precision=10, scale=2), nullable=True),
+    sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.CheckConstraint('cost >= 0 OR cost IS NULL', name='check_cost_non_negative'),
     sa.CheckConstraint('price > 0', name='check_price_positive'),
     sa.CheckConstraint('quantity >= -1', name='check_quantity_valid'),
     sa.PrimaryKeyConstraint('id')
     )
+    op.create_index(op.f('ix_products_id'), 'products', ['id'], unique=False)
     op.create_index(op.f('ix_products_title'), 'products', ['title'], unique=True)
     op.create_table('users',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
@@ -44,7 +47,8 @@ def upgrade() -> None:
     sa.Column('status', sa.Enum('ACTIVE', 'INACTIVE', name='userstatus'), nullable=False),
     sa.Column('work_status', sa.Enum('ACTIVE', 'INACTIVE', name='userstatus'), nullable=False),
     sa.Column('last_login', sa.DateTime(timezone=True), nullable=True),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
     sa.CheckConstraint('pin >= 1000 AND pin <= 999999', name='check_pin_range'),
     sa.PrimaryKeyConstraint('id')
     )
@@ -53,10 +57,12 @@ def upgrade() -> None:
     op.create_table('orders',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
     sa.Column('user_id', sa.Integer(), nullable=False),
-    sa.Column('total', sa.Float(), nullable=True),
+    sa.Column('total', sa.Float(), nullable=False),
     sa.Column('status', sa.Enum('PENDING', 'PREPARING', 'READY', 'COMPLETED', 'CANCELLED', name='orderstatus'), nullable=False),
-    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=True),
+    sa.Column('notes', sa.Text(), nullable=True),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('(CURRENT_TIMESTAMP)'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), nullable=True),
+    sa.Column('completed_at', sa.DateTime(timezone=True), nullable=True),
     sa.CheckConstraint('total >= 0', name='check_total_non_negative'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
@@ -99,5 +105,6 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_table('users')
     op.drop_index(op.f('ix_products_title'), table_name='products')
+    op.drop_index(op.f('ix_products_id'), table_name='products')
     op.drop_table('products')
     # ### end Alembic commands ###

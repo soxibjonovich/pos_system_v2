@@ -1,12 +1,11 @@
 from typing import Sequence
 
-from fastapi import status, HTTPException
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import Product
 from database.schemas import products as schema
+from shared.rabbitmq_client import rabbitmq_client
 
 
 async def get_products(db: AsyncSession) -> Sequence[Product]:
@@ -19,46 +18,81 @@ async def get_product_by_id(db: AsyncSession, id: int) -> Product | None:
     return result.scalar_one_or_none()
 
 
-async def create_product(
-    db: AsyncSession, product_data: schema.ProductCreate
-) -> Product:
-    product = Product(**product_data.model_dump())
-    db.add(product)
-
+async def create_product(db: AsyncSession, product: schema.ProductCreate) -> Product:
+    new_product = Product(**product.model_dump())
+    db.add(new_product)
+    
     try:
         await db.commit()
-        await db.refresh(product)
-        return product
+        await db.refresh(new_product)
+        
+        # Publish event to RabbitMQ
+        await rabbitmq_client.publish(
+            "product.created",
+            {
+                "action": "created",
+                "product_id": new_product.id,
+                "title": new_product.title,
+                "price": float(new_product.price),
+                "quantity": new_product.quantity,
+            }
+        )
+        
+        return new_product
+    except Exception:
+        await db.rollback()
+        raise
+    
+async def update_product(db: AsyncSession, product_id: int, product: schema.Product) -> Product | None:
+    existing_product = await get_product_by_id(db, product_id)
+    
+    if not existing_product:
+        return None
+    
+    for key, value in product.model_dump(exclude_unset=True).items():
+        setattr(existing_product, key, value)
+    
+    try:
+        await db.commit()
+        await db.refresh(existing_product)
+        
+        # Publish event
+        await rabbitmq_client.publish(
+            "product.updated",
+            {
+                "action": "updated",
+                "product_id": existing_product.id,
+                "title": existing_product.title,
+                "price": float(existing_product.price),
+                "quantity": existing_product.quantity,
+            }
+        )
+        
+        return existing_product
     except Exception:
         await db.rollback()
         raise
 
-
-async def update_product(db: AsyncSession, product: schema.Product) -> Product:
-    old_product = await get_product_by_id(db, product.id)
-    if not old_product:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Owner is not found."
-        )
-    for key, value in product.model_dump().items():
-        setattr(old_product, key, value)
-    await db.commit()
-    await db.refresh(old_product)
-
-    return old_product
-
-
-async def delete_product(db: AsyncSession, id: int):
-    """Удалить продукт по ID. Возвращает результат операции."""
-    product = await get_product_by_id(db, id)
-
+async def delete_product(db: AsyncSession, product_id: int) -> bool:
+    product = await get_product_by_id(db, product_id)
+    
     if not product:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Product not found."
+        return False
+    
+    try:
+        await db.delete(product)
+        await db.commit()
+        
+        # Publish event
+        await rabbitmq_client.publish(
+            "product.deleted",
+            {
+                "action": "deleted",
+                "product_id": product_id,
+            }
         )
-
-    # Удаление
-    await db.delete(product)
-    await db.commit()
-
-    return {"message": "Product deleted successfully", "id": id}
+        
+        return {"message": "Product deleted successfully", "id": id}
+    except Exception:
+        await db.rollback()
+        raise

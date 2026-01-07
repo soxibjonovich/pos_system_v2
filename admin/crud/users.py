@@ -3,6 +3,7 @@ from fastapi import HTTPException, status
 
 from admin.schemas import users as schema
 from admin.schemas.users import User, Users
+from shared.rabbitmq_client import rabbitmq_client
 
 
 class ServiceClient:
@@ -144,7 +145,17 @@ async def create_user(user_in: schema.UserCreate) -> User | None:
         )
 
         if response.status_code == 201:
-            return User.model_validate_json(response.content)
+            user = User.model_validate_json(response.content)
+            await rabbitmq_client.publish(
+                "user.created",
+                {
+                    "action": "created",
+                    "user_id": user.id,
+                    "username": user.username,
+                    "role": user.role,
+                }
+            )
+            return user
 
         return None
 

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from datetime import timedelta
 
+from fastapi.middleware.cors import CORSMiddleware
 import redis.asyncio as redis
 from authx import TokenPayload
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -26,6 +27,16 @@ async def lifespan(app: FastAPI):
 
 auth_app = FastAPI(title="Auth Microservice", version="1.7", lifespan=lifespan)
 
+auth_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:5173", 
+        "http://localhost:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @auth_app.post(
     "/register",
@@ -66,7 +77,7 @@ async def login(user_in: auth_schemas.UserLogin):
     await redis_client.setex(f"token:{user.username}", 18060, token)
 
     return auth_schemas.TokenResponse(
-        access_token=token, token_type="bearer", expires_at=7
+        access_token=token, token_type="bearer", expires_at=7, role=user.role
     )
 
 
@@ -113,7 +124,7 @@ async def health():
 def run_auth():
     import uvicorn
 
-    uvicorn.run("auth:auth_app", host="0.0.0.0", port=8003, log_level="error")
+    uvicorn.run("auth:auth_app", host="0.0.0.0", port=8003, log_level="info")
 
 
 if __name__ == "__main__":

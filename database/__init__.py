@@ -1,25 +1,34 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
-from contextlib import asynccontextmanager
-from database.api import users, products, order
-from database.database import engine, Base
+
+from database.api import order, products, users
+from database.database import Base, engine
+from shared.rabbitmq_client import rabbitmq_client
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    await rabbitmq_client.connect()
     print("✅ Database Service started on port 8003")
+    
     yield
+    
+    # Shutdown
+    await rabbitmq_client.close()
     await engine.dispose()
     print("👋 Database Service stopped")
 
 
 app = FastAPI(
     title="Database Microservice",
-    description="Internal database operations service (no authentication required)",
-    version="1.0",
-    lifespan=lifespan,
+    version="1.2",
+    lifespan=lifespan
 )
 
 
