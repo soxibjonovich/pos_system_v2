@@ -6,66 +6,80 @@ from typing import List
 
 
 def start_admin():
-    """Запуск админ сервиса на порту 8001"""
     from admin import run_admin
-
     run_admin()
 
 
 def start_db():
-    """Запуск базы данных на порту 8002"""
     from database import run_database
-
     run_database()
 
 
 def start_auth():
-    """Запуск сервиса авторизации на порту 8003"""
     from auth import run_auth
-
     run_auth()
 
 
 def start_order():
-    """Запуск сервиса ордеров на порту 8004"""
     from order import run_order
-
     run_order()
 
 
 def start_redis():
     """Запуск Redis сервиса"""
-    print("\033[92m[*] Starting Redis Server...\033[0m")  # Green for success
+    print("\033[92m[*] Starting Redis Server...\033[0m")
     redis_proc = subprocess.Popen(
         ["redis-server", "--loglevel", "warning"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    redis_proc.wait()
     return redis_proc
 
 
 def stop_redis(redis_proc):
-    """Gracefully stop Redis"""
+    """Graceful stop Redis"""
     if redis_proc:
-        print("\033[91m[*] Stopping Redis Server...\033[0m")  # Red for action
-        redis_proc.terminate()  # Attempt graceful shutdown
+        print("\033[91m[*] Stopping Redis Server...\033[0m")
+        redis_proc.terminate()
         try:
-            redis_proc.wait(timeout=5)  # Wait for termination
+            redis_proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            print(
-                "\033[91m[*] Redis did not shut down gracefully. Force killing...\033[0m"
-            )
-            redis_proc.kill()  # Force kill if not terminated
-        print("\033[92m[*] Redis Server stopped.\033[0m")  # Green for success
+            print("\033[91m[*] Redis did not shut down gracefully. Force killing...\033[0m")
+            redis_proc.kill()
+        print("\033[92m[*] Redis Server stopped.\033[0m")
+
+
+def start_rabbitmq():
+    """Запуск RabbitMQ сервера"""
+    print("\033[92m[*] Starting RabbitMQ Server...\033[0m")
+    rabbitmq_proc = subprocess.Popen(
+        ["rabbitmq-server", "-detached"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    # Optional: wait a few seconds to ensure server starts
+    import time
+    time.sleep(3)
+    print("\033[92m[*] RabbitMQ Server started.\033[0m")
+    return rabbitmq_proc
+
+
+def stop_rabbitmq():
+    """Graceful stop RabbitMQ"""
+    print("\033[91m[*] Stopping RabbitMQ Server...\033[0m")
+    try:
+        subprocess.run(["rabbitmqctl", "stop"], check=True)
+    except subprocess.CalledProcessError:
+        print("\033[91m❌ Failed to stop RabbitMQ gracefully.\033[0m")
+    print("\033[92m[*] RabbitMQ Server stopped.\033[0m")
 
 
 def signal_handler(signum, frame, processes: List[multiprocessing.Process], redis_proc):
     """Обработчик сигналов для graceful shutdown"""
     print("\n\033[93m[*] Received shutdown signal. Terminating services...\033[0m")
 
-    # Stop Redis before terminating other processes
     stop_redis(redis_proc)
+    stop_rabbitmq()
 
     for proc in processes:
         if proc.is_alive():
@@ -73,7 +87,7 @@ def signal_handler(signum, frame, processes: List[multiprocessing.Process], redi
             proc.terminate()
             proc.join(timeout=3)
             if proc.is_alive():
-                proc.kill()  # Force kill if not terminated
+                proc.kill()
             print(f"\033[92m[*] {proc.name} stopped.\033[0m")
 
     print("\033[92m[*] All services stopped.\033[0m")
@@ -81,45 +95,37 @@ def signal_handler(signum, frame, processes: List[multiprocessing.Process], redi
 
 
 def main():
-    """Основная функция запуска микросервисов"""
     print("=" * 60)
     print("\033[94m🚀 Launching Micro Services...\033[0m")
     print("=" * 60)
 
-    # Create processes for each service
     db_proc = multiprocessing.Process(target=start_db, name="Database")
     auth_proc = multiprocessing.Process(target=start_auth, name="Auth")
     admin_proc = multiprocessing.Process(target=start_admin, name="Admin")
     order_proc = multiprocessing.Process(target=start_order, name="Order")
 
-    # Redis will be handled separately (start and stop)
-    redis_proc = None
-
     processes = [db_proc, auth_proc, admin_proc, order_proc]
 
-    try:
-        # Start Redis first
-        redis_proc = start_redis()
+    redis_proc = None
+    rabbitmq_proc = None
 
-        # Start all other services
-        db_proc.start()
-        auth_proc.start()
-        admin_proc.start()
-        order_proc.start()
+    try:
+        # Start Redis and RabbitMQ
+        redis_proc = start_redis()
+        rabbitmq_proc = start_rabbitmq()
+
+        # Start other services
+        for proc in processes:
+            proc.start()
 
         print("\033[92m✅ All services started successfully!\033[0m")
-        for service in [db_proc, auth_proc, admin_proc, order_proc]:
+        for service in processes:
             print(f"\033[94m[*] {service.name} -> PID: {service.pid}\033[0m")
 
-        # Register signal handlers
-        signal.signal(
-            signal.SIGINT, lambda s, f: signal_handler(s, f, processes, redis_proc)
-        )
-        signal.signal(
-            signal.SIGTERM, lambda s, f: signal_handler(s, f, processes, redis_proc)
-        )
+        # Signal handling
+        signal.signal(signal.SIGINT, lambda s, f: signal_handler(s, f, processes, redis_proc))
+        signal.signal(signal.SIGTERM, lambda s, f: signal_handler(s, f, processes, redis_proc))
 
-        # Wait for all processes to finish
         for proc in processes:
             proc.join()
 
@@ -128,8 +134,6 @@ def main():
     except Exception as e:
         print(f"\033[91m❌ Error starting services: {e}\033[0m")
     finally:
-        # Graceful shutdown
-        print("\033[93m[*] Shutting down services...\033[0m")
         for proc in processes:
             if proc.is_alive():
                 proc.terminate()
@@ -137,14 +141,13 @@ def main():
                 if proc.is_alive():
                     proc.kill()
 
-        # Ensure Redis is also shut down
         stop_redis(redis_proc)
+        stop_rabbitmq()
 
         print("\033[92m👋 All services stopped.\033[0m")
         sys.exit(0)
 
 
 if __name__ == "__main__":
-    # Set the start method for multiprocessing (necessary on macOS)
     multiprocessing.set_start_method("spawn", force=True)
     main()

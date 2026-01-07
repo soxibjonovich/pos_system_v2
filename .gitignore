@@ -13,3 +13,6 @@ wheels/
 .zed
 db.sqlite3
 dump.rdb
+
+
+erl_crash.dump

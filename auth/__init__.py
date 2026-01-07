@@ -124,7 +124,7 @@ async def health():
 def run_auth():
     import uvicorn
 
-    uvicorn.run("auth:auth_app", host="0.0.0.0", port=8003, log_level="info")
+    uvicorn.run("auth:auth_app", host="0.0.0.0", port=8003, log_level="error")
 
 
 if __name__ == "__main__":
