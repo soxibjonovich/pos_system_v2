@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 
 class UserBase(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
+    username: str = Field(..., min_length=2, max_length=50)
     full_name: str = Field(..., min_length=2, max_length=100)
 
 
@@ -21,6 +21,8 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     id: int
+    username: str
+    full_name: str
     pin: int
     role: str
     status: str
@@ -50,7 +52,7 @@ class UserUpdate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    username: str = Field(..., min_length=3, max_length=50)
+    username: str = Field(..., min_length=2, max_length=50)
     pin: int = Field(..., ge=1000, le=999999)
 
     @field_validator("pin")

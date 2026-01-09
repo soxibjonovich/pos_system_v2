@@ -1,9 +1,9 @@
-from fastapi import FastAPI, status, Request
+from authx.exceptions import AuthXException, MissingTokenError, NoAuthorizationError
+from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
-from admin.api import users
-from authx.exceptions import MissingTokenError, AuthXException, NoAuthorizationError
+from admin.api import products, users
 
 app = FastAPI(
     title="Admin Micro Service",
@@ -18,14 +18,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# app.include_router(products.product_router, prefix="/api")
-app.include_router(users.users_router, prefix="/api")
+app.include_router(products.product_router, prefix="")
+app.include_router(users.users_router, prefix="")
 
 
 @app.get("/", include_in_schema=False)
 async def root():
     return RedirectResponse(url="/docs")
 
+@app.get("/health", tags=["Health"])
+async def health():
+    return {"status": "ok", "service": "auth"}
+    
 
 # Exception handler for missing token
 @app.exception_handler(MissingTokenError)

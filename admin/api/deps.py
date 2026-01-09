@@ -20,7 +20,6 @@ async def get_current_user(
 ) -> User:
     try:
         username: str = token.sub
-        print(username)
         if not username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -29,6 +28,7 @@ async def get_current_user(
             )
 
         user = await crud.get_user_by_username(username)
+        print(user)
         if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

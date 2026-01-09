@@ -9,7 +9,7 @@ from shared.rabbitmq_client import rabbitmq_client
 class ServiceClient:
     def __init__(self):
         self.db_client = httpx.AsyncClient(
-            base_url="http://127.0.0.1:8003", timeout=10.0
+            base_url="http://127.0.0.1:8002", timeout=10.0
         )
         self.auth_client = httpx.AsyncClient(
             base_url="http://127.0.0.1:8001", timeout=10.0
@@ -85,7 +85,7 @@ async def get_users() -> Users:
 async def get_user_by_username(username: str) -> User | None:
     try:
         response = await service_client.db_client.get(f"/users/username/{username}")
-
+        
         if response.status_code == 404:
             return None
 
