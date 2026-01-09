@@ -29,14 +29,17 @@ auth_app = FastAPI(title="Auth Microservice", version="1.7", lifespan=lifespan)
 
 auth_app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:5173", 
-        "http://localhost:5173"
-    ],
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@auth_app.get("/health", tags=["Health"])
+async def health():
+    return {"status": "ok", "service": "auth"}
+
 
 @auth_app.post(
     "/register",
@@ -114,12 +117,6 @@ async def verify_token(payload: TokenPayload = Depends(auth.access_token_require
 async def logout(current_user: User = Depends(get_current_user)):
     await redis_client.delete(f"token:{current_user.username}")
     return {"status": "ok"}
-
-
-@auth_app.get("/health", tags=["Health"])
-async def health():
-    return {"status": "ok", "service": "auth"}
-
 
 def run_auth():
     import uvicorn

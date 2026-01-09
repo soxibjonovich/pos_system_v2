@@ -6,7 +6,7 @@ from database.database import get_db
 from database.crud import products as crud
 from database.schemas import products as schema
 
-product_router = APIRouter(prefix="/products", tags=["Products"])
+product_router = APIRouter(tags=["Products"])
 
 
 @product_router.get("", status_code=status.HTTP_200_OK)

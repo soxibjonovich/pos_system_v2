@@ -22,7 +22,7 @@ class OrderItem(OrderItemBase):
     id: int
     order_id: int
     subtotal: float
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -32,7 +32,7 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     items: list[OrderItemCreate] = Field(default_factory=list)
-    
+
     @field_validator("items")
     @classmethod
     def validate_items(cls, v):
@@ -42,7 +42,9 @@ class OrderCreate(OrderBase):
 
 
 class OrderUpdate(BaseModel):
-    status: Literal["pending", "preparing", "ready", "completed", "cancelled"] | None = None
+    status: (
+        Literal["pending", "preparing", "ready", "completed", "cancelled"] | None
+    ) = None
 
 
 class OrderResponse(OrderBase):
@@ -52,7 +54,7 @@ class OrderResponse(OrderBase):
     created_at: datetime
     updated_at: datetime | None = None
     items: list[OrderItem] = Field(default_factory=list)
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -69,7 +71,7 @@ class User(BaseModel):
     role: str
     status: str
     last_login: datetime | None = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 

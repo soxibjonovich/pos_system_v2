@@ -85,7 +85,7 @@ async def get_users() -> Users:
 async def get_user_by_username(username: str) -> User | None:
     try:
         response = await service_client.db_client.get(f"/users/username/{username}")
-        
+
         if response.status_code == 404:
             return None
 
@@ -153,7 +153,7 @@ async def create_user(user_in: schema.UserCreate) -> User | None:
                     "user_id": user.id,
                     "username": user.username,
                     "role": user.role,
-                }
+                },
             )
             return user
 

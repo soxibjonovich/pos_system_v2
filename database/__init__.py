@@ -13,23 +13,19 @@ async def lifespan(app: FastAPI):
     # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    
+
     await rabbitmq_client.connect()
     print("✅ Database Service started on port 8003")
-    
+
     yield
-    
+
     # Shutdown
     await rabbitmq_client.close()
     await engine.dispose()
     print("👋 Database Service stopped")
 
 
-app = FastAPI(
-    title="Database Microservice",
-    version="1.2",
-    lifespan=lifespan
-)
+app = FastAPI(title="Database Microservice", version="1.2", lifespan=lifespan)
 
 
 @app.get("/", include_in_schema=False)

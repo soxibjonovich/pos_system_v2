@@ -8,15 +8,6 @@ class OrderItemBase(BaseModel):
     quantity: int = Field(..., gt=0)
 
 
-class OrderItemCreate(OrderItemBase):
-    pass
-
-
-class OrderItemUpdate(BaseModel):
-    quantity: int | None = Field(None, gt=0)
-    price: float | None = Field(None, gt=0)
-
-
 class OrderItem(OrderItemBase):
     id: int
     order_id: int
@@ -28,16 +19,6 @@ class OrderItem(OrderItemBase):
 
 class OrderBase(BaseModel):
     user_id: int = Field(..., gt=0)
-
-
-class OrderCreate(OrderBase):
-    items: list[OrderItemCreate] = Field(..., min_length=1)
-
-
-class OrderUpdate(BaseModel):
-    status: (
-        Literal["pending", "preparing", "ready", "completed", "cancelled"] | None
-    ) = None
 
 
 class OrderStatusUpdate(BaseModel):
