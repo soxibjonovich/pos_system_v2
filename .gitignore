@@ -1,18 +1,5 @@
-# Python-generated files
-__pycache__/
-*.py[oc]
-build/
-dist/
-wheels/
-*.egg-info
-
-# Virtual environments
-.venv
-.ruff_cache
 .idea
+.ruff_cache
+.venv
 .zed
-db.sqlite3
-dump.rdb
-
-
-erl_crash.dump
+.DS_Store

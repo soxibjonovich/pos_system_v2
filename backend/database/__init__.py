@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
 from database.api import order, products, users
@@ -27,6 +28,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Database Microservice", version="1.2", lifespan=lifespan)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["Authorization", "Content-Type"],
+)
 
 @app.get("/", include_in_schema=False)
 async def root():
