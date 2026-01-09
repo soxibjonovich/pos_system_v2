@@ -1,28 +1,29 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useNavigate } from '@tanstack/react-router'
-import { useAuth } from "@/contexts/auth-context";
-import { useEffect } from 'react';
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { useEffect } from "react"
+import { useAuth } from "@/contexts/auth-context"
 
-export const Route = createFileRoute('/')({
-  component: RouteComponent,
+export const Route = createFileRoute("/")({
+  component: IndexRoute,
 })
 
-function RouteComponent() {
-  const navigate = useNavigate() as any;
-  const { isAuthenticated, role } = useAuth();
-  
+function IndexRoute() {
+  const navigate = useNavigate()
+  const { isAuthenticated, role } = useAuth()
+
   useEffect(() => {
-    if (isAuthenticated && role) {
+    if (!isAuthenticated || !role) {
       navigate({
-        to: role === "admin" ? "/admin" : "/staff",
+        to: "/login",
         replace: true,
-      });
-    } else {
-      navigate({
-        to: "/login"
       })
+      return
     }
-  }, [navigate, isAuthenticated, role]);
-  
-  return <></>
+
+    navigate({
+      to: role === "admin" ? "/admin" : "/staff",
+      replace: true,
+    })
+  }, [isAuthenticated, role, navigate])
+
+  return null
 }

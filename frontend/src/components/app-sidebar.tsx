@@ -44,22 +44,21 @@ const data = {
       items: [
         {
           title: "Users",
-          url: "/users/add",
+          url: "/admin/users",
         },
         {
-          title: "Role",
-          url: "/users/roles",
-          isActive: true,
+          title: "Administrators",
+          url: "/admin/admins",
         }
       ],
     },
     {
       title: "Orders",
-      url: "/orders",
+      url: "/admin/orders",
     },
     {
       title: "Reports",
-      url: "/reports",
+      url: "/admin/reports",
     },
   ],
 }

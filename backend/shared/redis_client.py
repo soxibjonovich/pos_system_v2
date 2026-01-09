@@ -20,7 +20,7 @@ class RedisClient:
 
     async def set_token(self, username: str, token: str, expire_seconds: int = None):
         if expire_seconds is None:
-            expire_seconds = settings.TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+            expire_seconds = 7 * 24 * 60 * 60
 
         await self.redis.setex(f"token:{username}", expire_seconds, token)
 

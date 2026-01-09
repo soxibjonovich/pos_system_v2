@@ -1,5 +1,5 @@
 from typing import Sequence
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from database.models import User, UserRole, UserStatus
 from database.schemas import users as schema
@@ -9,7 +9,20 @@ async def get_users(db: AsyncSession) -> Sequence[User]:
     result = await db.execute(select(User))
     return result.scalars().all()
 
+async def get_usernames(db: AsyncSession, status: str) -> Sequence[str]:
+    if not status:
+        return []
+        
+    target_status = status.strip().upper()
+    
+    result = await db.execute(
+        select(User.username)
+        .where(func.upper(func.trim(User.status)) == target_status)
+    )
+    
+    return result.scalars().all()
 
+    
 async def get_user_by_id(db: AsyncSession, id: int) -> User | None:
     result = await db.execute(select(User).where(User.id == id))
     return result.scalar_one_or_none()
