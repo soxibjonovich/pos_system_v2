@@ -9,10 +9,10 @@ from rabbitmq_client import rabbitmq_client
 class ServiceClient:
     def __init__(self):
         self.db_client = httpx.AsyncClient(
-            base_url="http://127.0.0.1:8002", timeout=10.0
+            base_url="http://database_api:8002", timeout=10.0
         )
         self.auth_client = httpx.AsyncClient(
-            base_url="http://127.0.0.1:8001", timeout=10.0
+            base_url="http://auth_api:8001", timeout=10.0
         )
 
     async def close(self):
