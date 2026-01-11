@@ -22,6 +22,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     full_name: str | None = Field(None, min_length=2, max_length=100)
     pin: int | None = Field(None, ge=1000, le=999999)
+    role: str | None = Field(None, description="Role (admin, staff)")
 
     @field_validator("pin")
     @classmethod

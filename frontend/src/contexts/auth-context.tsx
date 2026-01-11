@@ -13,7 +13,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 const TOKEN_KEY = 'postoken'
-const ROLE_KEY = 'role'
+const ROLE_KEY = 'posrole'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null)

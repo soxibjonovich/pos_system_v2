@@ -1,6 +1,7 @@
-from pydantic_settings import BaseSettings
-from authx import AuthX, AuthXConfig
 import os
+
+from authx import AuthX, AuthXConfig
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):

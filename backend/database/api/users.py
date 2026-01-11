@@ -51,8 +51,7 @@ async def update_user(
     if not updated_user:
         raise HTTPException(status_code=404, detail="User not found")
     return updated_user
-
-
+	
 @user_router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_user(id: int, db: AsyncSession = Depends(get_db)):
     deleted = await users_crud.delete_user(db, id)

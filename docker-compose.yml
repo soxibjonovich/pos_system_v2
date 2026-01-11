@@ -7,26 +7,94 @@ services:
     networks:
       - pos_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: pos_rabbitmq
+    hostname: rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
-    # Environment variables for user/pass removed to use default 'guest:guest'
     networks:
       - pos_network
     restart: unless-stopped
-    healthcheck: # Added healthcheck to ensure service is ready
-      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity", "5672"]
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics check_running || exit 1"]
+      interval: 15s
+      timeout: 15s
+      retries: 10
+      start_period: 90s
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  database:
+    build: 
+      context: ./backend/database
+      dockerfile: Dockerfile
+    container_name: database_api
+    ports:
+      - "8002:8002"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_URL: sqlite+aiosqlite:///./data/pos_system.db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pos_network
+    restart: unless-stopped
+    volumes:
+      - pos_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8002)); s.close()' || exit 1"]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 10s
+      retries: 10
+      start_period: 40s
+
+  auth:
+    build:
+      context: ./backend/auth
+      dockerfile: Dockerfile
+    container_name: auth_api
+    ports:
+      - "8003:8003"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      SECRET_KEY: your-super-secret-key-change-in-production
+      ALGORITHM: HS256
+      TOKEN_EXPIRE_DAYS: 7
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8003)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   admin:
-    build: ./backend/admin
+    build:
+      context: ./backend/admin
+      dockerfile: Dockerfile
     container_name: admin_api
     ports:
       - "8001:8001"
@@ -36,60 +104,23 @@ services:
       AUTH_SERVICE_URL: http://auth_api:8003
     depends_on:
       database:
-        condition: service_started # No healthcheck defined in custom build
+        condition: service_healthy
       auth:
-        condition: service_started # No healthcheck defined in custom build
+        condition: service_healthy
     networks:
       - pos_network
     restart: unless-stopped
-
-  database:
-    build: ./backend/database
-    container_name: database_api
-    ports:
-      - "8002:8002"
-    environment:
-      PYTHONUNBUFFERED: 1
-      DATABASE_URL: sqlite+aiosqlite:///./data/pos_system.db
-      # Updated URL to use 'rabbitmq' hostname and 'guest' user
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-    depends_on:
-      rabbitmq:
-        condition: service_healthy # Wait for RabbitMQ healthcheck to pass
-    networks:
-      - pos_network
-    restart: unless-stopped
-    volumes:
-      - pos_data:/app/data
-
-  auth:
-    build: ./backend/auth
-    container_name: auth_api
-    ports:
-      - "8003:8003"
-    environment:
-      PYTHONUNBUFFERED: 1
-      DATABASE_SERVICE_URL: http://database_api:8002
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      # Updated URL to use 'rabbitmq' hostname and 'guest' user
-      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      SECRET_KEY: your-super-secret-key-change-in-production
-      ALGORITHM: HS256
-      TOKEN_EXPIRE_DAYS: 7
-    depends_on:
-      redis:
-        condition: service_started
-      rabbitmq:
-        condition: service_healthy # Wait for RabbitMQ healthcheck to pass
-      database:
-        condition: service_started
-    networks:
-      - pos_network
-    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8001)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
   order:
-    build: ./backend/order
+    build:
+      context: ./backend/order
+      dockerfile: Dockerfile
     container_name: order_api
     ports:
       - "8004:8004"
@@ -97,38 +128,52 @@ services:
       PYTHONUNBUFFERED: 1
       DATABASE_SERVICE_URL: http://database_api:8002
       AUTH_SERVICE_URL: http://auth_api:8003
-      # Updated URL to use 'rabbitmq' hostname and 'guest' user
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
     depends_on:
       database:
-        condition: service_started
+        condition: service_healthy
       auth:
-        condition: service_started
+        condition: service_healthy
       rabbitmq:
-        condition: service_healthy # Wait for RabbitMQ healthcheck to pass
+        condition: service_healthy
     networks:
       - pos_network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8004)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
   frontend:
-      build: ./frontend
-      container_name: pos_frontend
-      ports:
-        - "5173:5173" # Maps local port 5173 to container port 5173
-      command: npm run dev
-      volumes:
-        - ./frontend:/app
-        - /app/node_modules
-      networks:
-        - pos_network
-      depends_on:
-        admin:
-          condition: service_started
-        auth:
-          condition: service_started
-      restart: unless-stopped
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: pos_frontend
+    ports:
+      - "5173:5173"
+    command: npm run dev -- --host 0.0.0.0
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - pos_network
+    depends_on:
+      admin:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:8001
+
 networks:
   pos_network:
     driver: bridge
 
 volumes:
   pos_data:
+    driver: local
+  rabbitmq_data:
+    driver: local

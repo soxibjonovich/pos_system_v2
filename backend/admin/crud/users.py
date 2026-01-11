@@ -3,16 +3,17 @@ from fastapi import HTTPException, status
 
 from schemas import users as schema
 from schemas.users import User, Users
-from rabbitmq_client import rabbitmq_client
+
+from config import settings
 
 
 class ServiceClient:
     def __init__(self):
         self.db_client = httpx.AsyncClient(
-            base_url="http://database_api:8002", timeout=10.0
+            base_url=settings.DATABASE_SERVICE_URL, timeout=10.0
         )
         self.auth_client = httpx.AsyncClient(
-            base_url="http://auth_api:8001", timeout=10.0
+            base_url=settings.AUTH_SERVICE_URL, timeout=10.0
         )
 
     async def close(self):
@@ -145,22 +146,10 @@ async def create_user(user_in: schema.UserCreate, role: str = "cashier") -> User
         user_data = user_in.model_dump()
         user_data["role"] = role
 
-        response = await service_client.db_client.post(
-            "/users", json=user_data
-        )
+        response = await service_client.db_client.post("/users", json=user_data)
 
         if response.status_code == 201:
-            user = User.model_validate_json(response.content)
-            await rabbitmq_client.publish(
-                "user.created",
-                {
-                    "action": "created",
-                    "user_id": user.id,
-                    "username": user.username,
-                    "role": user.role,
-                },
-            )
-            return user
+            return User.model_validate_json(response.content)
 
         return None
 
@@ -179,6 +168,7 @@ async def create_admin(user_in: schema.UserCreate) -> User | None:
 
 
 async def update_user(user_id: int, user_in: schema.UserUpdate) -> User | None:
+    """Update user details"""
     try:
         response = await service_client.db_client.put(
             f"/users/{user_id}", json=user_in.model_dump(exclude_unset=True)
@@ -188,16 +178,7 @@ async def update_user(user_id: int, user_in: schema.UserUpdate) -> User | None:
             return None
 
         if response.status_code == 200:
-            user = User.model_validate_json(response.content)
-            await rabbitmq_client.publish(
-                "user.updated",
-                {
-                    "action": "updated",
-                    "user_id": user.id,
-                    "username": user.username,
-                },
-            )
-            return user
+            return User.model_validate_json(response.content)
 
         return None
 
@@ -221,17 +202,7 @@ async def update_user_role(user_id: int, role: str) -> User | None:
             return None
 
         if response.status_code == 200:
-            user = User.model_validate_json(response.content)
-            await rabbitmq_client.publish(
-                "user.role_updated",
-                {
-                    "action": "role_updated",
-                    "user_id": user.id,
-                    "username": user.username,
-                    "new_role": role,
-                },
-            )
-            return user
+            return User.model_validate_json(response.content)
 
         return None
 
@@ -240,30 +211,20 @@ async def update_user_role(user_id: int, role: str) -> User | None:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Database service unavailable",
         )
-    except Exception:
-        return None
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update user role: {str(e)}",
+        )
 
 
 async def delete_user(user_id: int) -> bool:
+    """Delete a user"""
     try:
-        # Get user info before deletion for event
-        user = await get_user_by_id(user_id)
-        
         response = await service_client.db_client.delete(f"/users/{user_id}")
-        
-        if response.status_code == 204:
-            if user:
-                await rabbitmq_client.publish(
-                    "user.deleted",
-                    {
-                        "action": "deleted",
-                        "user_id": user_id,
-                        "username": user.username,
-                    },
-                )
-            return True
-        
-        return False
+        return response.status_code == 204
 
     except httpx.ConnectError:
         raise HTTPException(

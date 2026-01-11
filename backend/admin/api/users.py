@@ -49,8 +49,7 @@ async def create_admin(
     _: User = Depends(get_current_admin),
 ):
     """Create a new administrator account"""
-    # Create user with admin role
-    user = await crud.create_user(user_in, role="admin")
+    user = await crud.create_admin(user_in)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists"
@@ -80,35 +79,47 @@ async def update_user_role(
     # current_admin: User = Depends(get_current_admin),
 ):
     """Update user role (admin, manager, cashier)"""
-    # Prevent self-demotion
-    # if user_id == current_admin.id and role_data.role != "admin":
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Cannot change your own admin role"
-    #     )
+    try:
+        # # Prevent self-demotion
+        # if user_id == current_admin.id and role_data.role != "admin":
+        #     raise HTTPException(
+        #         status_code=status.HTTP_403_FORBIDDEN,
+        #         detail="Cannot change your own admin role"
+        #     )
+        
+        # Check if user exists
+        user = await crud.get_user_by_id(user_id)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, 
+                detail="User not found"
+            )
+        
+        # Validate role
+        valid_roles = ["admin", "manager", "cashier"]
+        if role_data.role not in valid_roles:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
+            )
+        
+        # Update the role
+        updated_user = await crud.update_user_role(user_id, role_data.role)
+        if not updated_user:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update user role"
+            )
+        
+        return updated_user
     
-    user = await crud.get_user_by_id(user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-    
-    # Validate role
-    valid_roles = ["admin", "manager", "cashier"]
-    if role_data.role not in valid_roles:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
-        )
-    
-    updated_user = await crud.update_user_role(user_id, role_data.role)
-    if not updated_user:
+    except HTTPException:
+        raise
+    except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update user role"
+            detail=f"Error updating user role: {str(e)}"
         )
-    
-    return updated_user
 
 
 @users_router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
