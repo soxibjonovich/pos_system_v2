@@ -1,21 +1,23 @@
 import enum
 from datetime import datetime
+
 from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
     Column,
+    DateTime,
+    Enum,
+    Float,
     ForeignKey,
     Integer,
-    String,
-    DateTime,
-    CheckConstraint,
-    Enum,
-    Text,
     Numeric,
-    Float,
-    Boolean,
+    String,
+    Text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from database.database import Base
+
+from database import Base
 
 
 class OrderStatus(str, enum.Enum):

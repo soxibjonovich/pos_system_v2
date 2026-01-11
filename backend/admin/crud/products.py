@@ -1,6 +1,6 @@
 import httpx
 from fastapi import HTTPException, status
-from admin.schemas import products as schema
+from schemas import products as schema
 
 
 class ServiceClient:

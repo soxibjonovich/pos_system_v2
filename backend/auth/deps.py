@@ -1,13 +1,20 @@
-from authx import TokenPayload
-from fastapi import Depends, HTTPException, status
-from config import settings, auth
-from database.models import User, UserRole
-from auth.crud import get_user_by_username
+from enum import Enum
 
+from authx import TokenPayload
+from config import auth, settings
+from crud import get_user_by_username
+from fastapi import Depends, HTTPException, status
+from schemas import UserResponse
+
+
+class UserRole(str, Enum):
+    ADMIN = "admin"
+    STAFF = "staff"
+    CHEF = "chef"
 
 async def get_current_user(
     token: TokenPayload = Depends(auth.access_token_required),
-) -> User:
+) -> UserResponse:
     try:
         username: str = token.sub
 
@@ -40,7 +47,7 @@ async def get_current_user(
         )
 
 
-async def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
+async def get_current_admin(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
     if current_user.role != UserRole.ADMIN.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
@@ -48,7 +55,7 @@ async def get_current_admin(current_user: User = Depends(get_current_user)) -> U
     return current_user
 
 
-async def get_current_staff(current_user: User = Depends(get_current_user)) -> User:
+async def get_current_staff(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
     if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Staff access required"

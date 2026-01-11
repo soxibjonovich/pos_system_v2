@@ -1,8 +1,8 @@
 from authx import TokenPayload
 from fastapi import Depends, HTTPException, status
 
-from admin.crud import users as crud
-from admin.schemas.users import User
+from crud import users as crud
+from schemas.users import User
 
 
 from config import auth

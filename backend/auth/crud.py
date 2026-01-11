@@ -3,13 +3,13 @@ from datetime import timedelta
 import httpx
 from fastapi import HTTPException, status
 
-from auth.schemas import UserCreate, UserLoginOption, UserResponse
+from schemas import UserCreate, UserLoginOption, UserResponse
 from config import auth
 
 
 class DatabaseClient:
     def __init__(self):
-        self.base_url = "http://127.0.0.1:8002"
+        self.base_url = "http://database_api:8002"
         self.timeout = 10.0
     
     def get_client(self):

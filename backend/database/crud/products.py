@@ -3,9 +3,9 @@ from typing import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import Product
-from database.schemas import products as schema
-from shared.rabbitmq_client import rabbitmq_client
+from models import Product
+from schemas import products as schema
+from rabbitmq_client import rabbitmq_client
 
 
 async def get_products(db: AsyncSession) -> Sequence[Product]:

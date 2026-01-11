@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { Search, Plus, Pencil } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2 } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -10,20 +10,39 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/contexts/auth-context"
 
 interface Product {
-  id: number | string
-  name?: string
-  title?: string
-  price?: number | string
-  category?: string
+  id: number
+  title: string
+  description?: string | null
+  quantity: number
+  price: number
+  cost?: number | null
+  is_active: boolean
+  created_at: string
+  updated_at?: string | null
+}
+
+interface ProductFormData {
+  title: string
   description?: string
-  stock?: number
-  status?: string
-  [key: string]: any // Allow for flexible product structure
+  quantity: number
+  price: number
+  cost?: number
+  is_active: boolean
 }
 
 export const Route = createFileRoute('/admin/products/')({
@@ -36,44 +55,55 @@ function RouteComponent() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchField, setSearchField] = useState<'all' | 'name' | 'category' | 'status' | 'description'>('all')
-  const [categoryFilter, setCategoryFilter] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
+  const [searchField, setSearchField] = useState<'all' | 'title' | 'description'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const { token } = useAuth()
 
+  // Modal states
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Form data
+  const [formData, setFormData] = useState<ProductFormData>({
+    title: '',
+    description: '',
+    quantity: 0,
+    price: 0,
+    cost: 0,
+    is_active: true,
+  })
+
   // Fetch products from API
-  useEffect(() => {
-    const fetchProducts = async () => {
-      setIsLoading(true)
-      setError(null)
-      try {
-        const response = await fetch('http://127.0.0.1:8002/products', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(token && { 'Authorization': `Bearer ${token}` }),
-          },
-        })
+  const fetchProducts = async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await fetch('http://127.0.0.1:8001/products', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+      })
 
-        console.log(response);
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch products: ${response.statusText}`)
-        }
-
-        const data = await response.json()
-        // Handle both array and object responses
-        const productsList = Array.isArray(data) ? data : (data.products || data.data || [])
-        setProducts(productsList)
-        setFilteredProducts(productsList)
-      } catch (err) {
-        console.error('Error fetching products:', err)
-        setError(err instanceof Error ? err.message : 'Failed to fetch products')
-      } finally {
-        setIsLoading(false)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch products: ${response.statusText}`)
       }
-    }
 
+      const data = await response.json()
+      setProducts(data.products || [])
+      setFilteredProducts(data.products || [])
+    } catch (err) {
+      console.error('Error fetching products:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch products')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchProducts()
   }, [token])
 
@@ -81,78 +111,158 @@ function RouteComponent() {
   useEffect(() => {
     let filtered = [...products]
 
-    // Apply search filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter((product) => {
-        const name = (product.name || product.title || '').toLowerCase()
+        const title = product.title.toLowerCase()
         const description = (product.description || '').toLowerCase()
-        const category = (product.category || '').toLowerCase()
-        const status = (product.status || '').toLowerCase()
 
         switch (searchField) {
-          case 'name':
-            return name.includes(query)
-          case 'category':
-            return category.includes(query)
-          case 'status':
-            return status.includes(query)
+          case 'title':
+            return title.includes(query)
           case 'description':
             return description.includes(query)
           default:
-            return (
-              name.includes(query) ||
-              description.includes(query) ||
-              category.includes(query) ||
-              status.includes(query)
-            )
+            return title.includes(query) || description.includes(query)
         }
       })
     }
 
-    // Apply category filter
-    if (categoryFilter) {
-      filtered = filtered.filter((product) => {
-        const category = (product.category || '').toLowerCase()
-        return category === categoryFilter.toLowerCase()
-      })
-    }
-
-    // Apply status filter
-    if (statusFilter) {
-      filtered = filtered.filter((product) => {
-        const status = (product.status || '').toLowerCase()
-        return status === statusFilter.toLowerCase()
-      })
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((product) => 
+        statusFilter === 'active' ? product.is_active : !product.is_active
+      )
     }
 
     setFilteredProducts(filtered)
-  }, [searchQuery, searchField, categoryFilter, statusFilter, products])
+  }, [searchQuery, searchField, statusFilter, products])
 
-  // Get unique categories and statuses for filters
-  const categories = Array.from(new Set([]))
-  const statuses = Array.from(new Set(products.map(p => p.status).filter(Boolean)))
+  // API Functions
+  const addProduct = async (data: ProductFormData) => {
+    setIsSubmitting(true)
+    try {
+      const response = await fetch('http://127.0.0.1:8001/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: JSON.stringify(data),
+      })
 
-  // Get product keys for table headers (dynamically based on first product)
-  const getProductKeys = (): string[] => {
-    if (products.length === 0) return ['id', 'name', 'price', 'category', 'stock']
-    const firstProduct = products[0]
-    // Prioritize common fields
-    const commonFields = ['id', 'name', 'title', 'price', 'category', 'stock', 'status', 'description']
-    const keys = Object.keys(firstProduct)
-    const orderedKeys = [
-      ...commonFields.filter(k => keys.includes(k)),
-      ...keys.filter(k => !commonFields.includes(k))
-    ]
-    return orderedKeys.slice(0, 6) // Limit to 6 columns for readability
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to add product: ${response.statusText}`)
+      }
+
+      await fetchProducts()
+      setIsAddModalOpen(false)
+      resetForm()
+    } catch (err) {
+      console.error('Error adding product:', err)
+      alert(err instanceof Error ? err.message : 'Failed to add product')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  const productKeys = getProductKeys()
+  const updateProduct = async (id: number, data: Partial<ProductFormData>) => {
+    setIsSubmitting(true)
+    try {
+      const response = await fetch(`http://127.0.0.1:8001/products/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: JSON.stringify(data),
+      })
 
-  const formatValue = (value: any): string => {
-    if (value === null || value === undefined) return '-'
-    if (typeof value === 'object') return JSON.stringify(value)
-    return String(value)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to update product: ${response.statusText}`)
+      }
+
+      await fetchProducts()
+      setIsEditModalOpen(false)
+      setSelectedProduct(null)
+      resetForm()
+    } catch (err) {
+      console.error('Error updating product:', err)
+      alert(err instanceof Error ? err.message : 'Failed to update product')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const deleteProduct = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this product?')) {
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const response = await fetch(`http://127.0.0.1:8001/products/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to delete product: ${response.statusText}`)
+      }
+
+      await fetchProducts()
+      setIsEditModalOpen(false)
+      setSelectedProduct(null)
+    } catch (err) {
+      console.error('Error deleting product:', err)
+      alert(err instanceof Error ? err.message : 'Failed to delete product')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // Form handlers
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      quantity: 0,
+      price: 0,
+      cost: 0,
+      is_active: true,
+    })
+  }
+
+  const handleAddClick = () => {
+    resetForm()
+    setIsAddModalOpen(true)
+  }
+
+  const handleEditClick = (product: Product) => {
+    setSelectedProduct(product)
+    setFormData({
+      title: product.title,
+      description: product.description || '',
+      quantity: product.quantity,
+      price: product.price,
+      cost: product.cost || 0,
+      is_active: product.is_active,
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (isEditModalOpen && selectedProduct) {
+      updateProduct(selectedProduct.id, formData)
+    } else {
+      addProduct(formData)
+    }
   }
 
   if (isLoading) {
@@ -177,20 +287,17 @@ function RouteComponent() {
 
   return (
     <div className="p-6 space-y-4">
-      {/* Header with Add Product Button */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Products</h1>
-        <Link to="/admin/products">
-          <Button>
-            <Plus className="size-4" />
-            Add Product
-          </Button>
-        </Link>
+        <Button onClick={handleAddClick}>
+          <Plus className="size-4" />
+          Add Product
+        </Button>
       </div>
 
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
-        {/* Search Bar with field filter */}
         <div className="flex flex-1 gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
@@ -208,53 +315,27 @@ function RouteComponent() {
             className="h-9 w-36 rounded-md border border-input bg-background px-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="all">All fields</option>
-            <option value="name">Name</option>
-            <option value="category">Category</option>
-            <option value="status">Status</option>
+            <option value="title">Title</option>
             <option value="description">Description</option>
           </select>
         </div>
 
-        {/* Category Filter */}
-        {categories.length > 0 && (
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        )}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
+          className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="all">All Status</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
 
-        {/* Status Filter */}
-        {statuses.length > 0 && (
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">All Statuses</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {/* Clear Filters Button */}
-        {(searchQuery || categoryFilter || statusFilter) && (
+        {(searchQuery || statusFilter !== 'all') && (
           <Button
             variant="outline"
             onClick={() => {
               setSearchQuery('')
-              setCategoryFilter('')
-              setStatusFilter('')
+              setStatusFilter('all')
             }}
           >
             Clear Filters
@@ -272,36 +353,46 @@ function RouteComponent() {
           </TableCaption>
           <TableHeader>
             <TableRow>
-              {productKeys.map((key) => (
-                <TableHead key={key} className="capitalize">
-                  {key.replace(/_/g, ' ')}
-                </TableHead>
-              ))}
-              <TableHead className="w-0 text-right">Edit</TableHead>
+              <TableHead>ID</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Quantity</TableHead>
+              <TableHead>Price</TableHead>
+              <TableHead>Cost</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={productKeys.length + 1} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   No products match your filters
                 </TableCell>
               </TableRow>
             ) : (
               filteredProducts.map((product) => (
                 <TableRow key={product.id}>
-                  {productKeys.map((key) => (
-                    <TableCell key={key}>
-                      {key === 'price' && typeof product[key] === 'number'
-                        ? `$${product[key].toFixed(2)}`
-                        : formatValue(product[key])}
-                    </TableCell>
-                  ))}
+                  <TableCell>{product.id}</TableCell>
+                  <TableCell className="font-medium">{product.title}</TableCell>
+                  <TableCell className="max-w-xs truncate">{product.description || '-'}</TableCell>
+                  <TableCell>{product.quantity === -1 ? '∞' : product.quantity}</TableCell>
+                  <TableCell>${product.price.toFixed(2)}</TableCell>
+                  <TableCell>${(product.cost || 0).toFixed(2)}</TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                      product.is_active 
+                        ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20' 
+                        : 'bg-gray-50 text-gray-700 ring-1 ring-gray-600/20'
+                    }`}>
+                      {product.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Edit product ${product.name || product.title || product.id}`}
+                      onClick={() => handleEditClick(product)}
                     >
                       <Pencil className="size-4" />
                     </Button>
@@ -312,6 +403,207 @@ function RouteComponent() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Add Product Modal */}
+      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New Product</DialogTitle>
+            <DialogDescription>
+              Enter the product details below. Set quantity to -1 for unlimited stock.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="title">Title *</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  required
+                  maxLength={200}
+                  placeholder="Product name"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Product description"
+                  maxLength={500}
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="quantity">
+                    Quantity *
+                    <span className="text-xs text-muted-foreground block">(-1 = ∞)</span>
+                  </Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    value={formData.quantity}
+                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                    required
+                    min={-1}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="price">Price *</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                    required
+                    min={0.01}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="cost">Cost</Label>
+                  <Input
+                    id="cost"
+                    type="number"
+                    step="0.01"
+                    value={formData.cost}
+                    onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
+                    min={0}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="is_active" className="cursor-pointer">Active</Label>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Adding...' : 'Add Product'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Product Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Product</DialogTitle>
+            <DialogDescription>
+              Update the product details below. Set quantity to -1 for unlimited stock.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-title">Title *</Label>
+                <Input
+                  id="edit-title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  required
+                  maxLength={200}
+                  placeholder="Product name"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Product description"
+                  maxLength={500}
+                  rows={3}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-quantity">
+                    Quantity *
+                    <span className="text-xs text-muted-foreground block">(-1 = ∞)</span>
+                  </Label>
+                  <Input
+                    id="edit-quantity"
+                    type="number"
+                    value={formData.quantity}
+                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                    required
+                    min={-1}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-price">Price *</Label>
+                  <Input
+                    id="edit-price"
+                    type="number"
+                    step="0.01"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                    required
+                    min={0.01}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="edit-cost">Cost</Label>
+                  <Input
+                    id="edit-cost"
+                    type="number"
+                    step="0.01"
+                    value={formData.cost}
+                    onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
+                    min={0}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="edit-is_active"
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="edit-is_active" className="cursor-pointer">Active</Label>
+              </div>
+            </div>
+            <DialogFooter className="flex justify-between">
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => selectedProduct && deleteProduct(selectedProduct.id)}
+                disabled={isSubmitting}
+              >
+                <Trash2 className="size-4 mr-2" />
+                Delete
+              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Updating...' : 'Update Product'}
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

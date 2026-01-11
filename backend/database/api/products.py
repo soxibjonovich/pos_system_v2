@@ -2,9 +2,9 @@ from fastapi import APIRouter, status, Depends
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.database import get_db
-from database.crud import products as crud
-from database.schemas import products as schema
+from database import get_db
+from crud import products as crud
+from schemas import products as schema
 
 product_router = APIRouter(tags=["Products"])
 

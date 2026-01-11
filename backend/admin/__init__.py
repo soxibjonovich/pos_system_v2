@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from admin.api import products, users, orders
+from api import products, users, orders
 
 app = FastAPI(
     title="Admin Micro Service",
@@ -12,7 +12,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173/"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,4 +66,4 @@ async def authx_error_handler(request: Request, exc: NoAuthorizationError):
 def run_admin():
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8001, access_log=False, log_level="error")
+    uvicorn.run(app, host="0.0.0.0", port=8001, access_log=False, log_level="info")

@@ -1,8 +1,8 @@
+import crud
 from authx import TokenPayload
-from fastapi import Depends, HTTPException, status
-from order import crud
-from order.schemas import User
 from config import auth
+from fastapi import Depends, HTTPException, status
+from schemas import User
 
 
 class UserRole:

@@ -1,9 +1,9 @@
 import httpx
 from fastapi import HTTPException, status
 
-from admin.schemas import users as schema
-from admin.schemas.users import User, Users
-from shared.rabbitmq_client import rabbitmq_client
+from schemas import users as schema
+from schemas.users import User, Users
+from rabbitmq_client import rabbitmq_client
 
 
 class ServiceClient:
@@ -135,13 +135,18 @@ async def get_user_by_id(user_id: int) -> User | None:
         return None
 
 
-async def create_user(user_in: schema.UserCreate) -> User | None:
+async def create_user(user_in: schema.UserCreate, role: str = "cashier") -> User | None:
+    """Create a new user with specified role (default: cashier)"""
     if await is_user_exists(user_in.username):
         return None
 
     try:
+        # Add role to the user data
+        user_data = user_in.model_dump()
+        user_data["role"] = role
+
         response = await service_client.db_client.post(
-            "/users", json=user_in.model_dump()
+            "/users", json=user_data
         )
 
         if response.status_code == 201:
@@ -168,6 +173,11 @@ async def create_user(user_in: schema.UserCreate) -> User | None:
         return None
 
 
+async def create_admin(user_in: schema.UserCreate) -> User | None:
+    """Create a new administrator user"""
+    return await create_user(user_in, role="admin")
+
+
 async def update_user(user_id: int, user_in: schema.UserUpdate) -> User | None:
     try:
         response = await service_client.db_client.put(
@@ -178,7 +188,50 @@ async def update_user(user_id: int, user_in: schema.UserUpdate) -> User | None:
             return None
 
         if response.status_code == 200:
-            return User.model_validate_json(response.content)
+            user = User.model_validate_json(response.content)
+            await rabbitmq_client.publish(
+                "user.updated",
+                {
+                    "action": "updated",
+                    "user_id": user.id,
+                    "username": user.username,
+                },
+            )
+            return user
+
+        return None
+
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable",
+        )
+    except Exception:
+        return None
+
+
+async def update_user_role(user_id: int, role: str) -> User | None:
+    """Update only the user's role"""
+    try:
+        response = await service_client.db_client.put(
+            f"/users/{user_id}", json={"role": role}
+        )
+
+        if response.status_code == 404:
+            return None
+
+        if response.status_code == 200:
+            user = User.model_validate_json(response.content)
+            await rabbitmq_client.publish(
+                "user.role_updated",
+                {
+                    "action": "role_updated",
+                    "user_id": user.id,
+                    "username": user.username,
+                    "new_role": role,
+                },
+            )
+            return user
 
         return None
 
@@ -193,8 +246,24 @@ async def update_user(user_id: int, user_in: schema.UserUpdate) -> User | None:
 
 async def delete_user(user_id: int) -> bool:
     try:
+        # Get user info before deletion for event
+        user = await get_user_by_id(user_id)
+        
         response = await service_client.db_client.delete(f"/users/{user_id}")
-        return response.status_code == 204
+        
+        if response.status_code == 204:
+            if user:
+                await rabbitmq_client.publish(
+                    "user.deleted",
+                    {
+                        "action": "deleted",
+                        "user_id": user_id,
+                        "username": user.username,
+                    },
+                )
+            return True
+        
+        return False
 
     except httpx.ConnectError:
         raise HTTPException(

@@ -3,12 +3,12 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 
-from auth import schemas as auth_schemas
-from auth.crud import create_user_in_db, get_active_users, get_user_by_credentials
-from auth.deps import get_current_user
+import schemas as auth_schemas
+from crud import create_user_in_db, get_active_users, get_user_by_credentials
+from deps import get_current_user
 from config import auth, settings
-from database.models import User
-from shared.redis_client import redis_client
+from schemas import UserResponse as User
+from redis_client import redis_client
 
 
 @asynccontextmanager

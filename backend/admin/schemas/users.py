@@ -50,6 +50,37 @@ class UserUpdate(BaseModel):
                 raise ValueError("PIN must be 4-6 digits")
         return v
 
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v):
+        if v is not None:
+            valid_roles = ["admin", "manager", "cashier"]
+            if v not in valid_roles:
+                raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
+        return v
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v):
+        if v is not None:
+            valid_statuses = ["active", "inactive"]
+            if v not in valid_statuses:
+                raise ValueError(f"Status must be one of: {', '.join(valid_statuses)}")
+        return v
+
+
+class UserRoleUpdate(BaseModel):
+    """Schema for updating only user role"""
+    role: str = Field(..., description="User role: admin, manager, or cashier")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v):
+        valid_roles = ["admin", "manager", "cashier"]
+        if v not in valid_roles:
+            raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
+        return v
+
 
 class UserLogin(BaseModel):
     username: str = Field(..., min_length=2, max_length=50)

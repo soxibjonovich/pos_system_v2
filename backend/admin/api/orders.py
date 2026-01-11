@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from admin.schemas import users as user_schema
-from admin.schemas import orders as order_schema
-from admin.api.deps import get_current_admin
-from admin.crud import orders as crud
+from schemas import users as user_schema
+from schemas import orders as order_schema
+from api.deps import get_current_admin
+from crud import orders as crud
 
 orders_router = APIRouter(prefix="/orders", tags=["Orders"])
 

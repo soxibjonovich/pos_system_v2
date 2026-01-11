@@ -1,0 +1,134 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: pos_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - pos_network
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pos_rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    # Environment variables for user/pass removed to use default 'guest:guest'
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck: # Added healthcheck to ensure service is ready
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity", "5672"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  admin:
+    build: ./backend/admin
+    container_name: admin_api
+    ports:
+      - "8001:8001"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      AUTH_SERVICE_URL: http://auth_api:8003
+    depends_on:
+      database:
+        condition: service_started # No healthcheck defined in custom build
+      auth:
+        condition: service_started # No healthcheck defined in custom build
+    networks:
+      - pos_network
+    restart: unless-stopped
+
+  database:
+    build: ./backend/database
+    container_name: database_api
+    ports:
+      - "8002:8002"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_URL: sqlite+aiosqlite:///./data/pos_system.db
+      # Updated URL to use 'rabbitmq' hostname and 'guest' user
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy # Wait for RabbitMQ healthcheck to pass
+    networks:
+      - pos_network
+    restart: unless-stopped
+    volumes:
+      - pos_data:/app/data
+
+  auth:
+    build: ./backend/auth
+    container_name: auth_api
+    ports:
+      - "8003:8003"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # Updated URL to use 'rabbitmq' hostname and 'guest' user
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      SECRET_KEY: your-super-secret-key-change-in-production
+      ALGORITHM: HS256
+      TOKEN_EXPIRE_DAYS: 7
+    depends_on:
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy # Wait for RabbitMQ healthcheck to pass
+      database:
+        condition: service_started
+    networks:
+      - pos_network
+    restart: unless-stopped
+
+  order:
+    build: ./backend/order
+    container_name: order_api
+    ports:
+      - "8004:8004"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      AUTH_SERVICE_URL: http://auth_api:8003
+      # Updated URL to use 'rabbitmq' hostname and 'guest' user
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      database:
+        condition: service_started
+      auth:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy # Wait for RabbitMQ healthcheck to pass
+    networks:
+      - pos_network
+    restart: unless-stopped
+  frontend:
+      build: ./frontend
+      container_name: pos_frontend
+      ports:
+        - "5173:5173" # Maps local port 5173 to container port 5173
+      command: npm run dev
+      volumes:
+        - ./frontend:/app
+        - /app/node_modules
+      networks:
+        - pos_network
+      depends_on:
+        admin:
+          condition: service_started
+        auth:
+          condition: service_started
+      restart: unless-stopped
+networks:
+  pos_network:
+    driver: bridge
+
+volumes:
+  pos_data:

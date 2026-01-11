@@ -13,6 +13,17 @@ export default defineConfig({
     react(), 
     tailwindcss()
   ],
+  server: {
+    host: '0.0.0.0', // Позволяет Docker пробрасывать порты
+    port: 5173,
+    strictPort: true,
+    watch: {
+      usePolling: true, // Критично для Windows/macOS, чтобы изменения файлов подхватывались
+    },
+    hmr: {
+      clientPort: 5173, // Гарантирует, что браузер стучится на правильный порт хоста
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

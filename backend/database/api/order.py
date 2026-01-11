@@ -1,8 +1,8 @@
 from fastapi import APIRouter, status, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from database.database import get_db
-from database.crud import order as crud
-from database.schemas.order import (
+from database import get_db
+from crud import order as crud
+from schemas.order import (
     OrderCreate,
     OrderUpdate,
     OrderResponse,

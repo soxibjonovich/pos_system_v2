@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from admin.api.deps import get_current_admin
-from admin.crud import products as product_crud
-from admin.schemas import products as product_schema
-from admin.schemas import users as user_schema
+from .deps import get_current_admin
+from crud import products as product_crud
+from schemas import products as product_schema
+from schemas import users as user_schema
 
 product_router = APIRouter(prefix="/products", tags=["Products"])
 

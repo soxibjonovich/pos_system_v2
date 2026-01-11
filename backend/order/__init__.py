@@ -14,10 +14,11 @@ from fastapi import (
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from order import crud, schemas
-from order.deps import get_current_staff
-from order.websocket_manager import ws_manager
-from shared.rabbitmq_client import rabbitmq_client
+import crud
+import schemas
+from deps import get_current_staff
+from websocket_manager import ws_manager
+from rabbitmq_client import rabbitmq_client
 
 
 async def handle_product_event(data: dict):

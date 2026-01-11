@@ -3,8 +3,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
-from database.models import Order, OrderItem, Product, User, OrderStatus
-from database.schemas import order as schema
+from models import Order, OrderItem, Product, User, OrderStatus
+from schemas import order as schema
 
 
 async def get_orders(db: AsyncSession) -> Sequence[Order]:

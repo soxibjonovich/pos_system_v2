@@ -2,7 +2,7 @@ import httpx
 from typing import Callable, Any
 from functools import wraps
 from fastapi import HTTPException, status
-from order import schemas
+import schemas
 
 
 class ServiceClient:

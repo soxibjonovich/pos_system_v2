@@ -4,13 +4,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from database.api import order, products, users
-from database.database import Base, engine
-from shared.rabbitmq_client import rabbitmq_client
+from api import order, products, users
+from database import Base, engine
+from rabbitmq_client import rabbitmq_client
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(_: FastAPI):
     # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
