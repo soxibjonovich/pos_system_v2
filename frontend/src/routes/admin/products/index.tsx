@@ -1,6 +1,7 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { Search, Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2 } from 'lucide-react'
+import { API_URL } from '@/config'
 import {
   Table,
   TableBody,
@@ -23,6 +24,8 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/contexts/auth-context"
+
+const PRODUCTS_API = `${API_URL}:8002/products`
 
 interface Product {
   id: number | string
@@ -51,23 +54,23 @@ export const Route = createFileRoute('/admin/products/')({
 })
 
 function RouteComponent() {
+  const { token } = useAuth()
+  
   const [products, setProducts] = useState<Product[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  
   const [searchQuery, setSearchQuery] = useState('')
   const [searchField, setSearchField] = useState<'all' | 'name' | 'category' | 'status' | 'description'>('all')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-  const { token } = useAuth()
 
-  // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Form data
   const [formData, setFormData] = useState<ProductFormData>({
     title: '',
     description: '',
@@ -76,12 +79,11 @@ function RouteComponent() {
     cost: 0,
   })
 
-  // Fetch products from API
   const fetchProducts = async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch('http://127.0.0.1:8002/products', {
+      const response = await fetch(PRODUCTS_API, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +111,6 @@ function RouteComponent() {
     fetchProducts()
   }, [token])
 
-  // Apply filters and search
   useEffect(() => {
     let filtered = [...products]
 
@@ -131,38 +132,31 @@ function RouteComponent() {
           case 'description':
             return description.includes(query)
           default:
-            return (
-              name.includes(query) ||
-              description.includes(query) ||
-              category.includes(query) ||
-              status.includes(query)
-            )
+            return name.includes(query) || description.includes(query) || 
+                   category.includes(query) || status.includes(query)
         }
       })
     }
 
     if (categoryFilter) {
-      filtered = filtered.filter((product) => {
-        const category = (product.category || '').toLowerCase()
-        return category === categoryFilter.toLowerCase()
-      })
+      filtered = filtered.filter((product) => 
+        (product.category || '').toLowerCase() === categoryFilter.toLowerCase()
+      )
     }
 
     if (statusFilter) {
-      filtered = filtered.filter((product) => {
-        const status = (product.status || '').toLowerCase()
-        return status === statusFilter.toLowerCase()
-      })
+      filtered = filtered.filter((product) => 
+        (product.status || '').toLowerCase() === statusFilter.toLowerCase()
+      )
     }
 
     setFilteredProducts(filtered)
   }, [searchQuery, searchField, categoryFilter, statusFilter, products])
 
-  // API Functions
   const addProduct = async (data: ProductFormData) => {
     setIsSubmitting(true)
     try {
-      const response = await fetch('http://127.0.0.1:8002/products', {
+      const response = await fetch(PRODUCTS_API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -175,7 +169,7 @@ function RouteComponent() {
         throw new Error(`Failed to add product: ${response.statusText}`)
       }
 
-      await fetchProducts() // Refresh the list
+      await fetchProducts()
       setIsAddModalOpen(false)
       resetForm()
     } catch (err) {
@@ -189,7 +183,7 @@ function RouteComponent() {
   const updateProduct = async (id: number | string, data: ProductFormData) => {
     setIsSubmitting(true)
     try {
-      const response = await fetch(`http://127.0.0.1:8002/products/${id}`, {
+      const response = await fetch(`${PRODUCTS_API}/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -202,7 +196,7 @@ function RouteComponent() {
         throw new Error(`Failed to update product: ${response.statusText}`)
       }
 
-      await fetchProducts() // Refresh the list
+      await fetchProducts()
       setIsEditModalOpen(false)
       setSelectedProduct(null)
       resetForm()
@@ -221,7 +215,7 @@ function RouteComponent() {
 
     setIsSubmitting(true)
     try {
-      const response = await fetch(`http://127.0.0.1:8002/products/${id}`, {
+      const response = await fetch(`${PRODUCTS_API}/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -233,7 +227,7 @@ function RouteComponent() {
         throw new Error(`Failed to delete product: ${response.statusText}`)
       }
 
-      await fetchProducts() // Refresh the list
+      await fetchProducts()
       setIsEditModalOpen(false)
       setSelectedProduct(null)
     } catch (err) {
@@ -244,7 +238,6 @@ function RouteComponent() {
     }
   }
 
-  // Form handlers
   const resetForm = () => {
     setFormData({
       title: '',
@@ -281,7 +274,7 @@ function RouteComponent() {
     }
   }
 
-  const categories = Array.from(new Set([]))
+  const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)))
   const statuses = Array.from(new Set(products.map(p => p.status).filter(Boolean)))
 
   const getProductKeys = (): string[] => {
@@ -326,7 +319,6 @@ function RouteComponent() {
 
   return (
     <div className="p-6 space-y-4">
-      {/* Header with Add Product Button */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Products</h1>
         <Button onClick={handleAddClick}>
@@ -334,7 +326,7 @@ function RouteComponent() {
           Add Product
         </Button>
       </div>
-      {/* Search and Filters */}
+
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex flex-1 gap-2">
           <div className="relative flex-1">
@@ -403,7 +395,7 @@ function RouteComponent() {
           </Button>
         )}
       </div>
-      {/* Products Table */}
+
       <div className="border rounded-lg">
         <Table>
           <TableCaption>
@@ -458,7 +450,7 @@ function RouteComponent() {
           </TableBody>
         </Table>
       </div>
-      {/* Add Product Modal */}
+
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -538,7 +530,7 @@ function RouteComponent() {
           </form>
         </DialogContent>
       </Dialog>
-      {/* Edit Product Modal */}
+
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>

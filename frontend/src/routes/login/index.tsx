@@ -31,12 +31,10 @@ interface User {
 interface LoginResponse {
   access_token: string
   token_type: string
-  user: {
-    id: number
-    username: string
-    role: string
-  }
+  expires_at: string
+  role: string
 }
+
 
 /* ===================== COMPONENT ===================== */
 
@@ -145,7 +143,7 @@ function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          username: selectedUser.username,
+          user_id: selectedUser.id,
           pin: parseInt(pin, 10),
         }),
       })
@@ -158,8 +156,9 @@ function LoginPage() {
       }
 
       const data: LoginResponse = await res.json()
+      console.log(data)
       const token = data.access_token
-      const userRole = data.user.role
+      const userRole = data.role
 
       localStorage.setItem(TOKEN_KEY, token)
       localStorage.setItem("posrole", userRole)
