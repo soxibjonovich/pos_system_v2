@@ -1,14 +1,15 @@
+import { API_URL } from "@/config"
+import { useAuth } from "@/contexts/auth-context"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useEffect, useMemo, useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
 
 /* ===================== CONFIG ===================== */
 
 const PIN_MIN_LENGTH = 4
 const PIN_MAX_LENGTH = 6
 
-const USERS_URL = "http://127.0.0.1:8003/users/login-options"
-const LOGIN_URL = "http://127.0.0.1:8003/login"
+const USERS_URL = `${API_URL}:8002/users?status=active`
+const LOGIN_URL = `${API_URL}:8003/login`
 const TOKEN_KEY = "postoken"
 
 /* ===================== ROUTE ===================== */
@@ -20,19 +21,21 @@ export const Route = createFileRoute("/login/")({
 /* ===================== TYPES ===================== */
 
 interface User {
-  id: number | string
+  id: number
   username: string
-  role?: string
-}
-
-interface UsersResponse {
-  users: User[]
+  full_name: string
+  role: string
+  status: string
 }
 
 interface LoginResponse {
-  token?: string
-  access_token?: string
-  role: string
+  access_token: string
+  token_type: string
+  user: {
+    id: number
+    username: string
+    role: string
+  }
 }
 
 /* ===================== COMPONENT ===================== */
@@ -40,8 +43,6 @@ interface LoginResponse {
 function LoginPage() {
   const navigate = useNavigate()
   const { login, isAuthenticated, role } = useAuth()
-
-  /* ---------- State ---------- */
 
   const [users, setUsers] = useState<User[]>([])
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
@@ -51,25 +52,18 @@ function LoginPage() {
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [isDark, setIsDark] = useState(true)
 
-  /* ---------- Derived ---------- */
-
   const isPinValid = useMemo(
     () => pin.length >= PIN_MIN_LENGTH && pin.length <= PIN_MAX_LENGTH,
     [pin]
   )
 
-  /* =====================================================
-     🔐 CHECK LOCAL STORAGE TOKEN (FIRST)
-     ===================================================== */
-
+  /* ===== Check stored token ===== */
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY)
     const savedRole = localStorage.getItem("posrole")
 
     if (token && savedRole) {
-      // hydrate auth context
       login(token, savedRole)
-
       navigate({
         to: savedRole === "admin" ? "/admin" : "/staff",
         replace: true,
@@ -77,8 +71,7 @@ function LoginPage() {
     }
   }, [login, navigate])
 
-  /* ---------- Dark mode by time ---------- */
-
+  /* ===== Dark mode by time ===== */
   useEffect(() => {
     const updateTheme = () => {
       const hour = new Date().getHours()
@@ -90,22 +83,30 @@ function LoginPage() {
     return () => clearInterval(timer)
   }, [])
 
-  /* ---------- Load users ---------- */
-
+  /* ===== Load users ===== */
   useEffect(() => {
-    if (isAuthenticated) return // 🔒 skip if auto-logged in
+    if (isAuthenticated) return
 
     const loadUsers = async () => {
       try {
         setLoadingUsers(true)
         const res = await fetch(USERS_URL)
-        if (!res.ok) throw new Error()
+        
+        if (!res.ok) {
+          throw new Error(`Failed to fetch users: ${res.status}`)
+        }
 
-        const data: UsersResponse = await res.json()
-        setUsers(data.users ?? [])
-      } catch {
-        setError("Ошибка загрузки списка пользователей")
-        setError("Ошибка загрузки списка пользователей")
+        const data = await res.json()
+        const activeUsers = Array.isArray(data) ? data : data.users || []
+
+        setUsers(activeUsers)
+        
+        if (activeUsers.length === 0) {
+          setError("No active users found")
+        }
+      } catch (err) {
+        console.error("Error loading users:", err)
+        setError("Failed to load users list")
       } finally {
         setLoadingUsers(false)
       }
@@ -114,8 +115,7 @@ function LoginPage() {
     loadUsers()
   }, [isAuthenticated])
 
-  /* ---------- Auto redirect (context-based) ---------- */
-
+  /* ===== Auto redirect ===== */
   useEffect(() => {
     if (!isAuthenticated || !role) return
 
@@ -125,19 +125,15 @@ function LoginPage() {
     })
   }, [isAuthenticated, role, navigate])
 
-  /* ---------- PIN handlers ---------- */
-
+  /* ===== PIN handlers ===== */
   const addPinDigit = (digit: string) => {
-    setPin(prev =>
-      prev.length < PIN_MAX_LENGTH ? prev + digit : prev
-    )
+    setPin(prev => prev.length < PIN_MAX_LENGTH ? prev + digit : prev)
   }
 
   const clearPin = () => setPin("")
   const backspacePin = () => setPin(p => p.slice(0, -1))
 
-  /* ---------- Login ---------- */
-
+  /* ===== Login ===== */
   const handleLogin = async () => {
     if (!selectedUser || !isPinValid) return
 
@@ -149,54 +145,71 @@ function LoginPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          user_id: selectedUser.id,
-          pin,
+          username: selectedUser.username,
+          pin: parseInt(pin, 10),
         }),
       })
 
-      const data: LoginResponse = await res.json()
-
       if (!res.ok) {
-        setError("Неверный PIN-код")
+        const errorData = await res.json().catch(() => ({}))
+        setError(errorData.detail || "Invalid PIN code")
         setPin("")
         return
       }
 
-      const token = data.token ?? data.access_token ?? ""
+      const data: LoginResponse = await res.json()
+      const token = data.access_token
+      const userRole = data.user.role
 
-      // persist token
-      console.log(data)
       localStorage.setItem(TOKEN_KEY, token)
-      localStorage.setItem("posrole", data.role)
+      localStorage.setItem("posrole", userRole)
 
-      login(token, data.role)
+      login(token, userRole)
 
       navigate({
-        to: data.role === "admin" ? "/admin" : "/staff",
+        to: userRole === "admin" ? "/admin" : "/staff",
         replace: true,
       })
-    } catch {
-      setError("Ошибка сети. Попробуйте снова.")
+    } catch (err) {
+      console.error("Login error:", err)
+      setError("Network error. Please try again.")
+      setPin("")
     } finally {
       setIsLoading(false)
     }
   }
 
+  /* ===== Keyboard handlers ===== */
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (!selectedUser) return
+
+      if (e.key === 'Enter' && isPinValid) {
+        handleLogin()
+      } else if (e.key === 'Backspace') {
+        backspacePin()
+      } else if (e.key === 'Escape') {
+        clearPin()
+      } else if (/^[0-9]$/.test(e.key)) {
+        addPinDigit(e.key)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyPress)
+    return () => window.removeEventListener('keydown', handleKeyPress)
+  }, [selectedUser, isPinValid, pin])
+
   /* ===================== RENDER ===================== */
 
   return (
-    <div
-      className={`min-h-screen flex items-center justify-center p-6 ${
-        isDark ? "bg-gray-900" : "bg-gray-100"
-      }`}
-    >
+    <div className={`min-h-screen flex items-center justify-center p-6 ${isDark ? "bg-gray-900" : "bg-gray-100"}`}>
       <div className="w-full max-w-4xl">
         <header className="text-center mb-8">
           <h1 className={`text-4xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
             POS System
           </h1>
           <p className={`text-xl mt-2 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
-            Выберите пользователя и введите PIN
+            Select user and enter PIN
           </p>
         </header>
 
@@ -207,14 +220,15 @@ function LoginPage() {
             </div>
           )}
 
-          {/* ---------- Users ---------- */}
           <section>
             <h3 className={`mb-4 font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-              Пользователи
+              Users
             </h3>
 
             {loadingUsers ? (
-              <p className="text-center text-gray-400">Загрузка...</p>
+              <p className="text-center text-gray-400">Loading...</p>
+            ) : users.length === 0 ? (
+              <p className="text-center text-gray-400">No users available</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {users.map(user => (
@@ -223,27 +237,34 @@ function LoginPage() {
                     onClick={() => {
                       setSelectedUser(user)
                       setPin("")
+                      setError("")
                     }}
-                    className={`p-4 rounded-xl font-medium transition
-                      ${
-                        selectedUser?.id === user.id
-                          ? "bg-indigo-600 text-white"
-                          : isDark
-                          ? "bg-gray-700 text-gray-200 hover:bg-gray-600"
-                          : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                    className={`p-4 rounded-xl font-medium transition relative
+                      ${selectedUser?.id === user.id
+                        ? "bg-indigo-600 text-white ring-2 ring-indigo-400"
+                        : isDark
+                        ? "bg-gray-700 text-gray-200 hover:bg-gray-600"
+                        : "bg-gray-100 text-gray-800 hover:bg-gray-200"
                       }`}
                   >
-                    {user.username}
+                    <div className="text-sm font-bold">{user.username}</div>
+                    <div className={`text-xs mt-1 ${selectedUser?.id === user.id ? "text-indigo-200" : "text-gray-400"}`}>
+                      {user.full_name}
+                    </div>
+                    {user.role === 'admin' && (
+                      <span className="absolute top-1 right-1 text-xs bg-yellow-500 text-black px-1.5 py-0.5 rounded">
+                        Admin
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
             )}
           </section>
 
-          {/* ---------- PIN ---------- */}
           <section className="space-y-4">
             <p className={`text-center font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-              {selectedUser ? `PIN для ${selectedUser.username}` : "Выберите пользователя"}
+              {selectedUser ? `PIN for ${selectedUser.username}` : "Select a user"}
             </p>
 
             <div
@@ -262,18 +283,30 @@ function LoginPage() {
                   key={n}
                   disabled={!selectedUser}
                   onClick={() => addPinDigit(String(n))}
-                  className="py-5 rounded-xl text-2xl bg-gray-700 text-white disabled:opacity-40"
+                  className="py-5 rounded-xl text-2xl bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
                 >
                   {n}
                 </button>
               ))}
-              <button onClick={clearPin} disabled={!selectedUser} className="py-5 rounded-xl bg-red-600 text-white disabled:opacity-40">
-                Очистить
+              <button 
+                onClick={clearPin} 
+                disabled={!selectedUser || pin.length === 0} 
+                className="py-5 rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition text-sm font-medium"
+              >
+                Clear
               </button>
-              <button onClick={() => addPinDigit("0")} disabled={!selectedUser} className="py-5 rounded-xl bg-gray-700 text-white disabled:opacity-40">
+              <button 
+                onClick={() => addPinDigit("0")} 
+                disabled={!selectedUser} 
+                className="py-5 rounded-xl text-2xl bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
+              >
                 0
               </button>
-              <button onClick={backspacePin} disabled={!selectedUser} className="py-5 rounded-xl bg-orange-600 text-white disabled:opacity-40">
+              <button 
+                onClick={backspacePin} 
+                disabled={!selectedUser || pin.length === 0} 
+                className="py-5 rounded-xl bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed transition text-2xl"
+              >
                 ⌫
               </button>
             </div>
@@ -282,10 +315,16 @@ function LoginPage() {
           <button
             onClick={handleLogin}
             disabled={!selectedUser || !isPinValid || isLoading}
-            className="w-full py-5 rounded-xl bg-indigo-600 text-white text-lg font-bold disabled:opacity-50"
+            className="w-full py-5 rounded-xl bg-indigo-600 text-white text-lg font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
-            {isLoading ? "Вход..." : "Войти"}
+            {isLoading ? "Logging in..." : "Login"}
           </button>
+
+          {selectedUser && (
+            <p className="text-center text-sm text-gray-400">
+              Press Enter to login or Esc to clear PIN
+            </p>
+          )}
         </div>
       </div>
     </div>

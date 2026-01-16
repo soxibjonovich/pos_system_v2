@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { Search, Plus, Pencil, Trash2, X } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, Shield } from 'lucide-react'
 import {
   Table,
   TableBody,
@@ -21,29 +21,29 @@ import {
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { useAuth } from "@/contexts/auth-context"
 
-interface Product {
-  id: number | string
-  name?: string
-  title?: string
-  price?: number | string
-  cost?: number | string
-  category?: string
-  description?: string
-  stock?: number
-  quantity?: number
-  status?: string
-  [key: string]: any
+interface User {
+  id: number
+  username: string
+  full_name: string
+  pin: number
+  role: string
+  status: string
+  last_login?: string | null
 }
 
-interface ProductFormData {
-  title: string
-  description: string
-  quantity: number
-  price: number
-  cost: number
+interface UserFormData {
+  username: string
+  full_name: string
+  pin: number
+}
+
+interface UserUpdateData {
+  full_name?: string
+  pin?: number
+  role?: string
+  status?: string
 }
 
 export const Route = createFileRoute('/admin/users/')({
@@ -51,37 +51,44 @@ export const Route = createFileRoute('/admin/users/')({
 })
 
 function RouteComponent() {
-  const [products, setProducts] = useState<Product[]>([])
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
+  const [users, setUsers] = useState<User[]>([])
+  const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchField, setSearchField] = useState<'all' | 'name' | 'category' | 'status' | 'description'>('all')
-  const [categoryFilter, setCategoryFilter] = useState('')
+  const [searchField, setSearchField] = useState<'all' | 'username' | 'full_name' | 'role'>('all')
+  const [roleFilter, setRoleFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const { token } = useAuth()
 
   // Modal states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isAddAdminModalOpen, setIsAddAdminModalOpen] = useState(false)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Form data
-  const [formData, setFormData] = useState<ProductFormData>({
-    title: '',
-    description: '',
-    quantity: 0,
-    price: 0,
-    cost: 0,
+  const [formData, setFormData] = useState<UserFormData>({
+    username: '',
+    full_name: '',
+    pin: 1000,
   })
 
-  // Fetch products from API
-  const fetchProducts = async () => {
+  // Edit form data
+  const [editFormData, setEditFormData] = useState<UserUpdateData & { role: string; status: string }>({
+    full_name: '',
+    pin: 1000,
+    role: 'cashier',
+    status: 'active',
+  })
+
+  // Fetch users from API
+  const fetchUsers = async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch('http://127.0.0.1:8002/products', {
+      const response = await fetch('http://127.0.0.1:8001/users', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -90,79 +97,66 @@ function RouteComponent() {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch products: ${response.statusText}`)
+        throw new Error(`Failed to fetch users: ${response.statusText}`)
       }
 
       const data = await response.json()
-      const productsList = Array.isArray(data) ? data : (data.products || data.data || [])
-      setProducts(productsList)
-      setFilteredProducts(productsList)
+      setUsers(data.users || [])
+      setFilteredUsers(data.users || [])
     } catch (err) {
-      console.error('Error fetching products:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch products')
+      console.error('Error fetching users:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch users')
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchProducts()
+    fetchUsers()
   }, [token])
 
   // Apply filters and search
   useEffect(() => {
-    let filtered = [...products]
+    let filtered = [...users]
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
-      filtered = filtered.filter((product) => {
-        const name = (product.name || product.title || '').toLowerCase()
-        const description = (product.description || '').toLowerCase()
-        const category = (product.category || '').toLowerCase()
-        const status = (product.status || '').toLowerCase()
+      filtered = filtered.filter((user) => {
+        const username = user.username.toLowerCase()
+        const fullName = user.full_name.toLowerCase()
+        const role = user.role.toLowerCase()
 
         switch (searchField) {
-          case 'name':
-            return name.includes(query)
-          case 'category':
-            return category.includes(query)
-          case 'status':
-            return status.includes(query)
-          case 'description':
-            return description.includes(query)
+          case 'username':
+            return username.includes(query)
+          case 'full_name':
+            return fullName.includes(query)
+          case 'role':
+            return role.includes(query)
           default:
-            return (
-              name.includes(query) ||
-              description.includes(query) ||
-              category.includes(query) ||
-              status.includes(query)
-            )
+            return username.includes(query) || fullName.includes(query) || role.includes(query)
         }
       })
     }
 
-    if (categoryFilter) {
-      filtered = filtered.filter((product) => {
-        const category = (product.category || '').toLowerCase()
-        return category === categoryFilter.toLowerCase()
-      })
+    if (roleFilter) {
+      filtered = filtered.filter((user) => user.role === roleFilter)
     }
 
     if (statusFilter) {
-      filtered = filtered.filter((product) => {
-        const status = (product.status || '').toLowerCase()
-        return status === statusFilter.toLowerCase()
-      })
+      filtered = filtered.filter((user) => user.status === statusFilter)
     }
 
-    setFilteredProducts(filtered)
-  }, [searchQuery, searchField, categoryFilter, statusFilter, products])
+    setFilteredUsers(filtered)
+  }, [searchQuery, searchField, roleFilter, statusFilter, users])
 
   // API Functions
-  const addProduct = async (data: ProductFormData) => {
+  const addUser = async (data: UserFormData, isAdmin: boolean = false) => {
     setIsSubmitting(true)
     try {
-      const response = await fetch('http://127.0.0.1:8002/products', {
+      const endpoint = isAdmin ? 'http://127.0.0.1:8001/users/admin' : 'http://127.0.0.1:8001/users'
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -172,24 +166,26 @@ function RouteComponent() {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to add product: ${response.statusText}`)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to add user: ${response.statusText}`)
       }
 
-      await fetchProducts() // Refresh the list
+      await fetchUsers()
       setIsAddModalOpen(false)
+      setIsAddAdminModalOpen(false)
       resetForm()
     } catch (err) {
-      console.error('Error adding product:', err)
-      alert(err instanceof Error ? err.message : 'Failed to add product')
+      console.error('Error adding user:', err)
+      alert(err instanceof Error ? err.message : 'Failed to add user')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const updateProduct = async (id: number | string, data: ProductFormData) => {
+  const updateUser = async (id: number, data: UserUpdateData) => {
     setIsSubmitting(true)
     try {
-      const response = await fetch(`http://127.0.0.1:8002/products/${id}`, {
+      const response = await fetch(`http://127.0.0.1:8001/users/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -199,29 +195,59 @@ function RouteComponent() {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to update product: ${response.statusText}`)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to update user: ${response.statusText}`)
       }
 
-      await fetchProducts() // Refresh the list
+      await fetchUsers()
       setIsEditModalOpen(false)
-      setSelectedProduct(null)
+      setSelectedUser(null)
       resetForm()
     } catch (err) {
-      console.error('Error updating product:', err)
-      alert(err instanceof Error ? err.message : 'Failed to update product')
+      console.error('Error updating user:', err)
+      alert(err instanceof Error ? err.message : 'Failed to update user')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const deleteProduct = async (id: number | string) => {
-    if (!confirm('Are you sure you want to delete this product?')) {
+  const updateUserRole = async (id: number, role: string) => {
+    setIsSubmitting(true)
+    try {
+      const response = await fetch(`http://127.0.0.1:8001/users/${id}/role`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { 'Authorization': `Bearer ${token}` }),
+        },
+        body: JSON.stringify({ role }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to update role: ${response.statusText}`)
+      }
+
+      await fetchUsers()
+      setIsEditModalOpen(false)
+      setSelectedUser(null)
+      resetForm()
+    } catch (err) {
+      console.error('Error updating role:', err)
+      alert(err instanceof Error ? err.message : 'Failed to update role')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const deleteUser = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       return
     }
 
     setIsSubmitting(true)
     try {
-      const response = await fetch(`http://127.0.0.1:8002/products/${id}`, {
+      const response = await fetch(`http://127.0.0.1:8001/users/${id}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
@@ -230,15 +256,16 @@ function RouteComponent() {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to delete product: ${response.statusText}`)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to delete user: ${response.statusText}`)
       }
 
-      await fetchProducts() // Refresh the list
+      await fetchUsers()
       setIsEditModalOpen(false)
-      setSelectedProduct(null)
+      setSelectedUser(null)
     } catch (err) {
-      console.error('Error deleting product:', err)
-      alert(err instanceof Error ? err.message : 'Failed to delete product')
+      console.error('Error deleting user:', err)
+      alert(err instanceof Error ? err.message : 'Failed to delete user')
     } finally {
       setIsSubmitting(false)
     }
@@ -247,11 +274,15 @@ function RouteComponent() {
   // Form handlers
   const resetForm = () => {
     setFormData({
-      title: '',
-      description: '',
-      quantity: 0,
-      price: 0,
-      cost: 0,
+      username: '',
+      full_name: '',
+      pin: 1000,
+    })
+    setEditFormData({
+      full_name: '',
+      pin: 1000,
+      role: 'cashier',
+      status: 'active',
     })
   }
 
@@ -260,55 +291,48 @@ function RouteComponent() {
     setIsAddModalOpen(true)
   }
 
-  const handleEditClick = (product: Product) => {
-    setSelectedProduct(product)
-    setFormData({
-      title: product.title || product.name || '',
-      description: product.description || '',
-      quantity: product.quantity || product.stock || 0,
-      price: Number(product.price) || 0,
-      cost: Number(product.cost) || 0,
+  const handleAddAdminClick = () => {
+    resetForm()
+    setIsAddAdminModalOpen(true)
+  }
+
+  const handleEditClick = (user: User) => {
+    setSelectedUser(user)
+    setEditFormData({
+      full_name: user.full_name,
+      pin: user.pin,
+      role: user.role,
+      status: user.status,
     })
     setIsEditModalOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (isEditModalOpen && selectedProduct) {
-      updateProduct(selectedProduct.id, formData)
-    } else {
-      addProduct(formData)
+    addUser(formData, false)
+  }
+
+  const handleAddAdminSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    addUser(formData, true)
+  }
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (selectedUser) {
+      updateUser(selectedUser.id, editFormData)
     }
   }
 
-  const categories = Array.from(new Set([]))
-  const statuses = Array.from(new Set(products.map(p => p.status).filter(Boolean)))
-
-  const getProductKeys = (): string[] => {
-    if (products.length === 0) return ['id', 'name', 'price', 'category', 'stock']
-    const firstProduct = products[0]
-    const commonFields = ['id', 'name', 'title', 'price', 'cost', 'category', 'stock', 'quantity', 'status', 'description']
-    const keys = Object.keys(firstProduct)
-    const orderedKeys = [
-      ...commonFields.filter(k => keys.includes(k)),
-      ...keys.filter(k => !commonFields.includes(k))
-    ]
-    return orderedKeys.slice(0, 6)
-  }
-
-  const productKeys = getProductKeys()
-
-  const formatValue = (value: any): string => {
-    if (value === null || value === undefined) return '-'
-    if (typeof value === 'object') return JSON.stringify(value)
-    return String(value)
-  }
+  // Get unique roles and statuses for filters
+  const roles = Array.from(new Set(users.map(u => u.role).filter(Boolean)))
+  const statuses = Array.from(new Set(users.map(u => u.status).filter(Boolean)))
 
   if (isLoading) {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading products...</p>
+          <p className="text-muted-foreground">Loading users...</p>
         </div>
       </div>
     )
@@ -326,14 +350,21 @@ function RouteComponent() {
 
   return (
     <div className="p-6 space-y-4">
-      {/* Header with Add Product Button */}
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Products</h1>
-        <Button onClick={handleAddClick}>
-          <Plus className="size-4" />
-          Add Product
-        </Button>
+        <h1 className="text-2xl font-bold">Users</h1>
+        <div className="flex gap-2">
+          <Button onClick={handleAddClick} variant="default">
+            <Plus className="size-4" />
+            Add User
+          </Button>
+          <Button onClick={handleAddAdminClick} variant="outline">
+            <Shield className="size-4" />
+            Add Admin
+          </Button>
+        </div>
       </div>
+
       {/* Search and Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex flex-1 gap-2">
@@ -341,7 +372,7 @@ function RouteComponent() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
             <Input
               type="text"
-              placeholder="Search products..."
+              placeholder="Search users..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"
@@ -353,23 +384,22 @@ function RouteComponent() {
             className="h-9 w-36 rounded-md border border-input bg-background px-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value="all">All fields</option>
-            <option value="name">Name</option>
-            <option value="category">Category</option>
-            <option value="status">Status</option>
-            <option value="description">Description</option>
+            <option value="username">Username</option>
+            <option value="full_name">Full Name</option>
+            <option value="role">Role</option>
           </select>
         </div>
 
-        {categories.length > 0 && (
+        {roles.length > 0 && (
           <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
+            <option value="">All Roles</option>
+            {roles.map((role) => (
+              <option key={role} value={role}>
+                {role}
               </option>
             ))}
           </select>
@@ -390,12 +420,12 @@ function RouteComponent() {
           </select>
         )}
 
-        {(searchQuery || categoryFilter || statusFilter) && (
+        {(searchQuery || roleFilter || statusFilter) && (
           <Button
             variant="outline"
             onClick={() => {
               setSearchQuery('')
-              setCategoryFilter('')
+              setRoleFilter('')
               setStatusFilter('')
             }}
           >
@@ -403,51 +433,63 @@ function RouteComponent() {
           </Button>
         )}
       </div>
-      {/* Products Table */}
+
+      {/* Users Table */}
       <div className="border rounded-lg">
         <Table>
           <TableCaption>
-            {filteredProducts.length === 0
-              ? 'No products found'
-              : `Showing ${filteredProducts.length} of ${products.length} products`}
+            {filteredUsers.length === 0
+              ? 'No users found'
+              : `Showing ${filteredUsers.length} of ${users.length} users`}
           </TableCaption>
           <TableHeader>
             <TableRow>
-              {productKeys.map((key) => (
-                <TableHead key={key} className="capitalize">
-                  {key.replace(/_/g, ' ')}
-                </TableHead>
-              ))}
-              <TableHead className="w-0 text-right">Actions</TableHead>
+              <TableHead>ID</TableHead>
+              <TableHead>Username</TableHead>
+              <TableHead>Full Name</TableHead>
+              <TableHead>PIN</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Last Login</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredProducts.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={productKeys.length + 1} className="text-center text-muted-foreground">
-                  No products match your filters
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                  No users match your filters
                 </TableCell>
               </TableRow>
             ) : (
-              filteredProducts.map((product) => (
-                <TableRow key={product.id}>
-                  {productKeys.map((key) => (
-                    <TableCell key={key}>
-                      {key === 'price' || key === 'cost' ? (
-                        typeof product[key] === 'number' ? `$${product[key].toFixed(2)}` : formatValue(product[key])
-                      ) : key === 'quantity' || key === 'stock' ? (
-                        product[key] === -1 ? '∞' : formatValue(product[key])
-                      ) : (
-                        formatValue(product[key])
-                      )}
-                    </TableCell>
-                  ))}
+              filteredUsers.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>{user.id}</TableCell>
+                  <TableCell className="font-medium">{user.username}</TableCell>
+                  <TableCell>{user.full_name}</TableCell>
+                  <TableCell className="font-mono">****</TableCell>
+                  <TableCell>
+                    <span className="capitalize inline-flex items-center rounded-full px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 ring-1 ring-blue-600/20">
+                      {user.role}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                      user.status === 'active' 
+                        ? 'bg-green-50 text-green-700 ring-1 ring-green-600/20' 
+                        : 'bg-gray-50 text-gray-700 ring-1 ring-gray-600/20'
+                    }`}>
+                      {user.status}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {user.last_login ? new Date(user.last_login).toLocaleDateString() : '-'}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleEditClick(product)}
-                      aria-label={`Edit product ${product.name || product.title || product.id}`}
+                      onClick={() => handleEditClick(user)}
                     >
                       <Pencil className="size-4" />
                     </Button>
@@ -458,73 +500,57 @@ function RouteComponent() {
           </TableBody>
         </Table>
       </div>
-      {/* Add Product Modal */}
+
+      {/* Add User Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Add New Product</DialogTitle>
+            <DialogTitle>Add New User</DialogTitle>
             <DialogDescription>
-              Enter the product details below. Set quantity to -1 for unlimited stock.
+              Create a new user account. PIN must be 4-6 digits.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleAddSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="title">Title *</Label>
+                <Label htmlFor="username">Username *</Label>
                 <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  id="username"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   required
-                  placeholder="Product name"
+                  minLength={2}
+                  maxLength={50}
+                  placeholder="johndoe"
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Product description"
-                  rows={3}
+                <Label htmlFor="full_name">Full Name *</Label>
+                <Input
+                  id="full_name"
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  placeholder="John Doe"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="quantity">
-                    Quantity *
-                    <span className="text-xs text-muted-foreground block">(-1 = ∞)</span>
-                  </Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="price">Price *</Label>
-                  <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="cost">Cost *</Label>
-                  <Input
-                    id="cost"
-                    type="number"
-                    step="0.01"
-                    value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
-                    required
-                  />
-                </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pin">
+                  PIN *
+                  <span className="text-xs text-muted-foreground block">(4-6 digits)</span>
+                </Label>
+                <Input
+                  id="pin"
+                  type="number"
+                  value={formData.pin}
+                  onChange={(e) => setFormData({ ...formData, pin: Number(e.target.value) })}
+                  required
+                  min={1000}
+                  max={999999}
+                  placeholder="1234"
+                />
               </div>
             </div>
             <DialogFooter>
@@ -532,78 +558,143 @@ function RouteComponent() {
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? 'Adding...' : 'Add Product'}
+                {isSubmitting ? 'Adding...' : 'Add User'}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-      {/* Edit Product Modal */}
+
+      {/* Add Admin Modal */}
+      <Dialog open={isAddAdminModalOpen} onOpenChange={setIsAddAdminModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Add New Administrator</DialogTitle>
+            <DialogDescription>
+              Create a new admin account with full system access. PIN must be 4-6 digits.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleAddAdminSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="admin-username">Username *</Label>
+                <Input
+                  id="admin-username"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  required
+                  minLength={2}
+                  maxLength={50}
+                  placeholder="admin"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="admin-full_name">Full Name *</Label>
+                <Input
+                  id="admin-full_name"
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  placeholder="Administrator"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="admin-pin">
+                  PIN *
+                  <span className="text-xs text-muted-foreground block">(4-6 digits)</span>
+                </Label>
+                <Input
+                  id="admin-pin"
+                  type="number"
+                  value={formData.pin}
+                  onChange={(e) => setFormData({ ...formData, pin: Number(e.target.value) })}
+                  required
+                  min={1000}
+                  max={999999}
+                  placeholder="1234"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsAddAdminModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Adding...' : 'Add Administrator'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Modal */}
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Edit Product</DialogTitle>
+            <DialogTitle>Edit User</DialogTitle>
             <DialogDescription>
-              Update the product details below. Set quantity to -1 for unlimited stock.
+              Update user account details. PIN must be 4-6 digits.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleEditSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-title">Title *</Label>
+                <Label htmlFor="edit-full_name">Full Name *</Label>
                 <Input
-                  id="edit-title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  id="edit-full_name"
+                  value={editFormData.full_name}
+                  onChange={(e) => setEditFormData({ ...editFormData, full_name: e.target.value })}
                   required
-                  placeholder="Product name"
+                  minLength={2}
+                  maxLength={100}
+                  placeholder="John Doe"
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-description">Description</Label>
-                <Textarea
-                  id="edit-description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Product description"
-                  rows={3}
+                <Label htmlFor="edit-pin">
+                  PIN *
+                  <span className="text-xs text-muted-foreground block">(4-6 digits)</span>
+                </Label>
+                <Input
+                  id="edit-pin"
+                  type="number"
+                  value={editFormData.pin}
+                  onChange={(e) => setEditFormData({ ...editFormData, pin: Number(e.target.value) })}
+                  required
+                  min={1000}
+                  max={999999}
+                  placeholder="1234"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-quantity">
-                    Quantity *
-                    <span className="text-xs text-muted-foreground block">(-1 = ∞)</span>
-                  </Label>
-                  <Input
-                    id="edit-quantity"
-                    type="number"
-                    value={formData.quantity}
-                    onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
+                  <Label htmlFor="edit-role">Role *</Label>
+                  <select
+                    id="edit-role"
+                    value={editFormData.role}
+                    onChange={(e) => setEditFormData({ ...editFormData, role: e.target.value })}
+                    className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     required
-                  />
+                  >
+                    <option value="admin">Admin</option>
+                    <option value="manager">Manager</option>
+                    <option value="cashier">Cashier</option>
+                  </select>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-price">Price *</Label>
-                  <Input
-                    id="edit-price"
-                    type="number"
-                    step="0.01"
-                    value={formData.price}
-                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                  <Label htmlFor="edit-status">Status *</Label>
+                  <select
+                    id="edit-status"
+                    value={editFormData.status}
+                    onChange={(e) => setEditFormData({ ...editFormData, status: e.target.value })}
+                    className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="edit-cost">Cost *</Label>
-                  <Input
-                    id="edit-cost"
-                    type="number"
-                    step="0.01"
-                    value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
-                    required
-                  />
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
                 </div>
               </div>
             </div>
@@ -611,7 +702,7 @@ function RouteComponent() {
               <Button
                 type="button"
                 variant="destructive"
-                onClick={() => selectedProduct && deleteProduct(selectedProduct.id)}
+                onClick={() => selectedUser && deleteUser(selectedUser.id)}
                 disabled={isSubmitting}
               >
                 <Trash2 className="size-4 mr-2" />
@@ -622,7 +713,7 @@ function RouteComponent() {
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Updating...' : 'Update Product'}
+                  {isSubmitting ? 'Updating...' : 'Update User'}
                 </Button>
               </div>
             </DialogFooter>
