@@ -4,10 +4,12 @@ interface AuthContextType {
   token: string | null
   role: string | null
   isAuthenticated: boolean
+  isLoading: boolean
   setToken: (token: string | null) => void
   setRole: (role: string | null) => void
   login: (token: string, role: string) => void
   logout: () => void
+  checkAuth: () => boolean
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -18,6 +20,7 @@ const ROLE_KEY = 'posrole'
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null)
   const [role, setRoleState] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
 
   // Initialize from localStorage on mount
   useEffect(() => {
@@ -30,6 +33,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storedRole) {
       setRoleState(storedRole)
     }
+    
+    setIsLoading(false)
   }, [])
 
   // Sync token changes to localStorage
@@ -64,14 +69,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setRole(null)
   }
 
+  // Check if user is authenticated by checking localStorage
+  const checkAuth = (): boolean => {
+    const storedToken = localStorage.getItem(TOKEN_KEY)
+    const storedRole = localStorage.getItem(ROLE_KEY)
+    
+    if (storedToken && storedRole) {
+      setTokenState(storedToken)
+      setRoleState(storedRole)
+      return true
+    }
+    
+    return false
+  }
+
   const value: AuthContextType = {
     token,
     role,
     isAuthenticated: !!token,
+    isLoading,
     setToken,
     setRole,
     login,
     logout,
+    checkAuth,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
@@ -84,4 +105,3 @@ export function useAuth() {
   }
   return context
 }
-

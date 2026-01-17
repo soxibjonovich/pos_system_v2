@@ -1,19 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Search, Plus, Pencil, Trash2 } from 'lucide-react'
 import { API_URL } from '@/config'
-import { useAuth } from '@/contexts/auth-context'
-
 import {
   Table,
   TableBody,
+  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-  TableCaption,
-} from '@/components/ui/table'
-
+} from "@/components/ui/table"
 import {
   Dialog,
   DialogContent,
@@ -21,326 +18,569 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
+import { useAuth } from "@/contexts/auth-context"
 
 const USERS_API = `${API_URL}:8002/users`
 
 interface User {
-  id: number | string
+  id: number
   username: string
   full_name: string
+  pin: number
+  role: string
   status: string
+  last_login: string | null
 }
 
 interface UserFormData {
   username: string
   full_name: string
-  status: string
+  pin: string
+}
+
+interface UserUpdateData {
+  full_name?: string
+  pin?: number
+  role?: string
+  status?: string
 }
 
 export const Route = createFileRoute('/admin/users/')({
-  component: UsersPage,
+  component: RouteComponent,
 })
 
-function UsersPage() {
+function RouteComponent() {
   const { token } = useAuth()
-
+  
   const [users, setUsers] = useState<User[]>([])
   const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-
-  const [search, setSearch] = useState('')
+  
+  const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
-  const [isAddOpen, setIsAddOpen] = useState(false)
-  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false)
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const [formData, setFormData] = useState<UserFormData>({
     username: '',
     full_name: '',
-    status: 'active',
+    pin: '',
   })
 
-  /* ===================== FETCH USERS ===================== */
+  const [editData, setEditData] = useState({
+    full_name: '',
+    pin: '',
+    role: '',
+    status: '',
+  })
+
   const fetchUsers = async () => {
     setIsLoading(true)
+    setError(null)
     try {
-      const res = await fetch(USERS_API, {
+      const response = await fetch(USERS_API, {
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
+          'Authorization': `Bearer ${token}`,
         },
       })
 
-      if (!res.ok) throw new Error('Failed to fetch users')
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.statusText}`)
+      }
 
-      const data = await res.json()
-      setUsers(data)
-      setFilteredUsers(data)
+      const data = await response.json()
+      const usersList = Array.isArray(data) ? data : (data.users || [])
+      
+      // Filter only staff users (cashier and manager)
+      const staffUsers = usersList.filter((user: User) => 
+        user.role === 'staff'
+      )
+      
+      setUsers(staffUsers)
+      setFilteredUsers(staffUsers)
     } catch (err) {
-      setError('Failed to load users')
+      console.error('Error fetching users:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch users')
     } finally {
       setIsLoading(false)
     }
   }
 
   useEffect(() => {
-    fetchUsers()
+    if (token) {
+      fetchUsers()
+    }
   }, [token])
 
-  /* ===================== FILTER ===================== */
   useEffect(() => {
-    let list = [...users]
+    let filtered = [...users]
 
-    if (search) {
-      const q = search.toLowerCase()
-      list = list.filter(
-        (u) =>
-          u.username.toLowerCase().includes(q) ||
-          u.full_name.toLowerCase().includes(q),
-      )
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter((user) => {
+        const username = user.username.toLowerCase()
+        const fullName = user.full_name.toLowerCase()
+        return username.includes(query) || fullName.includes(query)
+      })
     }
 
     if (statusFilter) {
-      list = list.filter((u) => u.status === statusFilter)
+      filtered = filtered.filter((user) => user.status === statusFilter)
     }
 
-    setFilteredUsers(list)
-  }, [search, statusFilter, users])
+    setFilteredUsers(filtered)
+  }, [searchQuery, statusFilter, users])
 
-  /* ===================== CRUD ===================== */
-  const resetForm = () => {
-    setFormData({ username: '', full_name: '', status: 'active' })
-  }
-
-  const addUser = async () => {
+  const addUser = async (data: UserFormData) => {
     setIsSubmitting(true)
     try {
-      const res = await fetch(USERS_API, {
+      const response = await fetch(USERS_API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          username: data.username,
+          full_name: data.full_name,
+          pin: parseInt(data.pin, 10),
+        }),
       })
 
-      if (!res.ok) throw new Error()
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to add user: ${response.statusText}`)
+      }
 
       await fetchUsers()
-      setIsAddOpen(false)
+      setIsAddModalOpen(false)
       resetForm()
+    } catch (err) {
+      console.error('Error adding user:', err)
+      alert(err instanceof Error ? err.message : 'Failed to add user')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const updateUser = async () => {
-    if (!selectedUser) return
+  const updateUser = async (id: number, data: UserUpdateData) => {
     setIsSubmitting(true)
     try {
-      const res = await fetch(`${USERS_API}/${selectedUser.id}`, {
+      console.log('Sending update:', data)
+      const response = await fetch(`${USERS_API}/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(data),
       })
+      console.log('Response status:', response.status)
 
-      if (!res.ok) throw new Error()
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to update user: ${response.statusText}`)
+      }
 
       await fetchUsers()
-      setIsEditOpen(false)
+      setIsEditModalOpen(false)
       setSelectedUser(null)
+      resetForm()
+    } catch (err) {
+      console.error('Error updating user:', err)
+      alert(err instanceof Error ? err.message : 'Failed to update user')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  const deleteUser = async () => {
-    if (!selectedUser) return
-    if (!confirm('Delete this user?')) return
+  const deleteUser = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this user?')) {
+      return
+    }
 
-    await fetch(`${USERS_API}/${selectedUser.id}`, {
-      method: 'DELETE',
-      headers: {
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-    })
+    setIsSubmitting(true)
+    try {
+      const response = await fetch(`${USERS_API}/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      })
 
-    await fetchUsers()
-    setIsEditOpen(false)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to delete user: ${response.statusText}`)
+      }
+
+      await fetchUsers()
+      setIsEditModalOpen(false)
+      setSelectedUser(null)
+    } catch (err) {
+      console.error('Error deleting user:', err)
+      alert(err instanceof Error ? err.message : 'Failed to delete user')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  /* ===================== UI ===================== */
+  const resetForm = () => {
+    setFormData({
+      username: '',
+      full_name: '',
+      pin: '',
+    })
+    setEditData({
+      full_name: '',
+      pin: '',
+      role: '',
+      status: '',
+    })
+  }
+
+  const handleAddClick = () => {
+    resetForm()
+    setIsAddModalOpen(true)
+  }
+
+  const handleEditClick = (user: User) => {
+    setSelectedUser(user)
+    setEditData({
+      full_name: user.full_name,
+      pin: String(user.pin),
+      role: user.role,
+      status: user.status,
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedUser || isSubmitting) return
+
+    const updateData: UserUpdateData = {}
+    if (editData.full_name !== selectedUser.full_name) {
+      updateData.full_name = editData.full_name
+    }
+    if (editData.pin && parseInt(editData.pin) !== selectedUser.pin) {
+      updateData.pin = parseInt(editData.pin, 10)
+    }
+    if (editData.role !== selectedUser.role) {
+      updateData.role = editData.role
+    }
+    if (editData.status !== selectedUser.status) {
+      updateData.status = editData.status
+    }
+
+    console.log('Update data being sent:', updateData)
+
+    if (Object.keys(updateData).length === 0) {
+      setIsEditModalOpen(false)
+      return
+    }
+
+    await updateUser(selectedUser.id, updateData)
+  }
+
+  const handleAddSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    addUser(formData)
+  }
+
+  const staffRoles = ['staff', "admin"]
+  const statuses = ['active', 'inactive']
+  const uniqueStatuses = Array.from(new Set(users.map(u => u.status)))
+
   if (isLoading) {
-    return <p className="p-6 text-muted-foreground">Loading users...</p>
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading staff users...</p>
+        </div>
+      </div>
+    )
   }
 
   if (error) {
-    return <p className="p-6 text-destructive">{error}</p>
+    return (
+      <div className="p-6">
+        <div className="flex items-center justify-center h-64">
+          <p className="text-destructive">Error: {error}</p>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="p-6 space-y-4">
-      {/* HEADER */}
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Users</h1>
-        <Button onClick={() => setIsAddOpen(true)}>
-          <Plus className="size-4 mr-2" />
-          Add User
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Staff Users</h1>
+        <Button onClick={handleAddClick}>
+          <Plus className="size-4" />
+          Add Staff User
         </Button>
       </div>
 
-      {/* FILTERS */}
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
-            placeholder="Search username or full name"
+            type="text"
+            placeholder="Search staff users..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
           />
         </div>
 
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="All statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
+        {uniqueStatuses.length > 0 && (
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="">All Statuses</option>
+            {uniqueStatuses.map((status) => (
+              <option key={status} value={status}>
+                {status}
+              </option>
+            ))}
+          </select>
+        )}
+
+        {(searchQuery || statusFilter) && (
+          <Button
+            variant="outline"
+            onClick={() => {
+              setSearchQuery('')
+              setStatusFilter('')
+            }}
+          >
+            Clear Filters
+          </Button>
+        )}
       </div>
 
-      {/* TABLE */}
       <div className="border rounded-lg">
         <Table>
           <TableCaption>
-            Showing {filteredUsers.length} of {users.length} users
+            {filteredUsers.length === 0
+              ? 'No staff users found'
+              : `Showing ${filteredUsers.length} of ${users.length} staff users`}
           </TableCaption>
           <TableHeader>
             <TableRow>
               <TableHead>ID</TableHead>
               <TableHead>Username</TableHead>
               <TableHead>Full Name</TableHead>
+              <TableHead>Role</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead>Last Login</TableHead>
+              <TableHead className="w-0 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredUsers.map((user) => (
-              <TableRow key={user.id}>
-                <TableCell>{user.id}</TableCell>
-                <TableCell>{user.username}</TableCell>
-                <TableCell>{user.full_name}</TableCell>
-                <TableCell className="capitalize">{user.status}</TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => {
-                      setSelectedUser(user)
-                      setFormData(user)
-                      setIsEditOpen(true)
-                    }}
-                  >
-                    <Pencil className="size-4" />
-                  </Button>
+            {filteredUsers.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  No staff users match your filters
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              filteredUsers.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>{user.id}</TableCell>
+                  <TableCell className="font-medium">{user.username}</TableCell>
+                  <TableCell>{user.full_name}</TableCell>
+                  <TableCell>
+                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                      user.role === 'manager' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {user.role}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                      user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
+                      {user.status}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEditClick(user)}
+                      aria-label="Edit user"
+                    >
+                      <Pencil className="size-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
 
-      {/* ADD / EDIT DIALOG */}
-      <Dialog open={isAddOpen || isEditOpen} onOpenChange={() => {
-        setIsAddOpen(false)
-        setIsEditOpen(false)
-      }}>
-        <DialogContent>
+      <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>
-              {isEditOpen ? 'Edit User' : 'Add User'}
-            </DialogTitle>
+            <DialogTitle>Add New Staff User</DialogTitle>
             <DialogDescription>
-              Manage user account details
+              Create a new staff user account. PIN must be 4-6 digits.
             </DialogDescription>
           </DialogHeader>
-
-          <div className="grid gap-4">
-            <div>
-              <Label>Username</Label>
-              <Input
-                value={formData.username}
-                onChange={(e) =>
-                  setFormData({ ...formData, username: e.target.value })
-                }
-              />
+          <form onSubmit={handleAddSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="username">Username *</Label>
+                <Input
+                  id="username"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  required
+                  minLength={2}
+                  maxLength={50}
+                  placeholder="username"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="full_name">Full Name *</Label>
+                <Input
+                  id="full_name"
+                  value={formData.full_name}
+                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                  required
+                  minLength={2}
+                  maxLength={100}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="pin">PIN Code *</Label>
+                <Input
+                  id="pin"
+                  type="number"
+                  value={formData.pin}
+                  onChange={(e) => setFormData({ ...formData, pin: e.target.value })}
+                  required
+                  min={1000}
+                  max={999999}
+                  placeholder="4-6 digit PIN"
+                />
+              </div>
             </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? 'Adding...' : 'Add User'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-            <div>
-              <Label>Full Name</Label>
-              <Input
-                value={formData.full_name}
-                onChange={(e) =>
-                  setFormData({ ...formData, full_name: e.target.value })
-                }
-              />
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Staff User</DialogTitle>
+            <DialogDescription>
+              Update user information. Leave PIN empty to keep current.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleEditSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="edit-full_name">Full Name *</Label>
+                <Input
+                  id="edit-full_name"
+                  value={editData.full_name}
+                  onChange={(e) => setEditData({ ...editData, full_name: e.target.value })}
+                  required
+                  minLength={2}
+                  maxLength={100}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-pin">New PIN (optional)</Label>
+                <Input
+                  id="edit-pin"
+                  type="number"
+                  value={editData.pin}
+                  onChange={(e) => setEditData({ ...editData, pin: e.target.value })}
+                  min={1000}
+                  max={999999}
+                  placeholder="Leave empty to keep current"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-role">Role</Label>
+                <select
+                  id="edit-role"
+                  value={editData.role}
+                  onChange={(e) => setEditData({ ...editData, role: e.target.value })}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {staffRoles.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-status">Status</Label>
+                <select
+                  id="edit-status"
+                  value={editData.status}
+                  onChange={(e) => setEditData({ ...editData, status: e.target.value })}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {statuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-
-            <div>
-              <Label>Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(v) =>
-                  setFormData({ ...formData, status: v })
-                }
+            <DialogFooter className="flex justify-between">
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => selectedUser && deleteUser(selectedUser.id)}
+                disabled={isSubmitting}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <DialogFooter className="flex justify-between">
-            {isEditOpen && (
-              <Button variant="destructive" onClick={deleteUser}>
                 <Trash2 className="size-4 mr-2" />
                 Delete
               </Button>
-            )}
-            <Button
-              onClick={isEditOpen ? updateUser : addUser}
-              disabled={isSubmitting}
-            >
-              {isSubmitting ? 'Saving...' : 'Save'}
-            </Button>
-          </DialogFooter>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting ? 'Updating...' : 'Update User'}
+                </Button>
+              </div>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

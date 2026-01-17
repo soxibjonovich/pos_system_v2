@@ -51,8 +51,8 @@ async def create_user(db: AsyncSession, user: schema.UserCreate) -> User:
                     "action": "created",
                     "user_id": new_user.id,
                     "username": new_user.username,
-                    "role": new_user.role,
-                    "status": new_user.status,
+                    "role": new_user.role.value if isinstance(new_user.role, UserRole) else new_user.role,
+                    "status": new_user.status.value if isinstance(new_user.status, UserStatus) else new_user.status,
                 },
             )
         except Exception as e:
@@ -69,10 +69,9 @@ async def update_user(db: AsyncSession, id: int, user: schema.UserUpdate) -> Use
     if not existing_user:
         return None
     
-    if user.role:
-        # Store old values for event
-        old_role = existing_user.role
-        old_status = existing_user.status
+    # Store old values for event BEFORE updating
+    old_role = existing_user.role.value if isinstance(existing_user.role, UserRole) else existing_user.role
+    old_status = existing_user.status.value if isinstance(existing_user.status, UserStatus) else existing_user.status
     
     for key, value in user.model_dump(exclude_unset=True).items():
         setattr(existing_user, key, value)
@@ -83,24 +82,27 @@ async def update_user(db: AsyncSession, id: int, user: schema.UserUpdate) -> Use
         
         # Publish RabbitMQ event
         try:
+            current_role = existing_user.role.value if isinstance(existing_user.role, UserRole) else existing_user.role
+            current_status = existing_user.status.value if isinstance(existing_user.status, UserStatus) else existing_user.status
+            
             event_data = {
                 "action": "updated",
                 "user_id": existing_user.id,
                 "username": existing_user.username,
-                "role": existing_user.role,
-                "status": existing_user.status,
+                "role": current_role,
+                "status": current_status,
             }
             
             # Add role change info if role was updated
-            if old_role != existing_user.role:
+            if old_role != current_role:
                 event_data["old_role"] = old_role
-                event_data["new_role"] = existing_user.role
+                event_data["new_role"] = current_role
                 event_data["role_changed"] = True
             
             # Add status change info if status was updated
-            if old_status != existing_user.status:
+            if old_status != current_status:
                 event_data["old_status"] = old_status
-                event_data["new_status"] = existing_user.status
+                event_data["new_status"] = current_status
                 event_data["status_changed"] = True
             
             await rabbitmq_client.publish("user.updated", event_data)
@@ -121,7 +123,7 @@ async def delete_user(db: AsyncSession, id: int) -> bool:
     # Store user info for event
     user_id = user.id
     username = user.username
-    role = user.role
+    role = user.role.value if isinstance(user.role, UserRole) else user.role
     
     try:
         await db.delete(user)
@@ -152,7 +154,7 @@ async def update_role(db: AsyncSession, id: int, role: str) -> User | None:
     if not user:
         return None
     
-    old_role = user.role
+    old_role = user.role.value if isinstance(user.role, UserRole) else user.role
     user.role = role
     
     try:
@@ -161,6 +163,7 @@ async def update_role(db: AsyncSession, id: int, role: str) -> User | None:
         
         # Publish RabbitMQ event
         try:
+            new_role = user.role.value if isinstance(user.role, UserRole) else user.role
             await rabbitmq_client.publish(
                 "user.role_updated",
                 {
@@ -168,7 +171,7 @@ async def update_role(db: AsyncSession, id: int, role: str) -> User | None:
                     "user_id": user.id,
                     "username": user.username,
                     "old_role": old_role,
-                    "new_role": role,
+                    "new_role": new_role,
                 },
             )
         except Exception as e:
@@ -185,7 +188,7 @@ async def update_status(db: AsyncSession, id: int, status: UserStatus) -> User |
     if not user:
         return None
     
-    old_status = user.status
+    old_status = user.status.value if isinstance(user.status, UserStatus) else user.status
     user.status = status
     
     try:
@@ -194,6 +197,7 @@ async def update_status(db: AsyncSession, id: int, status: UserStatus) -> User |
         
         # Publish RabbitMQ event
         try:
+            new_status = user.status.value if isinstance(user.status, UserStatus) else user.status
             await rabbitmq_client.publish(
                 "user.status_updated",
                 {
@@ -201,7 +205,7 @@ async def update_status(db: AsyncSession, id: int, status: UserStatus) -> User |
                     "user_id": user.id,
                     "username": user.username,
                     "old_status": old_status,
-                    "new_status": status,
+                    "new_status": new_status,
                 },
             )
         except Exception as e:

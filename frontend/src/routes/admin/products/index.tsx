@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useEffect } from 'react'
-import { Search, Plus, Pencil, Trash2 } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, Package } from 'lucide-react'
 import { API_URL } from '@/config'
 import {
   Table,
@@ -28,25 +28,24 @@ import { useAuth } from "@/contexts/auth-context"
 const PRODUCTS_API = `${API_URL}:8002/products`
 
 interface Product {
-  id: number | string
-  name?: string
-  title?: string
-  price?: number | string
-  cost?: number | string
-  category?: string
-  description?: string
-  stock?: number
-  quantity?: number
-  status?: string
-  [key: string]: any
+  id: number
+  title: string
+  description: string | null
+  quantity: number
+  price: number
+  cost: number | null
+  is_active: boolean
+  created_at: string
+  updated_at: string | null
 }
 
 interface ProductFormData {
   title: string
-  description: string
+  description: string | null
   quantity: number
   price: number
-  cost: number
+  cost: number | null
+  is_active: boolean
 }
 
 export const Route = createFileRoute('/admin/products/')({
@@ -62,8 +61,6 @@ function RouteComponent() {
   const [error, setError] = useState<string | null>(null)
   
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchField, setSearchField] = useState<'all' | 'name' | 'category' | 'status' | 'description'>('all')
-  const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -77,6 +74,7 @@ function RouteComponent() {
     quantity: 0,
     price: 0,
     cost: 0,
+    is_active: true,
   })
 
   const fetchProducts = async () => {
@@ -87,7 +85,7 @@ function RouteComponent() {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
+          'Authorization': `Bearer ${token}`,
         },
       })
 
@@ -96,7 +94,7 @@ function RouteComponent() {
       }
 
       const data = await response.json()
-      const productsList = Array.isArray(data) ? data : (data.products || data.data || [])
+      const productsList = data.products || []
       setProducts(productsList)
       setFilteredProducts(productsList)
     } catch (err) {
@@ -108,7 +106,9 @@ function RouteComponent() {
   }
 
   useEffect(() => {
-    fetchProducts()
+    if (token) {
+      fetchProducts()
+    }
   }, [token])
 
   useEffect(() => {
@@ -117,56 +117,46 @@ function RouteComponent() {
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter((product) => {
-        const name = (product.name || product.title || '').toLowerCase()
+        const title = product.title.toLowerCase()
         const description = (product.description || '').toLowerCase()
-        const category = (product.category || '').toLowerCase()
-        const status = (product.status || '').toLowerCase()
-
-        switch (searchField) {
-          case 'name':
-            return name.includes(query)
-          case 'category':
-            return category.includes(query)
-          case 'status':
-            return status.includes(query)
-          case 'description':
-            return description.includes(query)
-          default:
-            return name.includes(query) || description.includes(query) || 
-                   category.includes(query) || status.includes(query)
-        }
+        return title.includes(query) || description.includes(query)
       })
     }
 
-    if (categoryFilter) {
-      filtered = filtered.filter((product) => 
-        (product.category || '').toLowerCase() === categoryFilter.toLowerCase()
-      )
-    }
-
     if (statusFilter) {
-      filtered = filtered.filter((product) => 
-        (product.status || '').toLowerCase() === statusFilter.toLowerCase()
-      )
+      filtered = filtered.filter((product) => {
+        const isActive = product.is_active ? 'active' : 'inactive'
+        return isActive === statusFilter
+      })
     }
 
     setFilteredProducts(filtered)
-  }, [searchQuery, searchField, categoryFilter, statusFilter, products])
+  }, [searchQuery, statusFilter, products])
 
   const addProduct = async (data: ProductFormData) => {
     setIsSubmitting(true)
     try {
+      const payload = {
+        title: data.title,
+        description: data.description || null,
+        quantity: data.quantity,
+        price: data.price,
+        cost: data.cost || null,
+        is_active: data.is_active,
+      }
+
       const response = await fetch(PRODUCTS_API, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to add product: ${response.statusText}`)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to add product: ${response.statusText}`)
       }
 
       await fetchProducts()
@@ -180,20 +170,41 @@ function RouteComponent() {
     }
   }
 
-  const updateProduct = async (id: number | string, data: ProductFormData) => {
+  const updateProduct = async (id: number, data: ProductFormData) => {
     setIsSubmitting(true)
     try {
+      const payload = {
+        title: data.title || undefined,
+        description: data.description || null,
+        quantity: data.quantity,
+        price: data.price,
+        cost: data.cost || null,
+        is_active: data.is_active,
+      }
+
+      console.log('Updating product with payload:', payload)
+
       const response = await fetch(`${PRODUCTS_API}/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       })
 
+      console.log('Response status:', response.status)
+      
       if (!response.ok) {
-        throw new Error(`Failed to update product: ${response.statusText}`)
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          throw new Error(`Failed to update product: ${response.status} ${response.statusText}`)
+        }
+        throw new Error(errorData.detail || `Failed to update product: ${response.statusText}`)
       }
 
       await fetchProducts()
@@ -208,7 +219,7 @@ function RouteComponent() {
     }
   }
 
-  const deleteProduct = async (id: number | string) => {
+  const deleteProduct = async (id: number) => {
     if (!confirm('Are you sure you want to delete this product?')) {
       return
     }
@@ -219,12 +230,13 @@ function RouteComponent() {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` }),
+          'Authorization': `Bearer ${token}`,
         },
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to delete product: ${response.statusText}`)
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.detail || `Failed to delete product: ${response.statusText}`)
       }
 
       await fetchProducts()
@@ -245,6 +257,7 @@ function RouteComponent() {
       quantity: 0,
       price: 0,
       cost: 0,
+      is_active: true,
     })
   }
 
@@ -256,46 +269,28 @@ function RouteComponent() {
   const handleEditClick = (product: Product) => {
     setSelectedProduct(product)
     setFormData({
-      title: product.title || product.name || '',
+      title: product.title,
       description: product.description || '',
-      quantity: product.quantity || product.stock || 0,
-      price: Number(product.price) || 0,
-      cost: Number(product.cost) || 0,
+      quantity: product.quantity,
+      price: product.price,
+      cost: product.cost || 0,
+      is_active: product.is_active,
     })
     setIsEditModalOpen(true)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAddSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (isEditModalOpen && selectedProduct) {
-      updateProduct(selectedProduct.id, formData)
-    } else {
-      addProduct(formData)
-    }
+    addProduct(formData)
   }
 
-  const categories = Array.from(new Set(products.map(p => p.category).filter(Boolean)))
-  const statuses = Array.from(new Set(products.map(p => p.status).filter(Boolean)))
-
-  const getProductKeys = (): string[] => {
-    if (products.length === 0) return ['id', 'name', 'price', 'category', 'stock']
-    const firstProduct = products[0]
-    const commonFields = ['id', 'name', 'title', 'price', 'cost', 'category', 'stock', 'quantity', 'status', 'description']
-    const keys = Object.keys(firstProduct)
-    const orderedKeys = [
-      ...commonFields.filter(k => keys.includes(k)),
-      ...keys.filter(k => !commonFields.includes(k))
-    ]
-    return orderedKeys.slice(0, 6)
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedProduct) return
+    updateProduct(selectedProduct.id, formData)
   }
 
-  const productKeys = getProductKeys()
-
-  const formatValue = (value: any): string => {
-    if (value === null || value === undefined) return '-'
-    if (typeof value === 'object') return JSON.stringify(value)
-    return String(value)
-  }
+  const statuses = ['active', 'inactive']
 
   if (isLoading) {
     return (
@@ -320,74 +315,46 @@ function RouteComponent() {
   return (
     <div className="p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Products</h1>
-        <Button onClick={handleAddClick}>
+        <div className="flex items-center gap-2">
+          <Package className="size-6 text-blue-600" />
+          <h1 className="text-2xl font-bold">Products</h1>
+        </div>
+        <Button onClick={handleAddClick} className="bg-blue-600 hover:bg-blue-700">
           <Plus className="size-4" />
           Add Product
         </Button>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
-        <div className="flex flex-1 gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder="Search products..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <select
-            value={searchField}
-            onChange={(e) => setSearchField(e.target.value as typeof searchField)}
-            className="h-9 w-36 rounded-md border border-input bg-background px-2 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="all">All fields</option>
-            <option value="name">Name</option>
-            <option value="category">Category</option>
-            <option value="status">Status</option>
-            <option value="description">Description</option>
-          </select>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            type="text"
+            placeholder="Search products..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
         </div>
 
-        {categories.length > 0 && (
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">All Categories</option>
-            {categories.map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
-        )}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">All Statuses</option>
+          {statuses.map((status) => (
+            <option key={status} value={status}>
+              {status}
+            </option>
+          ))}
+        </select>
 
-        {statuses.length > 0 && (
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <option value="">All Statuses</option>
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </select>
-        )}
-
-        {(searchQuery || categoryFilter || statusFilter) && (
+        {(searchQuery || statusFilter) && (
           <Button
             variant="outline"
             onClick={() => {
               setSearchQuery('')
-              setCategoryFilter('')
               setStatusFilter('')
             }}
           >
@@ -405,41 +372,68 @@ function RouteComponent() {
           </TableCaption>
           <TableHeader>
             <TableRow>
-              {productKeys.map((key) => (
-                <TableHead key={key} className="capitalize">
-                  {key.replace(/_/g, ' ')}
-                </TableHead>
-              ))}
+              <TableHead>ID</TableHead>
+              <TableHead>Title</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Stock</TableHead>
+              <TableHead>Price</TableHead>
+              <TableHead>Cost</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead className="w-0 text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={productKeys.length + 1} className="text-center text-muted-foreground">
+                <TableCell colSpan={8} className="text-center text-muted-foreground">
                   No products match your filters
                 </TableCell>
               </TableRow>
             ) : (
               filteredProducts.map((product) => (
                 <TableRow key={product.id}>
-                  {productKeys.map((key) => (
-                    <TableCell key={key}>
-                      {key === 'price' || key === 'cost' ? (
-                        typeof product[key] === 'number' ? `$${product[key].toFixed(2)}` : formatValue(product[key])
-                      ) : key === 'quantity' || key === 'stock' ? (
-                        product[key] === -1 ? '∞' : formatValue(product[key])
-                      ) : (
-                        formatValue(product[key])
-                      )}
-                    </TableCell>
-                  ))}
+                  <TableCell>{product.id}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <Package className="size-4 text-blue-600" />
+                      {product.title}
+                    </div>
+                  </TableCell>
+                  <TableCell className="max-w-xs truncate text-muted-foreground">
+                    {product.description || '-'}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                      product.quantity === -1 
+                        ? 'bg-purple-100 text-purple-800'
+                        : product.quantity === 0
+                        ? 'bg-red-100 text-red-800'
+                        : product.quantity < 10
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-green-100 text-green-800'
+                    }`}>
+                      {product.quantity === -1 ? '∞ Unlimited' : product.quantity}
+                    </span>
+                  </TableCell>
+                  <TableCell className="font-semibold text-green-700">
+                    ${product.price.toFixed(2)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {product.cost !== null ? `$${product.cost.toFixed(2)}` : '-'}
+                  </TableCell>
+                  <TableCell>
+                    <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
+                      product.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      {product.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => handleEditClick(product)}
-                      aria-label={`Edit product ${product.name || product.title || product.id}`}
+                      aria-label="Edit product"
                     >
                       <Pencil className="size-4" />
                     </Button>
@@ -454,12 +448,15 @@ function RouteComponent() {
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Add New Product</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="size-5 text-blue-600" />
+              Add New Product
+            </DialogTitle>
             <DialogDescription>
               Enter the product details below. Set quantity to -1 for unlimited stock.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleAddSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="title">Title *</Label>
@@ -475,8 +472,8 @@ function RouteComponent() {
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  value={formData.description || ''}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value || null })}
                   placeholder="Product description"
                   rows={3}
                 />
@@ -507,23 +504,35 @@ function RouteComponent() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="cost">Cost *</Label>
+                  <Label htmlFor="cost">Cost</Label>
                   <Input
                     id="cost"
                     type="number"
                     step="0.01"
-                    value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
-                    required
+                    value={formData.cost || ''}
+                    onChange={(e) => setFormData({ ...formData, cost: e.target.value ? Number(e.target.value) : null })}
+                    placeholder="Optional"
                   />
                 </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                  className="size-4 rounded border-gray-300"
+                />
+                <Label htmlFor="is_active" className="cursor-pointer">
+                  Product is active
+                </Label>
               </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button type="submit" disabled={isSubmitting} className="bg-blue-600 hover:bg-blue-700">
                 {isSubmitting ? 'Adding...' : 'Add Product'}
               </Button>
             </DialogFooter>
@@ -539,7 +548,7 @@ function RouteComponent() {
               Update the product details below. Set quantity to -1 for unlimited stock.
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleEditSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="edit-title">Title *</Label>
@@ -555,8 +564,8 @@ function RouteComponent() {
                 <Label htmlFor="edit-description">Description</Label>
                 <Textarea
                   id="edit-description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  value={formData.description || ''}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value || null })}
                   placeholder="Product description"
                   rows={3}
                 />
@@ -587,16 +596,28 @@ function RouteComponent() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="edit-cost">Cost *</Label>
+                  <Label htmlFor="edit-cost">Cost</Label>
                   <Input
                     id="edit-cost"
                     type="number"
                     step="0.01"
-                    value={formData.cost}
-                    onChange={(e) => setFormData({ ...formData, cost: Number(e.target.value) })}
-                    required
+                    value={formData.cost || ''}
+                    onChange={(e) => setFormData({ ...formData, cost: e.target.value ? Number(e.target.value) : null })}
+                    placeholder="Optional"
                   />
                 </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="edit-is_active"
+                  checked={formData.is_active}
+                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                  className="size-4 rounded border-gray-300"
+                />
+                <Label htmlFor="edit-is_active" className="cursor-pointer">
+                  Product is active
+                </Label>
               </div>
             </div>
             <DialogFooter className="flex justify-between">
