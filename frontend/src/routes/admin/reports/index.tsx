@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { createFileRoute } from '@tanstack/react-router';
 import { Wrench } from 'lucide-react';
 
-export const Route = createFileRoute('/admin/orders/')({
+export const Route = createFileRoute('/admin/reports/')({
   component: RouteComponent,
 })
 

@@ -34,7 +34,7 @@ const data = {
         },
         {
           title: "Categories",
-          url: "/products/categories",
+          url: "/admin/categories",
         },
       ],
     },
