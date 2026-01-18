@@ -81,7 +81,7 @@ export default function POSTerminal() {
         (categoriesData.categories || []).filter((c: Category) => c.is_active),
       );
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching data:", err);
     } finally {
       setIsLoading(false);
     }
@@ -92,7 +92,7 @@ export default function POSTerminal() {
       p.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (p.description || "").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory =
-      !selectedCategory || p.category_id === selectedCategory;
+      selectedCategory === null || p.category_id === selectedCategory;
     return matchesSearch && matchesCategory;
   });
 
@@ -127,6 +127,7 @@ export default function POSTerminal() {
     }
     setSearchQuery("");
     setShowSuggestions(false);
+    setHighlightedIndex(-1);
     searchInputRef.current?.focus();
   };
 
@@ -139,6 +140,18 @@ export default function POSTerminal() {
             : item,
         )
         .filter((item) => item.quantity > 0),
+    );
+  };
+
+  const setQuantity = (productId: number, quantity: number) => {
+    if (quantity <= 0) {
+      removeFromCart(productId);
+      return;
+    }
+    setCart(
+      cart.map((item) =>
+        item.product_id === productId ? { ...item, quantity } : item,
+      ),
     );
   };
 
@@ -165,48 +178,89 @@ export default function POSTerminal() {
         }),
       });
 
-      if (!response.ok) throw new Error();
+      if (!response.ok) throw new Error("Failed to create order");
 
       setOrderSuccess(true);
       clearCart();
       setTimeout(() => setOrderSuccess(false), 3000);
-    } catch {
+      searchInputRef.current?.focus();
+    } catch (err) {
+      console.error(err);
       alert("Failed to create order");
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setHighlightedIndex((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev,
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+          addToCart(suggestions[highlightedIndex]);
+        }
+        break;
+      case "Escape":
+        setShowSuggestions(false);
+        setHighlightedIndex(-1);
+        break;
+    }
+  };
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    setShowSuggestions(value.trim().length > 0);
+    setHighlightedIndex(-1);
+  };
+
   return (
-    <div className="min-h-screen bg-gray-100 text-gray-900">
-      <div className="max-w-[2000px] mx-auto p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* PRODUCTS */}
-          <div className="lg:col-span-2 bg-white text-gray-900 rounded-lg shadow p-6">
-            {/* SEARCH */}
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+    <div className="min-h-screen bg-gray-50 text-gray-900">
+      <div className="max-w-[2000px] mx-auto p-3 sm:p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+          {/* Products Section */}
+          <div className="lg:col-span-2 bg-white text-gray-900 rounded-lg shadow-lg p-4 sm:p-6">
+            {/* Search Bar */}
+            <div className="mb-4 relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
               <input
                 ref={searchInputRef}
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setShowSuggestions(!!e.target.value);
-                }}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500"
+                type="text"
                 placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={() => searchQuery && setShowSuggestions(true)}
+                className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                autoComplete="off"
               />
 
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute z-50 w-full mt-2 bg-white border border-gray-200 rounded-lg shadow-lg">
-                  {suggestions.map((product) => (
+                <div className="absolute z-50 w-full mt-2 bg-white border-2 border-gray-200 rounded-lg shadow-xl">
+                  {suggestions.map((product, index) => (
                     <button
                       key={product.id}
                       onClick={() => addToCart(product)}
-                      className="w-full px-4 py-3 text-left text-gray-900 hover:bg-blue-50 border-b last:border-b-0"
+                      onMouseEnter={() => setHighlightedIndex(index)}
+                      className={`w-full px-4 py-3 text-left text-gray-900 hover:bg-blue-50 border-b last:border-b-0 ${
+                        highlightedIndex === index ? "bg-blue-100" : ""
+                      }`}
                     >
                       <div className="flex justify-between">
-                        <span className="font-medium">{product.title}</span>
+                        <span className="font-semibold">
+                          {product.title}
+                        </span>
                         <span className="font-bold text-green-600">
                           ${product.price.toFixed(2)}
                         </span>
@@ -217,33 +271,109 @@ export default function POSTerminal() {
               )}
             </div>
 
-            {/* PRODUCTS GRID */}
+            {/* Category Tabs (RESTORED) */}
+            <div className="mb-4 flex items-center gap-2 overflow-x-auto pb-2">
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition ${
+                  selectedCategory === null
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                }`}
+              >
+                All Products
+              </button>
+              {categories.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setSelectedCategory(cat.id)}
+                  className={`px-4 py-2 rounded-lg font-medium whitespace-nowrap transition ${
+                    selectedCategory === cat.id
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 text-gray-800 hover:bg-gray-200"
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+
+            {/* View Mode Toggle */}
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm text-gray-600">
+                {filteredProducts.length} products
+              </p>
+              <div className="flex gap-1 bg-gray-100 p-1 rounded-lg">
+                <button
+                  onClick={() => setViewMode("grid")}
+                  className={`p-2 rounded text-gray-700 ${
+                    viewMode === "grid" ? "bg-white shadow" : ""
+                  }`}
+                >
+                  <Grid3x3 className="size-4" />
+                </button>
+                <button
+                  onClick={() => setViewMode("list")}
+                  className={`p-2 rounded text-gray-700 ${
+                    viewMode === "list" ? "bg-white shadow" : ""
+                  }`}
+                >
+                  <List className="size-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Products Grid/List */}
             {isLoading ? (
-              <div className="py-20 text-center text-gray-500">
+              <div className="text-center py-20 text-gray-400">
                 Loading products...
               </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[600px] overflow-y-auto">
+            ) : viewMode === "grid" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3 max-h-[600px] overflow-y-auto">
                 {filteredProducts.map((product) => (
                   <button
                     key={product.id}
                     onClick={() => addToCart(product)}
-                    className="border border-gray-200 rounded-lg p-4 bg-white text-gray-900 hover:bg-blue-50 hover:border-blue-500"
+                    className="p-3 sm:p-4 border-2 border-gray-200 rounded-lg bg-white text-gray-900 hover:border-blue-500 hover:bg-blue-50 transition text-left"
                   >
-                    <div className="font-semibold line-clamp-2">
+                    <div className="font-semibold text-sm mb-2 line-clamp-2 min-h-[2.5rem]">
                       {product.title}
                     </div>
-                    <div className="text-lg font-bold text-green-600 mt-2">
+                    <div className="text-xl font-bold text-green-600 mb-2">
                       ${product.price.toFixed(2)}
                     </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[600px] overflow-y-auto">
+                {filteredProducts.map((product) => (
+                  <button
+                    key={product.id}
+                    onClick={() => addToCart(product)}
+                    className="w-full p-4 border-2 border-gray-200 rounded-lg bg-white text-gray-900 hover:border-blue-500 hover:bg-blue-50 transition text-left flex items-center justify-between"
+                  >
+                    <div className="flex-1">
+                      <div className="font-semibold mb-1">
+                        {product.title}
+                      </div>
+                      {product.description && (
+                        <div className="text-sm text-gray-500 line-clamp-1">
+                          {product.description}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-xl font-bold text-green-600 min-w-[80px] text-right">
+                      ${product.price.toFixed(2)}
+                    </span>
                   </button>
                 ))}
               </div>
             )}
           </div>
 
-          {/* CART */}
-          <div className="bg-white text-gray-900 rounded-lg shadow p-6">
+          {/* Cart Section */}
+          <div className="bg-white text-gray-900 rounded-lg shadow-lg p-4 sm:p-6 lg:sticky lg:top-4 h-fit">
             <h2 className="text-xl font-bold flex items-center gap-2 mb-4">
               <ShoppingCart className="text-gray-700" />
               Cart ({itemCount})
@@ -254,46 +384,43 @@ export default function POSTerminal() {
                 key={item.product_id}
                 className="border border-gray-200 rounded-lg p-3 mb-2"
               >
-                <div className="flex justify-between">
-                  <span className="font-medium">{item.title}</span>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="font-medium text-sm pr-2">
+                    {item.title}
+                  </div>
                   <button onClick={() => removeFromCart(item.product_id)}>
                     <X className="size-4 text-red-500" />
                   </button>
                 </div>
 
-                <div className="flex justify-between items-center mt-2">
-                  <div className="flex gap-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={() =>
-                        updateQuantity(item.product_id, -1)
-                      }
-                      className="p-1 bg-gray-200 rounded hover:bg-gray-300 text-gray-900"
+                      onClick={() => updateQuantity(item.product_id, -1)}
+                      className="p-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-900"
                     >
-                      <Minus size={14} />
+                      <Minus className="size-4" />
                     </button>
                     <span className="font-semibold">
                       {item.quantity}
                     </span>
                     <button
-                      onClick={() =>
-                        updateQuantity(item.product_id, 1)
-                      }
-                      className="p-1 bg-gray-200 rounded hover:bg-gray-300 text-gray-900"
+                      onClick={() => updateQuantity(item.product_id, 1)}
+                      className="p-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-900"
                     >
-                      <Plus size={14} />
+                      <Plus className="size-4" />
                     </button>
                   </div>
-
-                  <span className="font-bold text-green-600">
+                  <div className="font-bold text-green-600">
                     ${(item.price * item.quantity).toFixed(2)}
-                  </span>
+                  </div>
                 </div>
               </div>
             ))}
 
             {cart.length > 0 && (
               <>
-                <div className="border-t mt-4 pt-4 flex justify-between text-lg font-bold">
+                <div className="border-t pt-4 mt-4 flex justify-between text-lg font-bold">
                   <span>Total</span>
                   <span className="text-green-600">
                     ${total.toFixed(2)}
@@ -303,7 +430,7 @@ export default function POSTerminal() {
                 <button
                   onClick={submitOrder}
                   disabled={isSubmitting}
-                  className="w-full mt-4 py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg disabled:opacity-50"
+                  className="w-full py-4 mt-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg disabled:opacity-50"
                 >
                   Complete Order
                 </button>
