@@ -114,7 +114,8 @@ async def create_user_in_db(user_in: UserCreate) -> UserResponse | None:
 async def update_last_login(id: int, username: str) -> bool:
     async with db_client.get_client() as client:
         try:
-            response = await client.put(f"/users/{id}", json={"id": id, "username": username, "last_login": datetime.now()})
+            response = await client.put(f"/users/{id}", json={"id": id, "username": username, "last_login": datetime.utcnow().isoformat()})
+            print(response.content)
             if response.status_code == 200:
                 return True
             else:
@@ -124,6 +125,7 @@ async def update_last_login(id: int, username: str) -> bool:
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Database service unavailable"
             )
-        except Exception:
+        except Exception as e:
+            print(e)
             return False
 	

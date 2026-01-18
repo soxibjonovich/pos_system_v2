@@ -38,6 +38,7 @@ class UserResponse(UserBase):
     id: int
     role: str
     status: str
+    last_login: datetime | None
     
     class Config:
         from_attributes = True

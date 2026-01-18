@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 
 class ProductBase(BaseModel):
@@ -27,8 +28,8 @@ class ProductUpdate(BaseModel):
 
 class ProductResponse(ProductBase):
     id: int
-    created_at: str
-    updated_at: str | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
     
     model_config = {"from_attributes": True}
 
