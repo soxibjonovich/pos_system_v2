@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     
     # Service URLs
     DATABASE_SERVICE_URL: str = os.getenv("DATABASE_SERVICE_URL", "http://localhost:8002")
+    ORDER_SERVICE_URL: str = os.getenv("ORDER_SERVICE_URL", "http://localhost:8004")
     AUTH_SERVICE_URL: str = os.getenv("AUTH_SERVICE_URL", "http://localhost:8003")
     
     # Database

@@ -1,5 +1,5 @@
 #!/bin/bash
-# start.sh - Unix Docker Compose Launcher
+# run.sh - POS System Docker Manager
 set -e
 
 # Colors
@@ -11,299 +11,470 @@ CYAN='\033[0;36m'
 MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
+# Service names array
+SERVICES=("admin_api" "database_api" "auth_api" "order_api" "rabbitmq")
+SERVICE_LABELS=("Admin API" "Database API" "Auth API" "Order API" "RabbitMQ")
+
+#=============================================================================
+# Print Functions
+#=============================================================================
+
 print_header() {
-    echo -e "${CYAN}============================================================${NC}"
-    echo -e "${CYAN}   POS System Docker Launcher${NC}"
-    echo -e "${CYAN}============================================================${NC}"
-    echo ""
+    clear
+    printf "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}\n"
+    printf "${CYAN}║           POS System Docker Manager                       ║${NC}\n"
+    printf "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}\n"
+    printf "\n"
 }
 
 print_success() {
-    echo -e "${GREEN}[OK]${NC} $1"
+    printf "${GREEN}✓${NC} $1\n"
 }
 
 print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    printf "${RED}✗${NC} $1\n"
 }
 
 print_info() {
-    echo -e "${BLUE}[*]${NC} $1"
+    printf "${BLUE}ℹ${NC} $1\n"
 }
 
 print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
+    printf "${YELLOW}⚠${NC} $1\n"
 }
 
-print_service() {
-    echo -e "${MAGENTA}[SERVICE]${NC} $1"
+print_divider() {
+    printf "${CYAN}────────────────────────────────────────────────────────────${NC}\n"
 }
+
+#=============================================================================
+# Docker Check
+#=============================================================================
 
 check_docker() {
     if ! command -v docker &> /dev/null; then
         print_error "Docker is not installed!"
-        echo "Please install Docker and try again."
+        printf "\n"
+        printf "Please install Docker from: https://docs.docker.com/get-docker/\n"
         exit 1
     fi
     
-    if ! docker info &> /dev/null; then
+    if ! docker info &> /dev/null 2>&1; then
         print_error "Docker is not running!"
-        echo "Please start Docker and try again."
+        printf "\n"
+        printf "Please start Docker Desktop and try again.\n"
         exit 1
     fi
     
-    print_success "Docker is running"
-    echo ""
+    if ! command -v docker-compose &> /dev/null; then
+        print_error "Docker Compose is not installed!"
+        printf "\n"
+        printf "Please install Docker Compose and try again.\n"
+        exit 1
+    fi
 }
 
-show_menu() {
-    echo ""
-    echo "Choose an option:"
-    echo ""
-    echo "1.  Start all services"
-    echo "2.  Stop all services"
-    echo "3.  Restart all services"
-    echo "4.  View logs"
-    echo "5.  Build and start all services"
-    echo "6.  Rebuild specific service"
-    echo "7.  Restart specific service"
-    echo "8.  Clean everything (remove volumes)"
-    echo "9.  Check service status"
-    echo "10. Access service shell"
-    echo "11. View logs of specific service"
-    echo "12. Exit"
-    echo ""
+#=============================================================================
+# Menu Display
+#=============================================================================
+
+show_main_menu() {
+    print_header
+    printf "${CYAN}Main Menu:${NC}\n"
+    print_divider
+    printf "\n"
+    printf "  ${GREEN}[1]${NC}  Start all services\n"
+    printf "  ${GREEN}[2]${NC}  Stop all services\n"
+    printf "  ${GREEN}[3]${NC}  Restart all services\n"
+    printf "  ${GREEN}[4]${NC}  Build and start all services\n"
+    printf "\n"
+    printf "  ${YELLOW}[5]${NC}  Manage specific service\n"
+    printf "  ${YELLOW}[6]${NC}  View service logs\n"
+    printf "\n"
+    printf "  ${BLUE}[7]${NC}  Check service status\n"
+    printf "  ${BLUE}[8]${NC}  Access service shell\n"
+    printf "\n"
+    printf "  ${RED}[9]${NC}  Clean everything (⚠️  removes volumes)\n"
+    printf "  ${RED}[0]${NC}  Exit\n"
+    printf "\n"
+    print_divider
 }
+
+show_service_menu() {
+    printf "\n"
+    printf "${CYAN}Select a service:${NC}\n"
+    printf "\n"
+    for i in "${!SERVICES[@]}"; do
+        local num=$((i + 1))
+        printf "  ${GREEN}[$num]${NC}  ${SERVICE_LABELS[$i]}\n"
+    done
+    printf "  ${RED}[0]${NC}  Cancel\n"
+    printf "\n"
+}
+
+show_service_action_menu() {
+    local service_label="$1"
+    printf "\n"
+    printf "${CYAN}Actions for ${MAGENTA}${service_label}${CYAN}:${NC}\n"
+    printf "\n"
+    printf "  ${GREEN}[1]${NC}  Start\n"
+    printf "  ${GREEN}[2]${NC}  Stop\n"
+    printf "  ${GREEN}[3]${NC}  Restart\n"
+    printf "  ${YELLOW}[4]${NC}  Rebuild (stop, remove, build, start)\n"
+    printf "  ${BLUE}[5]${NC}  View logs\n"
+    printf "  ${BLUE}[6]${NC}  Access shell\n"
+    printf "  ${RED}[0]${NC}  Back to menu\n"
+    printf "\n"
+}
+
+#=============================================================================
+# Service Selection
+#=============================================================================
 
 select_service() {
-    echo ""
-    echo "Select service:"
-    echo "1. Admin API"
-    echo "2. Database API"
-    echo "3. Auth API"
-    echo "4. Order API"
-    echo "5. RabbitMQ"
-    echo "6. Cancel"
-    echo ""
-    read -p "Enter choice (1-6): " service_choice
-    
-    case $service_choice in
-        1) echo "admin_api" ;;
-        2) echo "database_api" ;;
-        3) echo "auth_api" ;;
-        4) echo "order_api" ;;
-        5) echo "rabbitmq" ;;
-        6) echo "cancel" ;;
-        *) echo "invalid" ;;
-    esac
+    while true; do
+        show_service_menu
+        read -p "Enter choice [0-${#SERVICES[@]}]: " choice
+        
+        if [[ "$choice" == "0" ]]; then
+            return 1
+        fi
+        
+        if [[ "$choice" =~ ^[1-9][0-9]*$ ]] && [ "$choice" -le "${#SERVICES[@]}" ]; then
+            local index=$((choice - 1))
+            SELECTED_SERVICE="${SERVICES[$index]}"
+            SELECTED_SERVICE_LABEL="${SERVICE_LABELS[$index]}"
+            return 0
+        fi
+        
+        print_error "Invalid choice! Please enter a number between 0 and ${#SERVICES[@]}"
+        sleep 1
+    done
 }
 
-start_services() {
+#=============================================================================
+# Docker Operations
+#=============================================================================
+
+start_all_services() {
     print_info "Starting all services..."
-    docker-compose up -d
+    printf "\n"
     
-    print_success "All services started successfully!"
-    echo ""
-    echo "Services are available at:"
-    echo "  - Admin API:    http://localhost:8001/docs"
-    echo "  - Database API: http://localhost:8002/docs"
-    echo "  - Auth API:     http://localhost:8003/docs"
-    echo "  - Order API:    http://localhost:8004/docs"
-    echo "  - RabbitMQ UI:  http://localhost:15672 (admin/pos_password_2024)"
-    echo ""
+    if docker-compose up -d; then
+        printf "\n"
+        print_success "All services started successfully!"
+        printf "\n"
+        printf "${CYAN}Services are available at:${NC}\n"
+        printf "  • Admin API:     http://localhost:8001/docs\n"
+        printf "  • Database API:  http://localhost:8002/docs\n"
+        printf "  • Auth API:      http://localhost:8003/docs\n"
+        printf "  • Order API:     http://localhost:8004/docs\n"
+        printf "  • RabbitMQ UI:   http://localhost:15672 (admin/pos_password_2024)\n"
+    else
+        printf "\n"
+        print_error "Failed to start services!"
+    fi
 }
 
-stop_services() {
+stop_all_services() {
     print_info "Stopping all services..."
-    docker-compose down
-    print_success "All services stopped"
+    printf "\n"
+    
+    if docker-compose down; then
+        printf "\n"
+        print_success "All services stopped successfully!"
+    else
+        printf "\n"
+        print_error "Failed to stop services!"
+    fi
 }
 
-restart_services() {
+restart_all_services() {
     print_info "Restarting all services..."
-    docker-compose restart
-    print_success "All services restarted"
+    printf "\n"
+    
+    if docker-compose restart; then
+        printf "\n"
+        print_success "All services restarted successfully!"
+    else
+        printf "\n"
+        print_error "Failed to restart services!"
+    fi
 }
 
-view_logs() {
-    print_info "Showing logs (Press Ctrl+C to exit)..."
-    docker-compose logs -f
-}
-
-build_services() {
+build_all_services() {
     print_info "Building and starting all services..."
-    docker-compose up -d --build
-    print_success "Build complete and services started"
-}
-
-rebuild_specific_service() {
-    local service
-    service=$(select_service)
+    printf "\n"
     
-    if [ "$service" = "cancel" ]; then
-        echo "Cancelled."
-        return
+    if docker-compose up -d --build; then
+        printf "\n"
+        print_success "Build completed and all services started!"
+    else
+        printf "\n"
+        print_error "Build failed!"
     fi
-    
-    if [ "$service" = "invalid" ]; then
-        print_error "Invalid choice!"
-        return
-    fi
-    
-    print_info "Rebuilding $service..."
-    
-    # Stop the service
-    print_service "Stopping $service..."
-    docker-compose stop "$service"
-    
-    # Remove the container
-    print_service "Removing old container..."
-    docker-compose rm -f "$service"
-    
-    # Rebuild and start
-    print_service "Building and starting $service..."
-    docker-compose up -d --build "$service"
-    
-    print_success "$service rebuilt and started successfully!"
-    
-    # Show logs
-    echo ""
-    read -p "View logs for $service? (y/n): " show_logs
-    if [ "$show_logs" = "y" ] || [ "$show_logs" = "Y" ]; then
-        docker-compose logs -f "$service"
-    fi
-}
-
-restart_specific_service() {
-    local service
-    service=$(select_service)
-    
-    if [ "$service" = "cancel" ]; then
-        echo "Cancelled."
-        return
-    fi
-    
-    if [ "$service" = "invalid" ]; then
-        print_error "Invalid choice!"
-        return
-    fi
-    
-    print_info "Restarting $service..."
-    docker-compose restart "$service"
-    print_success "$service restarted successfully"
-    
-    # Show logs
-    echo ""
-    read -p "View logs for $service? (y/n): " show_logs
-    if [ "$show_logs" = "y" ] || [ "$show_logs" = "Y" ]; then
-        docker-compose logs -f "$service"
-    fi
-}
-
-view_specific_logs() {
-    local service
-    service=$(select_service)
-    
-    if [ "$service" = "cancel" ]; then
-        echo "Cancelled."
-        return
-    fi
-    
-    if [ "$service" = "invalid" ]; then
-        print_error "Invalid choice!"
-        return
-    fi
-    
-    print_info "Showing logs for $service (Press Ctrl+C to exit)..."
-    docker-compose logs -f "$service"
-}
-
-clean_all() {
-    print_warning "This will remove all containers, networks, and volumes!"
-    read -p "Are you sure? (yes/no): " confirm
-    
-    if [ "$confirm" != "yes" ]; then
-        echo "Cancelled."
-        return
-    fi
-    
-    print_info "Cleaning up..."
-    docker-compose down -v
-    print_success "Cleanup complete"
 }
 
 check_status() {
     print_info "Service Status:"
-    echo ""
+    print_divider
+    printf "\n"
     docker-compose ps
-    echo ""
+    printf "\n"
     
-    # Show resource usage
+    print_divider
     print_info "Resource Usage:"
-    echo ""
-    local container_ids
-    container_ids=$(docker-compose ps -q)
+    printf "\n"
+    
+    local container_ids=$(docker-compose ps -q 2>/dev/null)
     if [ -n "$container_ids" ]; then
         docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" $container_ids
     else
-        echo "No running containers"
+        printf "No running containers\n"
     fi
 }
 
-access_shell() {
-    local service
-    service=$(select_service)
-    
-    if [ "$service" = "cancel" ]; then
-        echo "Cancelled."
-        return
-    fi
-    
-    if [ "$service" = "invalid" ]; then
-        print_error "Invalid choice!"
-        return
-    fi
-    
-    print_info "Accessing shell for $service..."
-    echo "Type 'exit' to return to menu"
-    echo ""
-    
-    # Try sh first, fallback to bash
-    docker exec -it "$service" sh 2>/dev/null || docker exec -it "$service" bash
+view_all_logs() {
+    print_info "Showing logs for all services (Press Ctrl+C to exit)..."
+    printf "\n"
+    sleep 1
+    docker-compose logs -f
 }
 
-main() {
-    print_header
-    check_docker
+clean_all() {
+    printf "\n"
+    print_warning "This will remove all containers, networks, and volumes!"
+    print_warning "All data will be lost!"
+    printf "\n"
+    read -p "Are you absolutely sure? Type 'yes' to confirm: " confirm
+    
+    if [ "$confirm" != "yes" ]; then
+        print_info "Cancelled."
+        return
+    fi
+    
+    printf "\n"
+    print_info "Cleaning up..."
+    
+    if docker-compose down -v; then
+        printf "\n"
+        print_success "Cleanup complete!"
+    else
+        printf "\n"
+        print_error "Cleanup failed!"
+    fi
+}
+
+#=============================================================================
+# Single Service Operations
+#=============================================================================
+
+start_service() {
+    local service="$1"
+    local label="$2"
+    
+    print_info "Starting ${label}..."
+    printf "\n"
+    
+    if docker-compose start "$service"; then
+        printf "\n"
+        print_success "${label} started successfully!"
+    else
+        printf "\n"
+        print_error "Failed to start ${label}!"
+    fi
+}
+
+stop_service() {
+    local service="$1"
+    local label="$2"
+    
+    print_info "Stopping ${label}..."
+    printf "\n"
+    
+    if docker-compose stop "$service"; then
+        printf "\n"
+        print_success "${label} stopped successfully!"
+    else
+        printf "\n"
+        print_error "Failed to stop ${label}!"
+    fi
+}
+
+restart_service() {
+    local service="$1"
+    local label="$2"
+    
+    print_info "Restarting ${label}..."
+    printf "\n"
+    
+    if docker-compose restart "$service"; then
+        printf "\n"
+        print_success "${label} restarted successfully!"
+    else
+        printf "\n"
+        print_error "Failed to restart ${label}!"
+    fi
+}
+
+rebuild_service() {
+    local service="$1"
+    local label="$2"
+    
+    printf "\n"
+    print_warning "This will rebuild ${label}"
+    read -p "Continue? (y/n): " confirm
+    
+    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
+        print_info "Cancelled."
+        return
+    fi
+    
+    printf "\n"
+    print_info "Step 1/4: Stopping ${label}..."
+    docker-compose stop "$service"
+    
+    print_info "Step 2/4: Removing container..."
+    docker-compose rm -f "$service"
+    
+    print_info "Step 3/4: Building ${label}..."
+    docker-compose build "$service"
+    
+    print_info "Step 4/4: Starting ${label}..."
+    if docker-compose up -d "$service"; then
+        printf "\n"
+        print_success "${label} rebuilt successfully!"
+    else
+        printf "\n"
+        print_error "Failed to rebuild ${label}!"
+        return
+    fi
+    
+    printf "\n"
+    read -p "View logs? (y/n): " show_logs
+    if [ "$show_logs" == "y" ] || [ "$show_logs" == "Y" ]; then
+        printf "\n"
+        print_info "Showing logs (Press Ctrl+C to stop)..."
+        printf "\n"
+        sleep 1
+        docker-compose logs -f "$service"
+    fi
+}
+
+view_service_logs() {
+    local service="$1"
+    local label="$2"
+    
+    print_info "Showing logs for ${label} (Press Ctrl+C to exit)..."
+    printf "\n"
+    sleep 1
+    docker-compose logs -f "$service"
+}
+
+access_service_shell() {
+    local service="$1"
+    local label="$2"
+    
+    print_info "Accessing shell for ${label}..."
+    print_info "Type 'exit' to return to menu"
+    printf "\n"
+    sleep 1
+    
+    # Try sh first, then bash
+    docker exec -it "$service" sh 2>/dev/null || docker exec -it "$service" bash 2>/dev/null || {
+        printf "\n"
+        print_error "Failed to access shell for ${label}"
+        print_info "The container might not be running"
+        return 1
+    }
+}
+
+#=============================================================================
+# Service Management
+#=============================================================================
+
+manage_service() {
+    if ! select_service; then
+        return
+    fi
     
     while true; do
-        show_menu
-        read -p "Enter your choice (1-12): " choice
+        print_header
+        show_service_action_menu "$SELECTED_SERVICE_LABEL"
         
-        case $choice in
-            1) start_services ;;
-            2) stop_services ;;
-            3) restart_services ;;
-            4) view_logs ;;
-            5) build_services ;;
-            6) rebuild_specific_service ;;
-            7) restart_specific_service ;;
-            8) clean_all ;;
-            9) check_status ;;
-            10) access_shell ;;
-            11) view_specific_logs ;;
-            12) 
-                echo ""
-                echo "Goodbye!"
-                exit 0
-                ;;
-            *)
-                print_error "Invalid choice! Please try again."
-                ;;
+        read -p "Enter choice [0-6]: " action
+        
+        case $action in
+            1) start_service "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
+            2) stop_service "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
+            3) restart_service "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
+            4) rebuild_service "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
+            5) view_service_logs "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
+            6) access_service_shell "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
+            0) return ;;
+            *) print_error "Invalid choice!" ;;
         esac
         
-        echo ""
+        printf "\n"
         read -p "Press Enter to continue..."
     done
 }
 
+view_logs_menu() {
+    if ! select_service; then
+        return
+    fi
+    
+    view_service_logs "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL"
+}
+
+access_shell_menu() {
+    if ! select_service; then
+        return
+    fi
+    
+    access_service_shell "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL"
+}
+
+#=============================================================================
+# Main Loop
+#=============================================================================
+
+main() {
+    # Check Docker
+    check_docker
+    
+    while true; do
+        show_main_menu
+        read -p "Enter your choice [0-9]: " choice
+        
+        case $choice in
+            1) start_all_services ;;
+            2) stop_all_services ;;
+            3) restart_all_services ;;
+            4) build_all_services ;;
+            5) manage_service ;;
+            6) view_logs_menu ;;
+            7) check_status ;;
+            8) access_shell_menu ;;
+            9) clean_all ;;
+            0) 
+                printf "\n"
+                print_success "Goodbye!"
+                printf "\n"
+                exit 0
+                ;;
+            *)
+                print_error "Invalid choice! Please enter a number between 0 and 9"
+                ;;
+        esac
+        
+        if [ "$choice" != "5" ]; then
+            printf "\n"
+            read -p "Press Enter to continue..."
+        fi
+    done
+}
+
+# Run the script
 main
