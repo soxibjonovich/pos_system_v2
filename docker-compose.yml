@@ -71,7 +71,7 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      SECRET_KEY: your-super-secret-key-change-in-production
+      # SECRET_KEY: your-super-secret-key-change-in-production
       ALGORITHM: HS256
       TOKEN_EXPIRE_DAYS: 7
     depends_on:

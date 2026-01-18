@@ -1,23 +1,22 @@
 from enum import Enum
 
 from authx import TokenPayload
-from config import auth, settings
-from crud import get_user_by_username
+from config import auth
+import crud
 from fastapi import Depends, HTTPException, status
 from schemas import UserResponse
 
 
-class UserRole(str, Enum):
+class UserRole(Enum):
     ADMIN = "admin"
     STAFF = "staff"
-    CHEF = "chef"
+
 
 async def get_current_user(
     token: TokenPayload = Depends(auth.access_token_required),
 ) -> UserResponse:
     try:
         username: str = token.sub
-
         if not username:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -25,9 +24,8 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        user = await get_user_by_username(username)
-
-        if not user or not settings.WHITE_LIST.get(user.username):
+        user = await crud.get_user_by_username(username)
+        if not user:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="User not authorized",

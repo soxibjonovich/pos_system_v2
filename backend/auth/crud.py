@@ -1,15 +1,15 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import httpx
 from fastapi import HTTPException, status
 
 from schemas import UserCreate, UserLoginOption, UserResponse
-from config import auth
+from config import auth, settings
 
 
 class DatabaseClient:
     def __init__(self):
-        self.base_url = "http://database_api:8002"
+        self.base_url = settings.DATABASE_SERVICE_URL
         self.timeout = 10.0
     
     def get_client(self):
@@ -29,7 +29,8 @@ def generate_token(username: str, role: str) -> str:
 async def get_user_by_username(username: str) -> UserResponse | None:
     async with db_client.get_client() as client:
         try:
-            response = await client.get(f"/username/{username}")
+            response = await client.get(f"/users/username/{username}")
+            print(response.content)
             if response.status_code != 200:
                 return None
             return UserResponse.model_validate_json(response.content)
@@ -109,3 +110,20 @@ async def create_user_in_db(user_in: UserCreate) -> UserResponse | None:
             )
         except Exception:
             return None
+            
+async def update_last_login(id: int, username: str) -> bool:
+    async with db_client.get_client() as client:
+        try:
+            response = await client.put(f"/users/{id}", json={"id": id, "username": username, "last_login": datetime.now()})
+            if response.status_code == 200:
+                return True
+            else:
+                return False
+        except httpx.ConnectError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable"
+            )
+        except Exception:
+            return False
+	

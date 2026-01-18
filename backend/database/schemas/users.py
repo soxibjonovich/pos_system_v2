@@ -1,9 +1,11 @@
 from pydantic import BaseModel, Field, field_validator
+from datetime import datetime
 
 class UserBase(BaseModel):
     username: str = Field(..., min_length=2, max_length=50)
     full_name: str = Field(..., min_length=2, max_length=100)
     pin: int = Field()
+    
 
 class UserCreate(UserBase):
     pin: int = Field(..., ge=1000, le=999999)
@@ -20,7 +22,8 @@ class UserUpdate(BaseModel):
     full_name: str | None = Field(None, min_length=2, max_length=100)
     pin: int | None = Field(None, ge=1000, le=999999)
     role: str | None = Field(None, description="Role (admin, manager, cashier)")
-    status: str | None = Field(None, description="Status (active, inactive)")  # ← ADD THIS LINE
+    status: str | None = Field(None, description="Status (active, inactive)")
+    last_login: datetime | None = Field(None, description="Last Login")
     
     @field_validator("pin")
     @classmethod
@@ -36,4 +39,8 @@ class UserResponse(UserBase):
     role: str
     status: str
     
-    model_config = {"from_attributes": True}
+    class Config:
+        from_attributes = True
+
+class UsersResponse(BaseModel):
+    users: list[UserResponse]

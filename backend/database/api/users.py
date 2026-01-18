@@ -7,9 +7,9 @@ from schemas import users as users_schema
 user_router = APIRouter()
 
 
-@user_router.get("", response_model=list[users_schema.UserResponse])
+@user_router.get("", response_model=users_schema.UsersResponse)
 async def get_users(db: AsyncSession = Depends(get_db)):
-    return await users_crud.get_users(db)
+    return {"users": await users_crud.get_users(db)}
 
 @user_router.get("")
 async def get_usernames(status: str, db: AsyncSession = Depends(get_db)):

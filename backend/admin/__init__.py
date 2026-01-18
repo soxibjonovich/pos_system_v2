@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
-from api import products, users, orders
+from api import products, users, orders, categories
 
 app = FastAPI(
     title="Admin Micro Service",
@@ -21,6 +21,7 @@ app.add_middleware(
 app.include_router(products.product_router, prefix="")
 app.include_router(users.users_router, prefix="")
 app.include_router(orders.orders_router, prefix="")
+app.include_router(categories.router, prefix="")
 
 
 @app.get("/", include_in_schema=False)

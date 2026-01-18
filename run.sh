@@ -1,6 +1,5 @@
 #!/bin/bash
 # start.sh - Unix Docker Compose Launcher
-
 set -e
 
 # Colors
@@ -9,6 +8,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
 NC='\033[0m' # No Color
 
 print_header() {
@@ -34,19 +34,23 @@ print_warning() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
+print_service() {
+    echo -e "${MAGENTA}[SERVICE]${NC} $1"
+}
+
 check_docker() {
     if ! command -v docker &> /dev/null; then
         print_error "Docker is not installed!"
         echo "Please install Docker and try again."
         exit 1
     fi
-
+    
     if ! docker info &> /dev/null; then
         print_error "Docker is not running!"
         echo "Please start Docker and try again."
         exit 1
     fi
-
+    
     print_success "Docker is running"
     echo ""
 }
@@ -55,16 +59,42 @@ show_menu() {
     echo ""
     echo "Choose an option:"
     echo ""
-    echo "1. Start all services"
-    echo "2. Stop all services"
-    echo "3. Restart all services"
-    echo "4. View logs"
-    echo "5. Build and start"
-    echo "6. Clean everything (remove volumes)"
-    echo "7. Check service status"
-    echo "8. Access service shell"
-    echo "9. Exit"
+    echo "1.  Start all services"
+    echo "2.  Stop all services"
+    echo "3.  Restart all services"
+    echo "4.  View logs"
+    echo "5.  Build and start all services"
+    echo "6.  Rebuild specific service"
+    echo "7.  Restart specific service"
+    echo "8.  Clean everything (remove volumes)"
+    echo "9.  Check service status"
+    echo "10. Access service shell"
+    echo "11. View logs of specific service"
+    echo "12. Exit"
     echo ""
+}
+
+select_service() {
+    echo ""
+    echo "Select service:"
+    echo "1. Admin API"
+    echo "2. Database API"
+    echo "3. Auth API"
+    echo "4. Order API"
+    echo "5. RabbitMQ"
+    echo "6. Cancel"
+    echo ""
+    read -p "Enter choice (1-6): " service_choice
+    
+    case $service_choice in
+        1) echo "admin_api" ;;
+        2) echo "database_api" ;;
+        3) echo "auth_api" ;;
+        4) echo "order_api" ;;
+        5) echo "rabbitmq" ;;
+        6) echo "cancel" ;;
+        *) echo "invalid" ;;
+    esac
 }
 
 start_services() {
@@ -100,9 +130,91 @@ view_logs() {
 }
 
 build_services() {
-    print_info "Building and starting services..."
+    print_info "Building and starting all services..."
     docker-compose up -d --build
     print_success "Build complete and services started"
+}
+
+rebuild_specific_service() {
+    local service
+    service=$(select_service)
+    
+    if [ "$service" = "cancel" ]; then
+        echo "Cancelled."
+        return
+    fi
+    
+    if [ "$service" = "invalid" ]; then
+        print_error "Invalid choice!"
+        return
+    fi
+    
+    print_info "Rebuilding $service..."
+    
+    # Stop the service
+    print_service "Stopping $service..."
+    docker-compose stop "$service"
+    
+    # Remove the container
+    print_service "Removing old container..."
+    docker-compose rm -f "$service"
+    
+    # Rebuild and start
+    print_service "Building and starting $service..."
+    docker-compose up -d --build "$service"
+    
+    print_success "$service rebuilt and started successfully!"
+    
+    # Show logs
+    echo ""
+    read -p "View logs for $service? (y/n): " show_logs
+    if [ "$show_logs" = "y" ] || [ "$show_logs" = "Y" ]; then
+        docker-compose logs -f "$service"
+    fi
+}
+
+restart_specific_service() {
+    local service
+    service=$(select_service)
+    
+    if [ "$service" = "cancel" ]; then
+        echo "Cancelled."
+        return
+    fi
+    
+    if [ "$service" = "invalid" ]; then
+        print_error "Invalid choice!"
+        return
+    fi
+    
+    print_info "Restarting $service..."
+    docker-compose restart "$service"
+    print_success "$service restarted successfully"
+    
+    # Show logs
+    echo ""
+    read -p "View logs for $service? (y/n): " show_logs
+    if [ "$show_logs" = "y" ] || [ "$show_logs" = "Y" ]; then
+        docker-compose logs -f "$service"
+    fi
+}
+
+view_specific_logs() {
+    local service
+    service=$(select_service)
+    
+    if [ "$service" = "cancel" ]; then
+        echo "Cancelled."
+        return
+    fi
+    
+    if [ "$service" = "invalid" ]; then
+        print_error "Invalid choice!"
+        return
+    fi
+    
+    print_info "Showing logs for $service (Press Ctrl+C to exit)..."
+    docker-compose logs -f "$service"
 }
 
 clean_all() {
@@ -123,25 +235,40 @@ check_status() {
     print_info "Service Status:"
     echo ""
     docker-compose ps
+    echo ""
+    
+    # Show resource usage
+    print_info "Resource Usage:"
+    echo ""
+    local container_ids
+    container_ids=$(docker-compose ps -q)
+    if [ -n "$container_ids" ]; then
+        docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" $container_ids
+    else
+        echo "No running containers"
+    fi
 }
 
 access_shell() {
-    echo ""
-    echo "Select service:"
-    echo "1. Admin"
-    echo "2. Database"
-    echo "3. Auth"
-    echo "4. Order"
-    echo ""
-    read -p "Enter choice (1-4): " service_choice
+    local service
+    service=$(select_service)
     
-    case $service_choice in
-        1) docker exec -it admin_api sh ;;
-        2) docker exec -it database_api sh ;;
-        3) docker exec -it auth_api sh ;;
-        4) docker exec -it order_api sh ;;
-        *) echo "Invalid choice" ;;
-    esac
+    if [ "$service" = "cancel" ]; then
+        echo "Cancelled."
+        return
+    fi
+    
+    if [ "$service" = "invalid" ]; then
+        print_error "Invalid choice!"
+        return
+    fi
+    
+    print_info "Accessing shell for $service..."
+    echo "Type 'exit' to return to menu"
+    echo ""
+    
+    # Try sh first, fallback to bash
+    docker exec -it "$service" sh 2>/dev/null || docker exec -it "$service" bash
 }
 
 main() {
@@ -150,7 +277,7 @@ main() {
     
     while true; do
         show_menu
-        read -p "Enter your choice (1-9): " choice
+        read -p "Enter your choice (1-12): " choice
         
         case $choice in
             1) start_services ;;
@@ -158,10 +285,13 @@ main() {
             3) restart_services ;;
             4) view_logs ;;
             5) build_services ;;
-            6) clean_all ;;
-            7) check_status ;;
-            8) access_shell ;;
-            9) 
+            6) rebuild_specific_service ;;
+            7) restart_specific_service ;;
+            8) clean_all ;;
+            9) check_status ;;
+            10) access_shell ;;
+            11) view_specific_logs ;;
+            12) 
                 echo ""
                 echo "Goodbye!"
                 exit 0

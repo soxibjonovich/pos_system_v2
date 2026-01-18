@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
 
+from api import categories, order, products, users
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-
-from api import order, products, users
-from database import Base, engine
 from rabbitmq_client import rabbitmq_client
+
+from database import Base, engine
 
 
 @asynccontextmanager
@@ -47,8 +47,9 @@ async def health():
 
 
 app.include_router(users.user_router, prefix="/users", tags=["Users"])
-app.include_router(products.product_router, prefix="/products", tags=["Products"])
+app.include_router(products.router, prefix="/products", tags=["Products"])
 app.include_router(order.order_router, prefix="/orders", tags=["Orders"])
+app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 
 
 def run_database():

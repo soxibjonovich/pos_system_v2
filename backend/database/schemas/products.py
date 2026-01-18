@@ -2,28 +2,37 @@ from pydantic import BaseModel, Field
 
 
 class ProductBase(BaseModel):
-    title: str = Field(title="Product title", examples=["Shashlik"], max_length=250)
-    description: str | None = Field(
-        None,
-        title="Product description",
-        description="Ingredients of product, ex: Qora non, baliq ...",
-        max_length=256,
-    )
-    quantity: int = Field(
-        -1,
-        title="Quantity",
-        description="If you wanna set quantity infinity skip this field, default -1 (infinity)",
-        ge=-1,
-    )
-    price: float = Field(title="Price", gt=0)
+    title: str = Field(..., min_length=1, max_length=200)
+    description: str | None = Field(None, max_length=500)
+    category_id: int | None = Field(None, description="Product category ID")
+    quantity: int = Field(..., ge=-1, description="Stock quantity. -1 for unlimited")
+    price: float = Field(..., gt=0, description="Selling price")
+    cost: float | None = Field(None, ge=0, description="Cost price (optional)")
+    is_active: bool = Field(True, description="Product availability status")
 
 
 class ProductCreate(ProductBase):
     pass
 
 
-class Product(ProductBase):
-    id: int
+class ProductUpdate(BaseModel):
+    title: str | None = Field(None, min_length=1, max_length=200)
+    description: str | None = None
+    category_id: int | None = None
+    quantity: int | None = Field(None, ge=-1)
+    price: float | None = Field(None, gt=0)
+    cost: float | None = Field(None, ge=0)
+    is_active: bool | None = None
 
-    class Config:
-        from_attributes = True
+
+class ProductResponse(ProductBase):
+    id: int
+    created_at: str
+    updated_at: str | None = None
+    
+    model_config = {"from_attributes": True}
+
+
+class ProductsResponse(BaseModel):
+    products: list[ProductResponse] = []
+    total: int = 0

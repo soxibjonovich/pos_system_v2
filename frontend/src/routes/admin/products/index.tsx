@@ -1,31 +1,31 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
-import { Search, Plus, Pencil, Trash2, Package } from 'lucide-react'
-import { API_URL } from '@/config'
+import { Button } from "@/components/ui/button"
 import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import {
+    Table,
+    TableBody,
+    TableCaption,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
+import { API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
+import { createFileRoute } from '@tanstack/react-router'
+import { Package, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
-const PRODUCTS_API = `${API_URL}:8002/products`
+const PRODUCTS_API = `${API_URL}:8001/products`
 
 interface Product {
   id: number

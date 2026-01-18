@@ -1,14 +1,20 @@
 from contextlib import asynccontextmanager
 
+import schemas as auth_schemas
+from authx.exceptions import AuthXException, MissingTokenError, NoAuthorizationError
+from config import auth, settings
+from crud import (
+    create_user_in_db,
+    get_active_users,
+    get_user_by_credentials,
+    update_last_login,
+)
+from deps import get_current_user
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-
-import schemas as auth_schemas
-from crud import create_user_in_db, get_active_users, get_user_by_credentials
-from deps import get_current_user
-from config import auth, settings
-from schemas import UserResponse as User
+from fastapi.responses import JSONResponse
 from redis_client import redis_client
+from schemas import UserResponse as User
 
 
 @asynccontextmanager
@@ -84,7 +90,7 @@ async def login(user_in: auth_schemas.UserLogin):
     )
     
     await redis_client.set_token(user.username, token)
-    
+    await update_last_login(user.id, user.username)
     return auth_schemas.TokenResponse(
         access_token=token,
         role=user.role,
@@ -154,6 +160,36 @@ async def health():
         "service": "auth",
         "redis": "connected" if redis_status else "disconnected"
     }
+
+# Exception handler for missing token
+@auth_app.exception_handler(MissingTokenError)
+async def missing_token_handler(request: Request, exc: MissingTokenError):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"detail": "Access denied: Missing or invalid authentication token"},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+# Exception handler for invalid token
+@auth_app.exception_handler(AuthXException)
+async def invalid_token_handler(request: Request, exc: AuthXException):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"detail": "Access denied: Invalid or expired token"},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+# Optional: Catch all other AuthX errors
+@auth_app.exception_handler(NoAuthorizationError)
+async def authx_error_handler(request: Request, exc: NoAuthorizationError):
+    return JSONResponse(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        content={"detail": "Access denied: Authentication failed"},
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
 
 
 def run_auth():

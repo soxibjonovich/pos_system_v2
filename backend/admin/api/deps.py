@@ -1,13 +1,10 @@
-from authx import TokenPayload
-from fastapi import Depends, HTTPException, status
-
-from crud import users as crud
-from schemas.users import User
-
-
-from config import auth
-
 from enum import Enum
+
+from authx import TokenPayload
+from config import auth
+from crud import users as crud
+from fastapi import Depends, HTTPException, status
+from schemas.users import User
 
 
 class UserRole(Enum):
