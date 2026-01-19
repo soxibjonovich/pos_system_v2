@@ -1,9 +1,12 @@
 services:
+  # -------------------------
+  # Redis
+  # -------------------------
   redis:
     image: redis:7-alpine
     container_name: pos_redis
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     networks:
       - pos_network
     restart: unless-stopped
@@ -13,13 +16,17 @@ services:
       timeout: 3s
       retries: 5
 
+  # -------------------------
+  # RabbitMQ
+  # -------------------------
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: pos_rabbitmq
     hostname: rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"
+      - "15672:15672"  # RabbitMQ UI only, optional
+    expose:
+      - "5672"
     networks:
       - pos_network
     restart: unless-stopped
@@ -32,13 +39,16 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
 
+  # -------------------------
+  # Database API
+  # -------------------------
   database:
-    build: 
+    build:
       context: ./backend/database
       dockerfile: Dockerfile
     container_name: database_api
-    ports:
-      - "8002:8002"
+    expose:
+      - "8002"
     environment:
       PYTHONUNBUFFERED: 1
       DATABASE_URL: sqlite+aiosqlite:///./data/pos_system.db
@@ -58,20 +68,22 @@ services:
       retries: 10
       start_period: 40s
 
+  # -------------------------
+  # Auth API
+  # -------------------------
   auth:
     build:
       context: ./backend/auth
       dockerfile: Dockerfile
     container_name: auth_api
-    ports:
-      - "8003:8003"
+    expose:
+      - "8003"
     environment:
       PYTHONUNBUFFERED: 1
       DATABASE_SERVICE_URL: http://database_api:8002
       REDIS_HOST: redis
       REDIS_PORT: 6379
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      # SECRET_KEY: your-super-secret-key-change-in-production
       ALGORITHM: HS256
       TOKEN_EXPIRE_DAYS: 7
     depends_on:
@@ -91,13 +103,16 @@ services:
       retries: 10
       start_period: 40s
 
+  # -------------------------
+  # Admin API
+  # -------------------------
   admin:
     build:
       context: ./backend/admin
       dockerfile: Dockerfile
     container_name: admin_api
-    ports:
-      - "8001:8001"
+    expose:
+      - "8001"
     environment:
       PYTHONUNBUFFERED: 1
       DATABASE_SERVICE_URL: http://database_api:8002
@@ -117,13 +132,16 @@ services:
       retries: 10
       start_period: 40s
 
+  # -------------------------
+  # Order API
+  # -------------------------
   order:
     build:
       context: ./backend/order
       dockerfile: Dockerfile
     container_name: order_api
-    ports:
-      - "8004:8004"
+    expose:
+      - "8004"
     environment:
       PYTHONUNBUFFERED: 1
       DATABASE_SERVICE_URL: http://database_api:8002
@@ -146,20 +164,22 @@ services:
       retries: 10
       start_period: 40s
 
+  # -------------------------
+  # Staff API
+  # -------------------------
   staff:
     build:
       context: ./backend/staff
       dockerfile: Dockerfile
     container_name: staff_api
-    ports:
-      - "8005:8005"
+    expose:
+      - "8005"
     environment:
       PYTHONUNBUFFERED: 1
       DATABASE_SERVICE_URL: http://database_api:8002
       REDIS_HOST: redis
       REDIS_PORT: 6379
       RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
-      # SECRET_KEY: your-super-secret-key-change-in-production
       ALGORITHM: HS256
       TOKEN_EXPIRE_DAYS: 7
     depends_on:
@@ -181,17 +201,22 @@ services:
       retries: 10
       start_period: 40s
 
+  # -------------------------
+  # Frontend (SPA served via Nginx)
+  # -------------------------
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: DockerfilePublic
     container_name: pos_frontend
     ports:
-      - "5173:5173"
-    command: npm run dev -- --host 0.0.0.0
+      - "80:80"
+      - "443:443"
     volumes:
       - ./frontend:/app
       - /app/node_modules
+      - /etc/letsencrypt/live/posystem.shop/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/posystem.shop/privkey.pem:/etc/ssl/private/privkey.pem:ro
     networks:
       - pos_network
     depends_on:
@@ -201,12 +226,18 @@ services:
         condition: service_healthy
     restart: unless-stopped
     environment:
-      VITE_API_URL: http://localhost:8001
+      VITE_API_URL: https://posystem.shop
 
+# -------------------------
+# Networks
+# -------------------------
 networks:
   pos_network:
     driver: bridge
 
+# -------------------------
+# Volumes
+# -------------------------
 volumes:
   pos_data:
     driver: local

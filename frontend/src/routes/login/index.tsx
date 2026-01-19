@@ -8,8 +8,8 @@ import { useEffect, useMemo, useState } from "react"
 const PIN_MIN_LENGTH = 4
 const PIN_MAX_LENGTH = 6
 
-const USERS_URL = `${API_URL}:8002/users?status=active`
-const LOGIN_URL = `${API_URL}:8003/login`
+const USERS_URL = `${API_URL}/api/database/users?status=active`
+const LOGIN_URL = `${API_URL}/api/auth/login`
 const TOKEN_KEY = "postoken"
 
 /* ===================== ROUTE ===================== */

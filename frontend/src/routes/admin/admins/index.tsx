@@ -24,8 +24,8 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/contexts/auth-context"
 
-const USERS_API = `${API_URL}:8002/users`
-const ADMIN_API = `${API_URL}:8002/users/admin`
+const USERS_API = `${API_URL}/api/database/users`
+const ADMIN_API = `${API_URL}/api/databse/users/admin`
 
 interface User {
   id: number

@@ -22,15 +22,17 @@ import { Textarea } from "@/components/ui/textarea"
 import { API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
 import { createFileRoute } from '@tanstack/react-router'
-import { Package, Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { Package, Pencil, Plus, Search, Tag, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
-const PRODUCTS_API = `${API_URL}:8001/products`
+const PRODUCTS_API = `${API_URL}/api/database/products`
+const CATEGORIES_API = `${API_URL}/api/database/categories`
 
 interface Product {
   id: number
   title: string
   description: string | null
+  category_id: number | null
   quantity: number
   price: number
   cost: number | null
@@ -39,9 +41,16 @@ interface Product {
   updated_at: string | null
 }
 
+interface Category {
+  id: number
+  name: string
+  is_active: boolean
+}
+
 interface ProductFormData {
   title: string
   description: string | null
+  category_id: number | null
   quantity: number
   price: number
   cost: number | null
@@ -56,11 +65,13 @@ function RouteComponent() {
   const { token } = useAuth()
   
   const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
   const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
@@ -71,35 +82,50 @@ function RouteComponent() {
   const [formData, setFormData] = useState<ProductFormData>({
     title: '',
     description: '',
+    category_id: null,
     quantity: 0,
     price: 0,
     cost: 0,
     is_active: true,
   })
 
-  const fetchProducts = async () => {
+  const fetchData = async () => {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch(PRODUCTS_API, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-      })
+      const [productsRes, categoriesRes] = await Promise.all([
+        fetch(PRODUCTS_API, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        }),
+        fetch(CATEGORIES_API, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        })
+      ])
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch products: ${response.statusText}`)
+      if (!productsRes.ok || !categoriesRes.ok) {
+        throw new Error('Failed to fetch data')
       }
 
-      const data = await response.json()
-      const productsList = data.products || []
+      const productsData = await productsRes.json()
+      const categoriesData = await categoriesRes.json()
+      
+      const productsList = productsData.products || []
+      const categoriesList = categoriesData.categories || []
+      
       setProducts(productsList)
+      setCategories(categoriesList)
       setFilteredProducts(productsList)
     } catch (err) {
-      console.error('Error fetching products:', err)
-      setError(err instanceof Error ? err.message : 'Failed to fetch products')
+      console.error('Error fetching data:', err)
+      setError(err instanceof Error ? err.message : 'Failed to fetch data')
     } finally {
       setIsLoading(false)
     }
@@ -107,7 +133,7 @@ function RouteComponent() {
 
   useEffect(() => {
     if (token) {
-      fetchProducts()
+      fetchData()
     }
   }, [token])
 
@@ -123,6 +149,11 @@ function RouteComponent() {
       })
     }
 
+    if (categoryFilter) {
+      const categoryId = parseInt(categoryFilter)
+      filtered = filtered.filter((product) => product.category_id === categoryId)
+    }
+
     if (statusFilter) {
       filtered = filtered.filter((product) => {
         const isActive = product.is_active ? 'active' : 'inactive'
@@ -131,7 +162,7 @@ function RouteComponent() {
     }
 
     setFilteredProducts(filtered)
-  }, [searchQuery, statusFilter, products])
+  }, [searchQuery, categoryFilter, statusFilter, products])
 
   const addProduct = async (data: ProductFormData) => {
     setIsSubmitting(true)
@@ -139,6 +170,7 @@ function RouteComponent() {
       const payload = {
         title: data.title,
         description: data.description || null,
+        category_id: data.category_id,
         quantity: data.quantity,
         price: data.price,
         cost: data.cost || null,
@@ -159,7 +191,7 @@ function RouteComponent() {
         throw new Error(errorData.detail || `Failed to add product: ${response.statusText}`)
       }
 
-      await fetchProducts()
+      await fetchData()
       setIsAddModalOpen(false)
       resetForm()
     } catch (err) {
@@ -176,13 +208,12 @@ function RouteComponent() {
       const payload = {
         title: data.title || undefined,
         description: data.description || null,
+        category_id: data.category_id,
         quantity: data.quantity,
         price: data.price,
         cost: data.cost || null,
         is_active: data.is_active,
       }
-
-      console.log('Updating product with payload:', payload)
 
       const response = await fetch(`${PRODUCTS_API}/${id}`, {
         method: 'PUT',
@@ -193,8 +224,6 @@ function RouteComponent() {
         body: JSON.stringify(payload),
       })
 
-      console.log('Response status:', response.status)
-      
       if (!response.ok) {
         const errorText = await response.text()
         console.error('Error response:', errorText)
@@ -207,7 +236,7 @@ function RouteComponent() {
         throw new Error(errorData.detail || `Failed to update product: ${response.statusText}`)
       }
 
-      await fetchProducts()
+      await fetchData()
       setIsEditModalOpen(false)
       setSelectedProduct(null)
       resetForm()
@@ -239,7 +268,7 @@ function RouteComponent() {
         throw new Error(errorData.detail || `Failed to delete product: ${response.statusText}`)
       }
 
-      await fetchProducts()
+      await fetchData()
       setIsEditModalOpen(false)
       setSelectedProduct(null)
     } catch (err) {
@@ -254,6 +283,7 @@ function RouteComponent() {
     setFormData({
       title: '',
       description: '',
+      category_id: null,
       quantity: 0,
       price: 0,
       cost: 0,
@@ -271,6 +301,7 @@ function RouteComponent() {
     setFormData({
       title: product.title,
       description: product.description || '',
+      category_id: product.category_id,
       quantity: product.quantity,
       price: product.price,
       cost: product.cost || 0,
@@ -288,6 +319,12 @@ function RouteComponent() {
     e.preventDefault()
     if (!selectedProduct) return
     updateProduct(selectedProduct.id, formData)
+  }
+
+  const getCategoryName = (categoryId: number | null) => {
+    if (!categoryId) return '-'
+    const category = categories.find(c => c.id === categoryId)
+    return category ? category.name : 'Unknown'
   }
 
   const statuses = ['active', 'inactive']
@@ -338,6 +375,19 @@ function RouteComponent() {
         </div>
 
         <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <option value="">All Categories</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+
+        <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
@@ -350,11 +400,12 @@ function RouteComponent() {
           ))}
         </select>
 
-        {(searchQuery || statusFilter) && (
+        {(searchQuery || categoryFilter || statusFilter) && (
           <Button
             variant="outline"
             onClick={() => {
               setSearchQuery('')
+              setCategoryFilter('')
               setStatusFilter('')
             }}
           >
@@ -374,6 +425,7 @@ function RouteComponent() {
             <TableRow>
               <TableHead>ID</TableHead>
               <TableHead>Title</TableHead>
+              <TableHead>Category</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Stock</TableHead>
               <TableHead>Price</TableHead>
@@ -385,7 +437,7 @@ function RouteComponent() {
           <TableBody>
             {filteredProducts.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center text-muted-foreground">
+                <TableCell colSpan={9} className="text-center text-muted-foreground">
                   No products match your filters
                 </TableCell>
               </TableRow>
@@ -398,6 +450,16 @@ function RouteComponent() {
                       <Package className="size-4 text-blue-600" />
                       {product.title}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {product.category_id ? (
+                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                        <Tag className="size-3 mr-1" />
+                        {getCategoryName(product.category_id)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400">-</span>
+                    )}
                   </TableCell>
                   <TableCell className="max-w-xs truncate text-muted-foreground">
                     {product.description || '-'}
@@ -467,6 +529,22 @@ function RouteComponent() {
                   required
                   placeholder="Product name"
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="category">Category</Label>
+                <select
+                  id="category"
+                  value={formData.category_id || ''}
+                  onChange={(e) => setFormData({ ...formData, category_id: e.target.value ? parseInt(e.target.value) : null })}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">No Category</option>
+                  {categories.filter(c => c.is_active).map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="description">Description</Label>
@@ -559,6 +637,22 @@ function RouteComponent() {
                   required
                   placeholder="Product name"
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="edit-category">Category</Label>
+                <select
+                  id="edit-category"
+                  value={formData.category_id || ''}
+                  onChange={(e) => setFormData({ ...formData, category_id: e.target.value ? parseInt(e.target.value) : null })}
+                  className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">No Category</option>
+                  {categories.filter(c => c.is_active).map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="edit-description">Description</Label>

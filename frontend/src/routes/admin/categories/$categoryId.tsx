@@ -15,8 +15,8 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Package, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
   
-  const CATEGORIES_API = `${API_URL}:8001/categories`
-  const PRODUCTS_API = `${API_URL}:8001/products`
+  const CATEGORIES_API = `${API_URL}/api/admin/categories`
+  const PRODUCTS_API = `${API_URL}/api/admin/products`
   
   interface Category {
     id: number

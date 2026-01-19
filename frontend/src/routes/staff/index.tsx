@@ -3,7 +3,7 @@ import { Check, Delete, Grid3x3, List, Minus, Plus, Search, ShoppingCart, X } fr
 import { useEffect, useRef, useState } from 'react'
 import { API_URL } from '@/config'
 
-const STAFF_API = `${API_URL}:8005`
+const STAFF_API = `${API_URL}/api/staff`
 
 const CURRENT_USER_ID = 1
 
