@@ -89,7 +89,12 @@ class Product(Base):
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
     title = Column(String(200), nullable=False, unique=True, index=True)
     description = Column(Text, nullable=True)
-    category_id = Column(Integer, ForeignKey("categories.id", ondelete="SET NULL"), nullable=True, index=True)
+    category_id = Column(
+        Integer,
+        ForeignKey("categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     quantity = Column(Integer, nullable=False, default=-1)
     price = Column(Numeric(10, 2), nullable=False)
     cost = Column(Numeric(10, 2), nullable=True)

@@ -22,15 +22,15 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     id: int
-    pin: int              # Consider hiding in production response!
+    pin: int  # Consider hiding in production response!
     role: str
     status: str
     last_login: Optional[datetime] = None
 
     model_config = ConfigDict(
-        from_attributes=True,           # for SQLAlchemy ORM
-        populate_by_name=True,          # very useful with aliases
-        json_encoders={datetime: lambda v: v.isoformat()}
+        from_attributes=True,  # for SQLAlchemy ORM
+        populate_by_name=True,  # very useful with aliases
+        json_encoders={datetime: lambda v: v.isoformat()},
     )
 
 
@@ -78,7 +78,7 @@ class TokenResponse(BaseModel):
             "example": {
                 "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
                 "token_type": "bearer",
-                "expires_at": 1736438400
+                "expires_at": 1736438400,
             }
         }
     )

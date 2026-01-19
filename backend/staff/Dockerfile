@@ -15,4 +15,4 @@ COPY . ./
 
 EXPOSE 8005
 
-CMD [ "uvicorn", "__init__:mapp", "--host", "0.0.0.0", "--port", "8004" ]
+CMD [ "uvicorn", "__init__:router", "--host", "0.0.0.0", "--port", "8005" ]

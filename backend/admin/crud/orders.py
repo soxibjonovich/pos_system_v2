@@ -6,7 +6,9 @@ from schemas import orders as schema
 
 class ServiceClient:
     def __init__(self):
-        self.client = httpx.AsyncClient(base_url=settings.DATABASE_SERVICE_URL, timeout=10.0)
+        self.client = httpx.AsyncClient(
+            base_url=settings.DATABASE_SERVICE_URL, timeout=10.0
+        )
 
     async def close(self):
         await self.client.aclose()

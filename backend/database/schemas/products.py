@@ -30,7 +30,7 @@ class ProductResponse(ProductBase):
     id: int
     created_at: datetime
     updated_at: datetime | None = None
-    
+
     model_config = {"from_attributes": True}
 
 

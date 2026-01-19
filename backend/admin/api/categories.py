@@ -18,12 +18,14 @@ async def get_category(category_id: int):
     if not category:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Category with id {category_id} not found"
+            detail=f"Category with id {category_id} not found",
         )
     return category
 
 
-@router.post("", response_model=schema.CategoryResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=schema.CategoryResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_category(category: schema.CategoryCreate):
     """Create a new category"""
     return await crud.create_category(category)
@@ -36,7 +38,7 @@ async def update_category(category_id: int, category: schema.CategoryUpdate):
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Category with id {category_id} not found"
+            detail=f"Category with id {category_id} not found",
         )
     return updated
 
@@ -48,5 +50,5 @@ async def delete_category(category_id: int):
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Category with id {category_id} not found"
+            detail=f"Category with id {category_id} not found",
         )

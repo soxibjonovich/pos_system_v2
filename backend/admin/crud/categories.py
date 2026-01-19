@@ -6,8 +6,10 @@ from schemas import categories as schema
 
 class ServiceClient:
     def __init__(self):
-        self.client = httpx.AsyncClient(base_url=settings.DATABASE_SERVICE_URL, timeout=10.0)
-    
+        self.client = httpx.AsyncClient(
+            base_url=settings.DATABASE_SERVICE_URL, timeout=10.0
+        )
+
     async def close(self):
         await self.client.aclose()
 
@@ -66,8 +68,7 @@ async def create_category(category: schema.CategoryCreate) -> schema.CategoryRes
     """Create a new category via database service"""
     try:
         response = await service_client.client.post(
-            "/categories",
-            json=category.model_dump()
+            "/categories", json=category.model_dump()
         )
         if response.status_code == 400:
             raise HTTPException(
@@ -95,12 +96,13 @@ async def create_category(category: schema.CategoryCreate) -> schema.CategoryRes
         )
 
 
-async def update_category(category_id: int, category: schema.CategoryUpdate) -> schema.CategoryResponse | None:
+async def update_category(
+    category_id: int, category: schema.CategoryUpdate
+) -> schema.CategoryResponse | None:
     """Update a category via database service"""
     try:
         response = await service_client.client.put(
-            f"/categories/{category_id}",
-            json=category.model_dump(exclude_unset=True)
+            f"/categories/{category_id}", json=category.model_dump(exclude_unset=True)
         )
         if response.status_code == 404:
             return None

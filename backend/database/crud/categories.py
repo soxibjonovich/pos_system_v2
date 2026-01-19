@@ -21,10 +21,12 @@ async def get_category_by_name(db: AsyncSession, name: str) -> Category | None:
     return result.scalar_one_or_none()
 
 
-async def create_category(db: AsyncSession, category: schema.CategoryCreate) -> Category:
+async def create_category(
+    db: AsyncSession, category: schema.CategoryCreate
+) -> Category:
     new_category = Category(**category.model_dump())
     db.add(new_category)
-    
+
     try:
         await db.commit()
         await db.refresh(new_category)
@@ -34,14 +36,16 @@ async def create_category(db: AsyncSession, category: schema.CategoryCreate) -> 
         raise
 
 
-async def update_category(db: AsyncSession, id: int, category: schema.CategoryUpdate) -> Category | None:
+async def update_category(
+    db: AsyncSession, id: int, category: schema.CategoryUpdate
+) -> Category | None:
     existing_category = await get_category_by_id(db, id)
     if not existing_category:
         return None
-    
+
     for key, value in category.model_dump(exclude_unset=True).items():
         setattr(existing_category, key, value)
-    
+
     try:
         await db.commit()
         await db.refresh(existing_category)
@@ -55,7 +59,7 @@ async def delete_category(db: AsyncSession, id: int) -> bool:
     category = await get_category_by_id(db, id)
     if not category:
         return False
-    
+
     try:
         await db.delete(category)
         await db.commit()

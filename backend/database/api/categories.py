@@ -29,7 +29,7 @@ async def create_category(
     existing = await crud.get_category_by_name(db, category.name)
     if existing:
         raise HTTPException(status_code=400, detail="Category name already exists")
-    
+
     return await crud.create_category(db, category)
 
 

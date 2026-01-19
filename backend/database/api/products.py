@@ -22,12 +22,14 @@ async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
     if not product:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Product with id {product_id} not found"
+            detail=f"Product with id {product_id} not found",
         )
     return product
 
 
-@router.post("", response_model=schema.ProductResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=schema.ProductResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_product(
     product: schema.ProductCreate,
     db: AsyncSession = Depends(get_db),
@@ -38,19 +40,20 @@ async def create_product(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Product with this title already exists"
+            detail="Product with this title already exists",
         )
-    
+
     # Validate category if provided
     if product.category_id:
         from crud import categories as cat_crud
+
         category = await cat_crud.get_category_by_id(db, product.category_id)
         if not category:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Category with id {product.category_id} not found"
+                detail=f"Category with id {product.category_id} not found",
             )
-    
+
     return await crud.create_product(db, product)
 
 
@@ -67,24 +70,25 @@ async def update_product(
         if existing and existing.id != product_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Product with this title already exists"
+                detail="Product with this title already exists",
             )
-    
+
     # Validate category if being updated
     if product.category_id:
         from crud import categories as cat_crud
+
         category = await cat_crud.get_category_by_id(db, product.category_id)
         if not category:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Category with id {product.category_id} not found"
+                detail=f"Category with id {product.category_id} not found",
             )
-    
+
     updated = await crud.update_product(db, product_id, product)
     if not updated:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Product with id {product_id} not found"
+            detail=f"Product with id {product_id} not found",
         )
     return updated
 
@@ -96,5 +100,5 @@ async def delete_product(product_id: int, db: AsyncSession = Depends(get_db)):
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Product with id {product_id} not found"
+            detail=f"Product with id {product_id} not found",
         )

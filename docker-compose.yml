@@ -146,6 +146,41 @@ services:
       retries: 10
       start_period: 40s
 
+  staff:
+    build:
+      context: ./backend/staff
+      dockerfile: Dockerfile
+    container_name: staff_api
+    ports:
+      - "8005:8005"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      # SECRET_KEY: your-super-secret-key-change-in-production
+      ALGORITHM: HS256
+      TOKEN_EXPIRE_DAYS: 7
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8005)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
   frontend:
     build:
       context: ./frontend

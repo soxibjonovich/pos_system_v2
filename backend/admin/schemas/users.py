@@ -71,6 +71,7 @@ class UserUpdate(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     """Schema for updating only user role"""
+
     role: str = Field(..., description="User role: admin, manager, or cashier")
 
     @field_validator("role")

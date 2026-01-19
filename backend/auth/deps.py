@@ -45,7 +45,9 @@ async def get_current_user(
         )
 
 
-async def get_current_admin(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
+async def get_current_admin(
+    current_user: UserResponse = Depends(get_current_user),
+) -> UserResponse:
     if current_user.role != UserRole.ADMIN.value:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required"
@@ -53,7 +55,9 @@ async def get_current_admin(current_user: UserResponse = Depends(get_current_use
     return current_user
 
 
-async def get_current_staff(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
+async def get_current_staff(
+    current_user: UserResponse = Depends(get_current_user),
+) -> UserResponse:
     if current_user.role not in [UserRole.ADMIN, UserRole.STAFF]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Staff access required"

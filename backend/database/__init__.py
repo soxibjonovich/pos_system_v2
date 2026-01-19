@@ -36,6 +36,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+
 @app.get("/", include_in_schema=False)
 async def root():
     return RedirectResponse("/docs")

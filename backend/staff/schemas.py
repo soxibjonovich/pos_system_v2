@@ -19,7 +19,7 @@ class StaffOrderResponse(BaseModel):
     status: str
     items: list[dict]
     created_at: str
-    
+
     model_config = {"from_attributes": True}
 
 

@@ -24,11 +24,7 @@ async def lifespan(app: FastAPI):
     await redis_client.close()
 
 
-auth_app = FastAPI(
-    title="Auth Microservice",
-    version="1.7",
-    lifespan=lifespan
-)
+auth_app = FastAPI(title="Auth Microservice", version="1.7", lifespan=lifespan)
 
 auth_app.add_middleware(
     CORSMiddleware,
@@ -38,10 +34,11 @@ auth_app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
+
 @auth_app.get(
     "/users/login-options",
     response_model=auth_schemas.UserLoginOptionsResponse,
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
 async def get_login_options():
     """Get list of active users for login selection"""
@@ -53,17 +50,17 @@ async def get_login_options():
     "/register",
     response_model=auth_schemas.UserResponse,
     status_code=status.HTTP_201_CREATED,
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
 async def register(user_in: auth_schemas.UserCreate):
     user = await create_user_in_db(user_in)
-    
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already registered"
+            detail="Username already registered",
         )
-    
+
     return user
 
 
@@ -71,78 +68,68 @@ async def register(user_in: auth_schemas.UserCreate):
     "/login",
     response_model=auth_schemas.TokenResponse,
     status_code=status.HTTP_200_OK,
-    tags=["Authentication"]
+    tags=["Authentication"],
 )
 async def login(user_in: auth_schemas.UserLogin):
     user = await get_user_by_credentials(user_in.user_id, user_in.pin)
-    
+
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials"
         )
-    
+
     from datetime import timedelta
+
     token = auth.create_access_token(
-        uid=user.username,
-        data={"role": user.role},
-        expiry=timedelta(days=7)
+        uid=user.username, data={"role": user.role}, expiry=timedelta(days=7)
     )
-    
+
     await redis_client.set_token(user.username, token)
     await update_last_login(user.id, user.username)
     return auth_schemas.TokenResponse(
-        access_token=token,
-        role=user.role,
-        token_type="bearer",
-        expires_at=7
+        access_token=token, role=user.role, token_type="bearer", expires_at=7
     )
 
 
 @auth_app.post(
-    "/verify",
-    tags=["Authentication"],
-    summary="Verify token (for other microservices)"
+    "/verify", tags=["Authentication"], summary="Verify token (for other microservices)"
 )
 async def verify_token(request: Request):
     authorization = request.headers.get("Authorization")
-    
+
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing or invalid authorization header"
+            detail="Missing or invalid authorization header",
         )
-    
+
     token = authorization.replace("Bearer ", "")
-    
+
     try:
         import jwt
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
         username = payload.get("sub")
-        
+
         if not username:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token"
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
             )
-        
+
         token_exists = await redis_client.token_exists(username)
-        
+
         if not token_exists:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Token not found or expired"
+                detail="Token not found or expired",
             )
-        
-        return {
-            "valid": True,
-            "username": username,
-            "role": payload.get("role")
-        }
+
+        return {"valid": True, "username": username, "role": payload.get("role")}
     except Exception:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
         )
 
 
@@ -158,8 +145,9 @@ async def health():
     return {
         "status": "ok",
         "service": "auth",
-        "redis": "connected" if redis_status else "disconnected"
+        "redis": "connected" if redis_status else "disconnected",
     }
+
 
 # Exception handler for missing token
 @auth_app.exception_handler(MissingTokenError)
@@ -191,15 +179,11 @@ async def authx_error_handler(request: Request, exc: NoAuthorizationError):
     )
 
 
-
 def run_auth():
     import uvicorn
+
     uvicorn.run(
-        "auth:auth_app",
-        host="0.0.0.0",
-        port=8003,
-        log_level="error",
-        reload=True
+        "auth:auth_app", host="0.0.0.0", port=8003, log_level="error", reload=True
     )
 
 

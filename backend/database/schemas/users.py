@@ -1,15 +1,16 @@
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 
+
 class UserBase(BaseModel):
     username: str = Field(..., min_length=2, max_length=50)
     full_name: str = Field(..., min_length=2, max_length=100)
     pin: int = Field()
-    
+
 
 class UserCreate(UserBase):
     pin: int = Field(..., ge=1000, le=999999)
-    
+
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v):
@@ -18,13 +19,14 @@ class UserCreate(UserBase):
             raise ValueError("PIN must be 4-6 digits")
         return v
 
+
 class UserUpdate(BaseModel):
     full_name: str | None = Field(None, min_length=2, max_length=100)
     pin: int | None = Field(None, ge=1000, le=999999)
     role: str | None = Field(None, description="Role (admin, manager, cashier)")
     status: str | None = Field(None, description="Status (active, inactive)")
     last_login: datetime | None = Field(None, description="Last Login")
-    
+
     @field_validator("pin")
     @classmethod
     def validate_pin(cls, v):
@@ -34,14 +36,16 @@ class UserUpdate(BaseModel):
                 raise ValueError("PIN must be 4-6 digits")
         return v
 
+
 class UserResponse(UserBase):
     id: int
     role: str
     status: str
     last_login: datetime | None
-    
+
     class Config:
         from_attributes = True
+
 
 class UsersResponse(BaseModel):
     users: list[UserResponse]

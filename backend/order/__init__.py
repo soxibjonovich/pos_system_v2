@@ -61,9 +61,11 @@ mapp.add_middleware(
     allow_headers=["*"],
 )
 
+
 @mapp.get("/health", tags=["Health"])
 async def health():
     return {"status": "ok", "service": "order"}
+
 
 @mapp.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
@@ -237,6 +239,7 @@ async def get_order_total(order_id: int, _: schemas.User = Depends(get_current_s
 
 
 mapp.include_router(app)
+
 
 @mapp.exception_handler(MissingTokenError)
 async def missing_token_handler(request: Request, exc: MissingTokenError):
