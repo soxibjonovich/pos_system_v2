@@ -7,7 +7,7 @@ interface AuthContextType {
   isLoading: boolean
   setToken: (token: string | null) => void
   setRole: (role: string | null) => void
-  login: (token: string, role: string) => void
+  login: (token: string, role: string, userId: string) => void
   logout: () => void
   checkAuth: () => boolean
 }
@@ -46,6 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem(TOKEN_KEY)
     }
   }
+  
+  const setItemInStorage = (newItem: string, key: string) => { 
+    localStorage.setItem(key, newItem)
+  }
 
   // Sync role changes to localStorage
   const setRole = (newRole: string | null) => {
@@ -58,9 +62,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   // Login helper that sets both token and role
-  const login = (newToken: string, newRole: string) => {
+  const login = (newToken: string, newRole: string, userId: string) => {
     setToken(newToken)
     setRole(newRole)
+    setItemInStorage(userId, "userId")
   }
 
   // Logout helper that clears both token and role

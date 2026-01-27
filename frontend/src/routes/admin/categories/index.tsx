@@ -1,26 +1,27 @@
 import { Button } from "@/components/ui/button"
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
-    Table,
-    TableBody,
-    TableCaption,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
 import { API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
+import { AuthGuard } from "@/middlewares/AuthGuard"
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Pencil, Plus, Search, Tag, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -43,7 +44,11 @@ interface CategoryFormData {
 }
 
 export const Route = createFileRoute('/admin/categories/')({
-  component: RouteComponent,
+  component: () => (
+    <AuthGuard allowedRoles={['admin']}>
+      <RouteComponent />
+    </AuthGuard>
+  ),
 })
 
 function RouteComponent() {

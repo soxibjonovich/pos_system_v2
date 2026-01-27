@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     await redis_client.close()
 
 
-auth_app = FastAPI(title="Auth Microservice", version="1.7", lifespan=lifespan)
+auth_app = FastAPI(title="Auth Microservice", version="1.7", lifespan=lifespan, root_path="/api/auth")
 
 auth_app.add_middleware(
     CORSMiddleware,

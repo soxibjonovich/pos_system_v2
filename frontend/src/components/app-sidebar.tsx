@@ -106,7 +106,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           <SidebarMenuSubItem key={subItem.title}>
                             <SidebarMenuSubButton
                               asChild
-                              isActive={subItem.isActive}
                             >
                               <Link to={subItem.url}>{subItem.title}</Link>
                             </SidebarMenuSubButton>

@@ -1,16 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useState, useEffect } from 'react'
-import { Search, Plus, Pencil, Trash2 } from 'lucide-react'
-import { API_URL } from '@/config'
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -20,9 +8,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
+import {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
+import { AuthGuard } from '@/middlewares/AuthGuard'
+import { createFileRoute } from '@tanstack/react-router'
+import { Pencil, Plus, Search, Trash2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 const USERS_API = `${API_URL}/api/admin/users`
 
@@ -50,7 +51,11 @@ interface UserUpdateData {
 }
 
 export const Route = createFileRoute('/admin/users/')({
-  component: RouteComponent,
+  component: () => (
+    <AuthGuard allowedRoles={['admin']}>
+      <RouteComponent />
+    </AuthGuard>
+  ),
 })
 
 function RouteComponent() {

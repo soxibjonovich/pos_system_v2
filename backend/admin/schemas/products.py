@@ -27,6 +27,7 @@ class ProductResponse(ProductBase):
     id: int
     cost: float | None = None
     is_active: bool
+    category_id: int
     created_at: datetime
     updated_at: datetime | None = None
 

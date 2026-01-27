@@ -1,480 +1,239 @@
 #!/bin/bash
-# run.sh - POS System Docker Manager
 set -e
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
-NC='\033[0m' # No Color
+R='\033[0;31m'
+G='\033[0;32m'
+Y='\033[1;33m'
+B='\033[0;34m'
+C='\033[0;36m'
+M='\033[0;35m'
+N='\033[0m'
 
-# Service names array
-SERVICES=("admin_api" "database_api" "auth_api" "order_api" "rabbitmq")
-SERVICE_LABELS=("Admin API" "Database API" "Auth API" "Order API" "RabbitMQ")
+SERVICES=("admin_api" "database_api" "auth_api" "order_api" "staff_api" "frontend" "rabbitmq" "redis")
+LABELS=("Admin API" "Database API" "Auth API" "Order API" "Staff API" "Frontend" "RabbitMQ" "Redis")
 
-#=============================================================================
-# Print Functions
-#=============================================================================
-
-print_header() {
+ph() {
     clear
-    printf "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}\n"
-    printf "${CYAN}║           POS System Docker Manager                       ║${NC}\n"
-    printf "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}\n"
-    printf "\n"
+    printf "${C}╔════════════════════════════════════════════════════════════╗${N}\n"
+    printf "${C}║           POS System Docker Manager                       ║${N}\n"
+    printf "${C}╚════════════════════════════════════════════════════════════╝${N}\n\n"
 }
 
-print_success() {
-    printf "${GREEN}✓${NC} $1\n"
+ps() { printf "${G}✓${N} $1\n"; }
+pe() { printf "${R}✗${N} $1\n"; }
+pi() { printf "${B}ℹ${N} $1\n"; }
+pw() { printf "${Y}⚠${N} $1\n"; }
+pd() { printf "${C}────────────────────────────────────────────────────────────${N}\n"; }
+
+cd() {
+    command -v docker &>/dev/null || { pe "Docker not installed!"; printf "\nhttps://docs.docker.com/get-docker/\n"; exit 1; }
+    docker info &>/dev/null || { pe "Docker not running!"; printf "\nStart Docker Desktop\n"; exit 1; }
+    command -v docker-compose &>/dev/null || { pe "Docker Compose not installed!"; exit 1; }
 }
 
-print_error() {
-    printf "${RED}✗${NC} $1\n"
+mm() {
+    ph
+    printf "${C}Main Menu:${N}\n"
+    pd
+    printf "\n  ${G}[1]${N}  Start all\n  ${G}[2]${N}  Stop all\n  ${G}[3]${N}  Restart all\n  ${G}[4]${N}  Build all\n\n"
+    printf "  ${Y}[5]${N}  Manage service\n  ${Y}[6]${N}  View logs\n\n"
+    printf "  ${B}[7]${N}  Status\n  ${B}[8]${N}  Shell access\n\n"
+    printf "  ${R}[9]${N}  Clean all\n  ${R}[0]${N}  Exit\n\n"
+    pd
 }
 
-print_info() {
-    printf "${BLUE}ℹ${NC} $1\n"
-}
-
-print_warning() {
-    printf "${YELLOW}⚠${NC} $1\n"
-}
-
-print_divider() {
-    printf "${CYAN}────────────────────────────────────────────────────────────${NC}\n"
-}
-
-#=============================================================================
-# Docker Check
-#=============================================================================
-
-check_docker() {
-    if ! command -v docker &> /dev/null; then
-        print_error "Docker is not installed!"
-        printf "\n"
-        printf "Please install Docker from: https://docs.docker.com/get-docker/\n"
-        exit 1
-    fi
-    
-    if ! docker info &> /dev/null 2>&1; then
-        print_error "Docker is not running!"
-        printf "\n"
-        printf "Please start Docker Desktop and try again.\n"
-        exit 1
-    fi
-    
-    if ! command -v docker-compose &> /dev/null; then
-        print_error "Docker Compose is not installed!"
-        printf "\n"
-        printf "Please install Docker Compose and try again.\n"
-        exit 1
-    fi
-}
-
-#=============================================================================
-# Menu Display
-#=============================================================================
-
-show_main_menu() {
-    print_header
-    printf "${CYAN}Main Menu:${NC}\n"
-    print_divider
-    printf "\n"
-    printf "  ${GREEN}[1]${NC}  Start all services\n"
-    printf "  ${GREEN}[2]${NC}  Stop all services\n"
-    printf "  ${GREEN}[3]${NC}  Restart all services\n"
-    printf "  ${GREEN}[4]${NC}  Build and start all services\n"
-    printf "\n"
-    printf "  ${YELLOW}[5]${NC}  Manage specific service\n"
-    printf "  ${YELLOW}[6]${NC}  View service logs\n"
-    printf "\n"
-    printf "  ${BLUE}[7]${NC}  Check service status\n"
-    printf "  ${BLUE}[8]${NC}  Access service shell\n"
-    printf "\n"
-    printf "  ${RED}[9]${NC}  Clean everything (⚠️  removes volumes)\n"
-    printf "  ${RED}[0]${NC}  Exit\n"
-    printf "\n"
-    print_divider
-}
-
-show_service_menu() {
-    printf "\n"
-    printf "${CYAN}Select a service:${NC}\n"
-    printf "\n"
+sm() {
+    printf "\n${C}Select service:${N}\n\n"
     for i in "${!SERVICES[@]}"; do
-        local num=$((i + 1))
-        printf "  ${GREEN}[$num]${NC}  ${SERVICE_LABELS[$i]}\n"
+        printf "  ${G}[$((i+1))]${N}  ${LABELS[$i]}\n"
     done
-    printf "  ${RED}[0]${NC}  Cancel\n"
-    printf "\n"
+    printf "  ${R}[0]${N}  Cancel\n\n"
 }
 
-show_service_action_menu() {
-    local service_label="$1"
-    printf "\n"
-    printf "${CYAN}Actions for ${MAGENTA}${service_label}${CYAN}:${NC}\n"
-    printf "\n"
-    printf "  ${GREEN}[1]${NC}  Start\n"
-    printf "  ${GREEN}[2]${NC}  Stop\n"
-    printf "  ${GREEN}[3]${NC}  Restart\n"
-    printf "  ${YELLOW}[4]${NC}  Rebuild (stop, remove, build, start)\n"
-    printf "  ${BLUE}[5]${NC}  View logs\n"
-    printf "  ${BLUE}[6]${NC}  Access shell\n"
-    printf "  ${RED}[0]${NC}  Back to menu\n"
-    printf "\n"
+sam() {
+    printf "\n${C}Actions for ${M}$1${C}:${N}\n\n"
+    printf "  ${G}[1]${N}  Start\n  ${G}[2]${N}  Stop\n  ${G}[3]${N}  Restart\n  ${Y}[4]${N}  Rebuild\n  ${B}[5]${N}  Logs\n  ${B}[6]${N}  Shell\n  ${R}[0]${N}  Back\n\n"
 }
 
-#=============================================================================
-# Service Selection
-#=============================================================================
-
-select_service() {
+ss() {
     while true; do
-        show_service_menu
-        read -p "Enter choice [0-${#SERVICES[@]}]: " choice
-        
-        if [[ "$choice" == "0" ]]; then
-            return 1
-        fi
-        
-        if [[ "$choice" =~ ^[1-9][0-9]*$ ]] && [ "$choice" -le "${#SERVICES[@]}" ]; then
-            local index=$((choice - 1))
-            SELECTED_SERVICE="${SERVICES[$index]}"
-            SELECTED_SERVICE_LABEL="${SERVICE_LABELS[$index]}"
+        sm
+        read -p "Choice [0-${#SERVICES[@]}]: " c
+        [[ "$c" == "0" ]] && return 1
+        [[ "$c" =~ ^[1-9][0-9]*$ ]] && [ "$c" -le "${#SERVICES[@]}" ] && {
+            i=$((c-1))
+            SS="${SERVICES[$i]}"
+            SL="${LABELS[$i]}"
             return 0
-        fi
-        
-        print_error "Invalid choice! Please enter a number between 0 and ${#SERVICES[@]}"
+        }
+        pe "Invalid choice!"
         sleep 1
     done
 }
 
-#=============================================================================
-# Docker Operations
-#=============================================================================
-
-start_all_services() {
-    print_info "Starting all services..."
+sa() {
+    pi "Starting all..."
     printf "\n"
-    
-    if docker-compose up -d; then
+    docker-compose up -d && {
         printf "\n"
-        print_success "All services started successfully!"
-        printf "\n"
-        printf "${CYAN}Services are available at:${NC}\n"
-        printf "  • Admin API:     http://localhost:8001/docs\n"
-        printf "  • Database API:  http://localhost:8002/docs\n"
-        printf "  • Auth API:      http://localhost:8003/docs\n"
-        printf "  • Order API:     http://localhost:8004/docs\n"
-        printf "  • RabbitMQ UI:   http://localhost:15672 (admin/pos_password_2024)\n"
-    else
-        printf "\n"
-        print_error "Failed to start services!"
-    fi
+        ps "All started!"
+        printf "\n${C}Available at:${N}\n"
+        printf "  • Admin:    http://localhost:8001/docs\n"
+        printf "  • Database: http://localhost:8002/docs\n"
+        printf "  • Auth:     http://localhost:8003/docs\n"
+        printf "  • Order:    http://localhost:8004/docs\n"
+        printf "  • Staff:    http://localhost:8005/docs\n"
+        printf "  • Frontend: http://localhost:80\n"
+        printf "  • RabbitMQ: http://localhost:15672\n"
+    } || { printf "\n"; pe "Start failed!"; }
 }
 
-stop_all_services() {
-    print_info "Stopping all services..."
+sta() {
+    pi "Stopping all..."
     printf "\n"
-    
-    if docker-compose down; then
-        printf "\n"
-        print_success "All services stopped successfully!"
-    else
-        printf "\n"
-        print_error "Failed to stop services!"
-    fi
+    docker-compose down && { printf "\n"; ps "Stopped!"; } || { printf "\n"; pe "Stop failed!"; }
 }
 
-restart_all_services() {
-    print_info "Restarting all services..."
+ra() {
+    pi "Restarting all..."
     printf "\n"
-    
-    if docker-compose restart; then
-        printf "\n"
-        print_success "All services restarted successfully!"
-    else
-        printf "\n"
-        print_error "Failed to restart services!"
-    fi
+    docker-compose restart && { printf "\n"; ps "Restarted!"; } || { printf "\n"; pe "Restart failed!"; }
 }
 
-build_all_services() {
-    print_info "Building and starting all services..."
+ba() {
+    pi "Building all..."
     printf "\n"
-    
-    if docker-compose up -d --build; then
-        printf "\n"
-        print_success "Build completed and all services started!"
-    else
-        printf "\n"
-        print_error "Build failed!"
-    fi
+    docker-compose up -d --build && { printf "\n"; ps "Built!"; } || { printf "\n"; pe "Build failed!"; }
 }
 
-check_status() {
-    print_info "Service Status:"
-    print_divider
+cs() {
+    pi "Status:"
+    pd
     printf "\n"
     docker-compose ps
     printf "\n"
-    
-    print_divider
-    print_info "Resource Usage:"
+    pd
+    pi "Resources:"
     printf "\n"
-    
-    local container_ids=$(docker-compose ps -q 2>/dev/null)
-    if [ -n "$container_ids" ]; then
-        docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" $container_ids
-    else
-        printf "No running containers\n"
-    fi
+    ids=$(docker-compose ps -q 2>/dev/null)
+    [ -n "$ids" ] && docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}" $ids || printf "No containers\n"
 }
 
-view_all_logs() {
-    print_info "Showing logs for all services (Press Ctrl+C to exit)..."
+val() {
+    pi "Logs (Ctrl+C to exit)..."
     printf "\n"
     sleep 1
     docker-compose logs -f
 }
 
-clean_all() {
+ca() {
     printf "\n"
-    print_warning "This will remove all containers, networks, and volumes!"
-    print_warning "All data will be lost!"
+    pw "Remove all containers, networks, volumes!"
+    pw "All data will be lost!"
     printf "\n"
-    read -p "Are you absolutely sure? Type 'yes' to confirm: " confirm
-    
-    if [ "$confirm" != "yes" ]; then
-        print_info "Cancelled."
-        return
-    fi
-    
+    read -p "Type 'yes' to confirm: " cf
+    [ "$cf" != "yes" ] && { pi "Cancelled."; return; }
     printf "\n"
-    print_info "Cleaning up..."
-    
-    if docker-compose down -v; then
-        printf "\n"
-        print_success "Cleanup complete!"
-    else
-        printf "\n"
-        print_error "Cleanup failed!"
-    fi
+    pi "Cleaning..."
+    docker-compose down -v && { printf "\n"; ps "Clean!"; } || { printf "\n"; pe "Clean failed!"; }
 }
 
-#=============================================================================
-# Single Service Operations
-#=============================================================================
-
-start_service() {
-    local service="$1"
-    local label="$2"
-    
-    print_info "Starting ${label}..."
+sts() {
+    pi "Starting $2..."
     printf "\n"
-    
-    if docker-compose start "$service"; then
-        printf "\n"
-        print_success "${label} started successfully!"
-    else
-        printf "\n"
-        print_error "Failed to start ${label}!"
-    fi
+    docker-compose start "$1" && { printf "\n"; ps "$2 started!"; } || { printf "\n"; pe "Start failed!"; }
 }
 
-stop_service() {
-    local service="$1"
-    local label="$2"
-    
-    print_info "Stopping ${label}..."
+sps() {
+    pi "Stopping $2..."
     printf "\n"
-    
-    if docker-compose stop "$service"; then
-        printf "\n"
-        print_success "${label} stopped successfully!"
-    else
-        printf "\n"
-        print_error "Failed to stop ${label}!"
-    fi
+    docker-compose stop "$1" && { printf "\n"; ps "$2 stopped!"; } || { printf "\n"; pe "Stop failed!"; }
 }
 
-restart_service() {
-    local service="$1"
-    local label="$2"
-    
-    print_info "Restarting ${label}..."
+rs() {
+    pi "Restarting $2..."
     printf "\n"
-    
-    if docker-compose restart "$service"; then
-        printf "\n"
-        print_success "${label} restarted successfully!"
-    else
-        printf "\n"
-        print_error "Failed to restart ${label}!"
-    fi
+    docker-compose restart "$1" && { printf "\n"; ps "$2 restarted!"; } || { printf "\n"; pe "Restart failed!"; }
 }
 
-rebuild_service() {
-    local service="$1"
-    local label="$2"
-    
+rbs() {
     printf "\n"
-    print_warning "This will rebuild ${label}"
-    read -p "Continue? (y/n): " confirm
-    
-    if [ "$confirm" != "y" ] && [ "$confirm" != "Y" ]; then
-        print_info "Cancelled."
-        return
-    fi
-    
+    pw "Rebuild $2"
+    read -p "Continue? (y/n): " cf
+    [[ "$cf" != [yY] ]] && { pi "Cancelled."; return; }
     printf "\n"
-    print_info "Step 1/4: Stopping ${label}..."
-    docker-compose stop "$service"
-    
-    print_info "Step 2/4: Removing container..."
-    docker-compose rm -f "$service"
-    
-    print_info "Step 3/4: Building ${label}..."
-    docker-compose build "$service"
-    
-    print_info "Step 4/4: Starting ${label}..."
-    if docker-compose up -d "$service"; then
-        printf "\n"
-        print_success "${label} rebuilt successfully!"
-    else
-        printf "\n"
-        print_error "Failed to rebuild ${label}!"
-        return
-    fi
-    
+    pi "1/4: Stopping..."
+    docker-compose stop "$1"
+    pi "2/4: Removing..."
+    docker-compose rm -f "$1"
+    pi "3/4: Building..."
+    docker-compose build "$1"
+    pi "4/4: Starting..."
+    docker-compose up -d "$1" && { printf "\n"; ps "Rebuilt!"; } || { printf "\n"; pe "Rebuild failed!"; return; }
     printf "\n"
-    read -p "View logs? (y/n): " show_logs
-    if [ "$show_logs" == "y" ] || [ "$show_logs" == "Y" ]; then
-        printf "\n"
-        print_info "Showing logs (Press Ctrl+C to stop)..."
-        printf "\n"
-        sleep 1
-        docker-compose logs -f "$service"
-    fi
+    read -p "View logs? (y/n): " sl
+    [[ "$sl" == [yY] ]] && { printf "\n"; pi "Logs (Ctrl+C to stop)..."; printf "\n"; sleep 1; docker-compose logs -f "$1"; }
 }
 
-view_service_logs() {
-    local service="$1"
-    local label="$2"
-    
-    print_info "Showing logs for ${label} (Press Ctrl+C to exit)..."
+vsl() {
+    pi "Logs for $2 (Ctrl+C to exit)..."
     printf "\n"
     sleep 1
-    docker-compose logs -f "$service"
+    docker-compose logs -f "$1"
 }
 
-access_service_shell() {
-    local service="$1"
-    local label="$2"
-    
-    print_info "Accessing shell for ${label}..."
-    print_info "Type 'exit' to return to menu"
+ash() {
+    pi "Shell for $2..."
+    pi "Type 'exit' to return"
     printf "\n"
     sleep 1
-    
-    # Try sh first, then bash
-    docker exec -it "$service" sh 2>/dev/null || docker exec -it "$service" bash 2>/dev/null || {
-        printf "\n"
-        print_error "Failed to access shell for ${label}"
-        print_info "The container might not be running"
-        return 1
-    }
+    docker exec -it "$1" sh 2>/dev/null || docker exec -it "$1" bash 2>/dev/null || { printf "\n"; pe "Shell failed!"; pi "Container not running"; return 1; }
 }
 
-#=============================================================================
-# Service Management
-#=============================================================================
-
-manage_service() {
-    if ! select_service; then
-        return
-    fi
-    
+ms() {
+    ss || return
     while true; do
-        print_header
-        show_service_action_menu "$SELECTED_SERVICE_LABEL"
-        
-        read -p "Enter choice [0-6]: " action
-        
-        case $action in
-            1) start_service "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
-            2) stop_service "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
-            3) restart_service "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
-            4) rebuild_service "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
-            5) view_service_logs "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
-            6) access_service_shell "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL" ;;
+        ph
+        sam "$SL"
+        read -p "Choice [0-6]: " a
+        case $a in
+            1) sts "$SS" "$SL" ;;
+            2) sps "$SS" "$SL" ;;
+            3) rs "$SS" "$SL" ;;
+            4) rbs "$SS" "$SL" ;;
+            5) vsl "$SS" "$SL" ;;
+            6) ash "$SS" "$SL" ;;
             0) return ;;
-            *) print_error "Invalid choice!" ;;
+            *) pe "Invalid!" ;;
         esac
-        
         printf "\n"
-        read -p "Press Enter to continue..."
+        read -p "Press Enter..."
     done
 }
 
-view_logs_menu() {
-    if ! select_service; then
-        return
-    fi
-    
-    view_service_logs "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL"
-}
-
-access_shell_menu() {
-    if ! select_service; then
-        return
-    fi
-    
-    access_service_shell "$SELECTED_SERVICE" "$SELECTED_SERVICE_LABEL"
-}
-
-#=============================================================================
-# Main Loop
-#=============================================================================
+vlm() { ss && vsl "$SS" "$SL"; }
+asm() { ss && ash "$SS" "$SL"; }
 
 main() {
-    # Check Docker
-    check_docker
-    
+    cd
     while true; do
-        show_main_menu
-        read -p "Enter your choice [0-9]: " choice
-        
-        case $choice in
-            1) start_all_services ;;
-            2) stop_all_services ;;
-            3) restart_all_services ;;
-            4) build_all_services ;;
-            5) manage_service ;;
-            6) view_logs_menu ;;
-            7) check_status ;;
-            8) access_shell_menu ;;
-            9) clean_all ;;
-            0) 
-                printf "\n"
-                print_success "Goodbye!"
-                printf "\n"
-                exit 0
-                ;;
-            *)
-                print_error "Invalid choice! Please enter a number between 0 and 9"
-                ;;
+        mm
+        read -p "Choice [0-9]: " c
+        case $c in
+            1) sa ;;
+            2) sta ;;
+            3) ra ;;
+            4) ba ;;
+            5) ms ;;
+            6) vlm ;;
+            7) cs ;;
+            8) asm ;;
+            9) ca ;;
+            0) printf "\n"; ps "Goodbye!"; printf "\n"; exit 0 ;;
+            *) pe "Invalid!" ;;
         esac
-        
-        if [ "$choice" != "5" ]; then
-            printf "\n"
-            read -p "Press Enter to continue..."
-        fi
+        [ "$c" != "5" ] && { printf "\n"; read -p "Press Enter..."; }
     done
 }
 
-# Run the script
 main

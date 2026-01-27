@@ -1,8 +1,9 @@
 import crud
+import schemas
 from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 
-router = FastAPI(tags=["Staff POS"])
+router = FastAPI(tags=["Staff POS"], root_path="/api/staff")
 
 
 router.add_middleware(
@@ -63,8 +64,8 @@ async def get_categories():
 # ==================== Orders ====================
 
 
-@router.post("/orders", status_code=status.HTTP_201_CREATED)
-async def create_order(user_id: int, items: list[dict]):
+@router.post("/orders")
+async def create_order(info: schemas.StaffOrderCreate):
     """
         Create a new order from staff POS
 
@@ -79,13 +80,13 @@ async def create_order(user_id: int, items: list[dict]):
         }
     ```
     """
-    if not items:
+    if not info.items:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Order must contain at least one item",
         )
 
-    return await crud.create_staff_order(user_id=user_id, items=items)
+    return await crud.create_staff_order(user_id=info.user_id, items=info.items)
 
 
 @router.get("/orders/user/{user_id}")

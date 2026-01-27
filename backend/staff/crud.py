@@ -173,7 +173,8 @@ async def create_staff_order(user_id: int, items: list[dict]):
             )
 
         return response.json()
-    except httpx.ConnectError:
+    except httpx.ConnectError as e:
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Order service unavailable",
@@ -181,6 +182,7 @@ async def create_staff_order(user_id: int, items: list[dict]):
     except HTTPException:
         raise
     except Exception as e:
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating order: {str(e)}",

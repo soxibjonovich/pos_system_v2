@@ -1,7 +1,12 @@
+import { AuthGuard } from '@/middlewares/AuthGuard'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/admin/')({
-  component: RouteComponent,
+  component: () => (
+    <AuthGuard allowedRoles={['admin']}>
+      <RouteComponent />
+    </AuthGuard>
+  ),
 })
 
 function RouteComponent() {

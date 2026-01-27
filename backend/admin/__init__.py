@@ -8,6 +8,7 @@ from api import products, users, orders, categories
 app = FastAPI(
     title="Admin Micro Service",
     version="1.0",
+    root_path="/api/admin"
 )
 
 app.add_middleware(

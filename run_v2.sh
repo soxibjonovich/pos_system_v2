@@ -58,7 +58,7 @@ check_docker() {
         exit 1
     fi
 
-    if ! [ -f "docker-compose.yml" ] && ! [ -f "docker-compose.yaml" ]; then
+    if ! [ -f "docker-compose-local.yml" ] && ! [ -f "docker-compose.yaml" ]; then
         print_error "Файл docker-compose.yml не найден в текущей директории!"
         exit 1
     fi

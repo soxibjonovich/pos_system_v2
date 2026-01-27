@@ -11,28 +11,23 @@ function IndexRoute() {
   const { isAuthenticated, role, isLoading, checkAuth } = useAuth()
 
   useEffect(() => {
-    // Wait for auth context to finish loading from localStorage
-    if (isLoading) return
+    const redirectUser = async () => {
+      if (isLoading) return
 
-    // Try to restore session from localStorage
-    const hasAuth = checkAuth()
+      const hasAuth = checkAuth()
 
-    if (!hasAuth || !isAuthenticated || !role) {
-      navigate({
-        to: "/login",
-        replace: true,
-      })
-      return
+      let target = "/login"
+
+      if (hasAuth && isAuthenticated && role) {
+        target = role === "admin" ? "/admin" : "/staff"
+      }
+
+      navigate({ to: target, replace: true })
     }
 
-    // Redirect based on role
-    navigate({
-      to: role === "admin" ? "/admin" : "/staff",
-      replace: true,
-    })
+    redirectUser()
   }, [isAuthenticated, role, isLoading, navigate, checkAuth])
 
-  // Show loading spinner while checking auth
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
       <div className="text-center">

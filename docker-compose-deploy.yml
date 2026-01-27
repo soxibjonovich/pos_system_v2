@@ -1,0 +1,245 @@
+services:
+  # -------------------------
+  # Redis
+  # -------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: pos_redis
+    expose:
+      - "6379"
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------
+  # RabbitMQ
+  # -------------------------
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: pos_rabbitmq
+    hostname: rabbitmq
+    ports:
+      - "15672:15672"  # RabbitMQ UI only, optional
+    expose:
+      - "5672"
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics check_running || exit 1"]
+      interval: 15s
+      timeout: 15s
+      retries: 10
+      start_period: 90s
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  # -------------------------
+  # Database API
+  # -------------------------
+  database:
+    build:
+      context: ./backend/database
+      dockerfile: Dockerfile
+    container_name: database_api
+    expose:
+      - "8002"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_URL: sqlite+aiosqlite:///./data/pos_system.db
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pos_network
+    restart: unless-stopped
+    volumes:
+      - pos_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8002)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # -------------------------
+  # Auth API
+  # -------------------------
+  auth:
+    build:
+      context: ./backend/auth
+      dockerfile: Dockerfile
+    container_name: auth_api
+    expose:
+      - "8003"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ALGORITHM: HS256
+      TOKEN_EXPIRE_DAYS: 7
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8003)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # -------------------------
+  # Admin API
+  # -------------------------
+  admin:
+    build:
+      context: ./backend/admin
+      dockerfile: Dockerfile
+    container_name: admin_api
+    expose:
+      - "8001"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      AUTH_SERVICE_URL: http://auth_api:8003
+    depends_on:
+      database:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8001)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # -------------------------
+  # Order API
+  # -------------------------
+  order:
+    build:
+      context: ./backend/order
+      dockerfile: Dockerfile
+    container_name: order_api
+    expose:
+      - "8004"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      AUTH_SERVICE_URL: http://auth_api:8003
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      database:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8004)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # -------------------------
+  # Staff API
+  # -------------------------
+  staff:
+    build:
+      context: ./backend/staff
+      dockerfile: Dockerfile
+    container_name: staff_api
+    expose:
+      - "8005"
+    environment:
+      PYTHONUNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ALGORITHM: HS256
+      TOKEN_EXPIRE_DAYS: 7
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+      database:
+        condition: service_healthy
+    networks:
+      - pos_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import socket; s=socket.socket(); s.connect((\"localhost\", 8005)); s.close()' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  # -------------------------
+  # Frontend (SPA served via Nginx)
+  # -------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: DockerfilePublic
+    container_name: pos_frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /etc/letsencrypt/live/posystem.shop/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/posystem.shop/privkey.pem:/etc/ssl/private/privkey.pem:ro
+    networks:
+      - pos_network
+    depends_on:
+      admin:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: https://posystem.shop
+
+# -------------------------
+# Networks
+# -------------------------
+networks:
+  pos_network:
+    driver: bridge
+
+# -------------------------
+# Volumes
+# -------------------------
+volumes:
+  pos_data:
+    driver: local
+  rabbitmq_data:
+    driver: local

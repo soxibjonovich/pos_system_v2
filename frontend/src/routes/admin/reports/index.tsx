@@ -1,11 +1,15 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { AuthGuard } from "@/middlewares/AuthGuard";
 import { createFileRoute } from '@tanstack/react-router';
 import { Wrench } from 'lucide-react';
-
 export const Route = createFileRoute('/admin/reports/')({
-  component: RouteComponent,
+  component: () => (
+    <AuthGuard allowedRoles={['admin']}>
+      <RouteComponent />
+    </AuthGuard>
+  ),
 })
 
 function RouteComponent() {

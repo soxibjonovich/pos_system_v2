@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table"
 import { API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
+import { AuthGuard } from "@/middlewares/AuthGuard"
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { ArrowLeft, Package, Search } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -29,19 +30,23 @@ import { useEffect, useState } from 'react'
   
   interface Product {
     id: number
-    title: string
+    name: string
     description: string | null
     category_id: number | null
     quantity: number
     price: number
-    cost: number | null
+    cost: number
     is_active: boolean
     created_at: string
     updated_at: string | null
   }
   
   export const Route = createFileRoute('/admin/categories/$categoryId')({
-    component: RouteComponent,
+    component: () => (
+      <AuthGuard allowedRoles={['admin']}>
+        <RouteComponent />
+      </AuthGuard>
+    ),
   })
   
   function RouteComponent() {
@@ -108,6 +113,7 @@ import { useEffect, useState } from 'react'
   
         const productsData = await productsResponse.json()
         const allProducts = productsData.products || []
+        console.log(allProducts)
         
         // Filter products by category
         const categoryProducts = allProducts.filter(

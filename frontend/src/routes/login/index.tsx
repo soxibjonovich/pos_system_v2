@@ -1,42 +1,29 @@
-import { API_URL } from "@/config"
+import { api } from "@/config"
 import { useAuth } from "@/contexts/auth-context"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
-/* ===================== CONFIG ===================== */
-
-const PIN_MIN_LENGTH = 4
-const PIN_MAX_LENGTH = 6
-
-const USERS_URL = `${API_URL}/api/database/users?status=active`
-const LOGIN_URL = `${API_URL}/api/auth/login`
+const PIN_MIN = 4
+const PIN_MAX = 6
 const TOKEN_KEY = "postoken"
-
-/* ===================== ROUTE ===================== */
+const ROLE_KEY = "posrole"
+const USER_ID_KEY = "userId"
 
 export const Route = createFileRoute("/login/")({
   component: LoginPage,
 })
-
-/* ===================== TYPES ===================== */
 
 interface User {
   id: number
   username: string
   full_name: string
   role: string
-  status: string
 }
 
 interface LoginResponse {
   access_token: string
-  token_type: string
-  expires_at: string
   role: string
 }
-
-
-/* ===================== COMPONENT ===================== */
 
 function LoginPage() {
   const navigate = useNavigate()
@@ -50,169 +37,131 @@ function LoginPage() {
   const [loadingUsers, setLoadingUsers] = useState(true)
   const [isDark, setIsDark] = useState(true)
 
-  const isPinValid = useMemo(
-    () => pin.length >= PIN_MIN_LENGTH && pin.length <= PIN_MAX_LENGTH,
-    [pin]
-  )
+  const isPinValid = pin.length >= PIN_MIN && pin.length <= PIN_MAX
 
-  /* ===== Check stored token ===== */
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY)
-    const savedRole = localStorage.getItem("posrole")
+    const savedRole = localStorage.getItem(ROLE_KEY)
+    const userId = localStorage.getItem(USER_ID_KEY)
 
-    if (token && savedRole) {
-      login(token, savedRole)
-      navigate({
-        to: savedRole === "admin" ? "/admin" : "/staff",
-        replace: true,
-      })
+    if (token && savedRole && userId) {
+      login(token, savedRole, userId)
+      navigate({ to: savedRole === "admin" ? "/admin" : "/staff", replace: true })
     }
-  }, [login, navigate])
-
-  /* ===== Dark mode by time ===== */
-  useEffect(() => {
-    const updateTheme = () => {
-      const hour = new Date().getHours()
-      setIsDark(hour < 6 || hour >= 18)
-    }
-
-    updateTheme()
-    const timer = setInterval(updateTheme, 60_000)
-    return () => clearInterval(timer)
   }, [])
 
-  /* ===== Load users ===== */
+  useEffect(() => {
+    const h = new Date().getHours()
+    setIsDark(h < 6 || h >= 18)
+    const t = setInterval(() => {
+      const h = new Date().getHours()
+      setIsDark(h < 6 || h >= 18)
+    }, 60000)
+    return () => clearInterval(t)
+  }, [])
+
   useEffect(() => {
     if (isAuthenticated) return
 
-    const loadUsers = async () => {
-      try {
-        setLoadingUsers(true)
-        const res = await fetch(USERS_URL)
-        
-        if (!res.ok) {
-          throw new Error(`Failed to fetch users: ${res.status}`)
-        }
-
-        const data = await res.json()
-        const activeUsers = Array.isArray(data) ? data : data.users || []
-
-        setUsers(activeUsers)
-        
-        if (activeUsers.length === 0) {
-          setError("No active users found")
-        }
-      } catch (err) {
-        console.error("Error loading users:", err)
-        setError("Failed to load users list")
-      } finally {
+    fetch(`${api.auth.base}/${api.auth.users_option}`)
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => {
+        const u = Array.isArray(d) ? d : d.users || []
+        setUsers(u)
+        if (!u.length) setError("No active users")
         setLoadingUsers(false)
-      }
-    }
-
-    loadUsers()
+      })
+      .catch(() => {
+        setError("Failed to load users")
+        setLoadingUsers(false)
+      })
   }, [isAuthenticated])
 
-  /* ===== Auto redirect ===== */
   useEffect(() => {
-    if (!isAuthenticated || !role) return
+    if (isAuthenticated && role) {
+      navigate({ to: role === "admin" ? "/admin" : "/staff", replace: true })
+    }
+  }, [isAuthenticated, role])
 
-    navigate({
-      to: role === "admin" ? "/admin" : "/staff",
-      replace: true,
-    })
-  }, [isAuthenticated, role, navigate])
+  const addDigit = useCallback((d: string) => {
+    setPin(p => p.length < PIN_MAX ? p + d : p)
+  }, [])
 
-  /* ===== PIN handlers ===== */
-  const addPinDigit = (digit: string) => {
-    setPin(prev => prev.length < PIN_MAX_LENGTH ? prev + digit : prev)
-  }
+  const clearPin = useCallback(() => setPin(""), [])
+  const backspace = useCallback(() => setPin(p => p.slice(0, -1)), [])
 
-  const clearPin = () => setPin("")
-  const backspacePin = () => setPin(p => p.slice(0, -1))
-
-  /* ===== Login ===== */
-  const handleLogin = async () => {
-    if (!selectedUser || !isPinValid) return
+  const handleLogin = useCallback(async () => {
+    if (!selectedUser || !isPinValid || isLoading) return
 
     setIsLoading(true)
     setError("")
 
     try {
-      const res = await fetch(LOGIN_URL, {
+      const res = await fetch(`${api.auth.base}/${api.auth.login}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: selectedUser.id,
-          pin: parseInt(pin, 10),
-        }),
+        body: JSON.stringify({ user_id: selectedUser.id, pin: parseInt(pin, 10) }),
       })
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        setError(errorData.detail || "Invalid PIN code")
+        const err = await res.json().catch(() => ({}))
+        setError(err.detail || "Invalid PIN")
         setPin("")
+        setIsLoading(false)
         return
       }
 
       const data: LoginResponse = await res.json()
-      console.log(data)
       const token = data.access_token
       const userRole = data.role
 
       localStorage.setItem(TOKEN_KEY, token)
-      localStorage.setItem("posrole", userRole)
+      localStorage.setItem(ROLE_KEY, userRole)
+      localStorage.setItem(USER_ID_KEY, String(selectedUser.id))
 
-      login(token, userRole)
-
-      navigate({
-        to: userRole === "admin" ? "/admin" : "/staff",
-        replace: true,
-      })
-    } catch (err) {
-      console.error("Login error:", err)
-      setError("Network error. Please try again.")
+      login(token, userRole, String(selectedUser.id))
+      navigate({ to: userRole === "admin" ? "/admin" : "/staff", replace: true })
+    } catch {
+      setError("Network error")
       setPin("")
-    } finally {
       setIsLoading(false)
     }
-  }
+  }, [selectedUser, isPinValid, isLoading, pin, login, navigate])
 
-  /* ===== Keyboard handlers ===== */
   useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      if (!selectedUser) return
+    if (!selectedUser) return
 
-      if (e.key === 'Enter' && isPinValid) {
-        handleLogin()
-      } else if (e.key === 'Backspace') {
-        backspacePin()
-      } else if (e.key === 'Escape') {
-        clearPin()
-      } else if (/^[0-9]$/.test(e.key)) {
-        addPinDigit(e.key)
-      }
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Enter" && isPinValid) handleLogin()
+      else if (e.key === "Backspace") backspace()
+      else if (e.key === "Escape") clearPin()
+      else if (/^[0-9]$/.test(e.key)) addDigit(e.key)
     }
 
-    window.addEventListener('keydown', handleKeyPress)
-    return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [selectedUser, isPinValid, pin])
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [selectedUser, isPinValid, handleLogin, backspace, clearPin, addDigit])
 
-  /* ===================== RENDER ===================== */
+  const selectUser = useCallback((u: User) => {
+    setSelectedUser(u)
+    setPin("")
+    setError("")
+  }, [])
+
+  const bg = isDark ? "bg-gray-900" : "bg-gray-100"
+  const cardBg = isDark ? "bg-gray-800" : "bg-white"
+  const text = isDark ? "text-white" : "text-gray-900"
+  const textSub = isDark ? "text-gray-300" : "text-gray-600"
 
   return (
-    <div className={`min-h-screen flex items-center justify-center p-6 ${isDark ? "bg-gray-900" : "bg-gray-100"}`}>
+    <div className={`min-h-screen flex items-center justify-center p-6 ${bg}`}>
       <div className="w-full max-w-4xl">
         <header className="text-center mb-8">
-          <h1 className={`text-4xl font-bold ${isDark ? "text-white" : "text-gray-900"}`}>
-            POS System
-          </h1>
-          <p className={`text-xl mt-2 ${isDark ? "text-gray-300" : "text-gray-600"}`}>
-            Select user and enter PIN
-          </p>
+          <h1 className={`text-4xl font-bold ${text}`}>POS System</h1>
+          <p className={`text-xl mt-2 ${textSub}`}>Select user and enter PIN</p>
         </header>
 
-        <div className={`rounded-2xl p-8 shadow-2xl space-y-8 ${isDark ? "bg-gray-800" : "bg-white"}`}>
+        <div className={`rounded-2xl p-8 shadow-2xl space-y-8 ${cardBg}`}>
           {error && (
             <div className="p-4 rounded-xl text-center bg-red-500/10 text-red-500 border border-red-500">
               {error}
@@ -220,37 +169,31 @@ function LoginPage() {
           )}
 
           <section>
-            <h3 className={`mb-4 font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>
-              Users
-            </h3>
+            <h3 className={`mb-4 font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>Users</h3>
 
             {loadingUsers ? (
               <p className="text-center text-gray-400">Loading...</p>
-            ) : users.length === 0 ? (
+            ) : !users.length ? (
               <p className="text-center text-gray-400">No users available</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                {users.map(user => (
+                {users.map(u => (
                   <button
-                    key={user.id}
-                    onClick={() => {
-                      setSelectedUser(user)
-                      setPin("")
-                      setError("")
-                    }}
-                    className={`p-4 rounded-xl font-medium transition relative
-                      ${selectedUser?.id === user.id
+                    key={u.id}
+                    onClick={() => selectUser(u)}
+                    className={`p-4 rounded-xl font-medium transition relative ${
+                      selectedUser?.id === u.id
                         ? "bg-indigo-600 text-white ring-2 ring-indigo-400"
                         : isDark
                         ? "bg-gray-700 text-gray-200 hover:bg-gray-600"
                         : "bg-gray-100 text-gray-800 hover:bg-gray-200"
-                      }`}
+                    }`}
                   >
-                    <div className="text-sm font-bold">{user.username}</div>
-                    <div className={`text-xs mt-1 ${selectedUser?.id === user.id ? "text-indigo-200" : "text-gray-400"}`}>
-                      {user.full_name}
+                    <div className="text-sm font-bold">{u.username}</div>
+                    <div className={`text-xs mt-1 ${selectedUser?.id === u.id ? "text-indigo-200" : "text-gray-400"}`}>
+                      {u.full_name}
                     </div>
-                    {user.role === 'admin' && (
+                    {u.role === "admin" && (
                       <span className="absolute top-1 right-1 text-xs bg-yellow-500 text-black px-1.5 py-0.5 rounded">
                         Admin
                       </span>
@@ -267,43 +210,44 @@ function LoginPage() {
             </p>
 
             <div
-              className={`max-w-sm mx-auto grid gap-2 p-4 border-2 border-dashed rounded-xl text-2xl text-center font-mono
-              ${isDark ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"}`}
-              style={{ gridTemplateColumns: `repeat(${PIN_MAX_LENGTH}, 1fr)` }}
+              className={`max-w-sm mx-auto grid gap-2 p-4 border-2 border-dashed rounded-xl text-2xl text-center font-mono ${
+                isDark ? "bg-gray-900 text-white" : "bg-gray-50 text-gray-900"
+              }`}
+              style={{ gridTemplateColumns: `repeat(${PIN_MAX}, 1fr)` }}
             >
-              {Array.from({ length: PIN_MAX_LENGTH }).map((_, i) => (
+              {Array.from({ length: PIN_MAX }, (_, i) => (
                 <span key={i}>{pin[i] ? "●" : "•"}</span>
               ))}
             </div>
 
             <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
-              {[1,2,3,4,5,6,7,8,9].map(n => (
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => (
                 <button
                   key={n}
                   disabled={!selectedUser}
-                  onClick={() => addPinDigit(String(n))}
+                  onClick={() => addDigit(String(n))}
                   className="py-5 rounded-xl text-2xl bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
                 >
                   {n}
                 </button>
               ))}
-              <button 
-                onClick={clearPin} 
-                disabled={!selectedUser || pin.length === 0} 
+              <button
+                onClick={clearPin}
+                disabled={!selectedUser || !pin.length}
                 className="py-5 rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition text-sm font-medium"
               >
                 Clear
               </button>
-              <button 
-                onClick={() => addPinDigit("0")} 
-                disabled={!selectedUser} 
+              <button
+                onClick={() => addDigit("0")}
+                disabled={!selectedUser}
                 className="py-5 rounded-xl text-2xl bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed transition"
               >
                 0
               </button>
-              <button 
-                onClick={backspacePin} 
-                disabled={!selectedUser || pin.length === 0} 
+              <button
+                onClick={backspace}
+                disabled={!selectedUser || !pin.length}
                 className="py-5 rounded-xl bg-orange-600 text-white hover:bg-orange-700 disabled:opacity-40 disabled:cursor-not-allowed transition text-2xl"
               >
                 ⌫
@@ -320,9 +264,7 @@ function LoginPage() {
           </button>
 
           {selectedUser && (
-            <p className="text-center text-sm text-gray-400">
-              Press Enter to login or Esc to clear PIN
-            </p>
+            <p className="text-center text-sm text-gray-400">Press Enter to login or Esc to clear PIN</p>
           )}
         </div>
       </div>

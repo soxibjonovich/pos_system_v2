@@ -48,7 +48,7 @@ async def get_active_users() -> list[UserLoginOption]:
 
             data = response.json()
 
-            return [UserLoginOption.model_validate(user) for user in data]
+            return [UserLoginOption.model_validate(user) for user in data["users"]]
 
         except httpx.ConnectError:
             raise HTTPException(

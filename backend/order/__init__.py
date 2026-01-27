@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI):
     await crud.service_client.close()
 
 
-mapp = FastAPI(title="Order Microservice", version="1.0", lifespan=lifespan)
+mapp = FastAPI(title="Order Microservice", version="1.0", lifespan=lifespan, root_path="/api/order")
 
 mapp.add_middleware(
     CORSMiddleware,
@@ -123,7 +123,7 @@ async def get_orders_by_user(
 
 @app.post("", response_model=schemas.OrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_order(
-    order: schemas.OrderCreate, _: schemas.User = Depends(get_current_staff)
+    order: schemas.OrderCreate
 ):
     created_order = await crud.create_order(order)
 

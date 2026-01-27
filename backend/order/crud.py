@@ -2,13 +2,14 @@ import httpx
 from typing import Callable, Any
 from functools import wraps
 from fastapi import HTTPException, status
+from config import settings
 import schemas
 
 
 class ServiceClient:
     def __init__(self) -> None:
         self.db_client = httpx.AsyncClient(
-            base_url="http://127.0.0.1:8002", timeout=10.0
+            base_url=settings.DATABASE_SERVICE_URL, timeout=10.0
         )
         self.auth_client = httpx.AsyncClient(
             base_url="http://127.0.0.1:8003", timeout=10.0

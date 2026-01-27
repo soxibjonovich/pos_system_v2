@@ -26,7 +26,7 @@ async def lifespan(_: FastAPI):
     print("👋 Database Service stopped")
 
 
-app = FastAPI(title="Database Microservice", version="1.2", lifespan=lifespan)
+app = FastAPI(title="Database Microservice", version="1.2", lifespan=lifespan, root_path="/api/database")
 
 app.add_middleware(
     CORSMiddleware,
