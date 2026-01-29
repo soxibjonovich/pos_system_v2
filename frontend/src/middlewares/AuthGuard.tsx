@@ -1,6 +1,6 @@
 import { API_URL } from '@/config'
 import { useNavigate } from '@tanstack/react-router'
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 
 interface AuthGuardProps {
   children: React.ReactNode
@@ -11,6 +11,7 @@ interface AuthGuardProps {
 const TOKEN_KEY = 'postoken'
 const ROLE_KEY = 'posrole'
 const USER_ID_KEY = 'userId'
+const INACTIVITY_TIMEOUT = 30000
 
 export function AuthGuard({
   children,
@@ -19,8 +20,15 @@ export function AuthGuard({
 }: AuthGuardProps) {
   const navigate = useNavigate()
   const [isChecking, setIsChecking] = useState(true)
+  const [isAuthorized, setIsAuthorized] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hasCheckedRef = useRef(false)
+  const hasSetupAutoLogoutRef = useRef(false)
 
   useEffect(() => {
+    if (hasCheckedRef.current) return
+    hasCheckedRef.current = true
+
     const token = localStorage.getItem(TOKEN_KEY)
     const role = localStorage.getItem(ROLE_KEY)
     const userId = localStorage.getItem(USER_ID_KEY)
@@ -31,55 +39,63 @@ export function AuthGuard({
       return
     }
 
-    if (allowedRoles?.length) {
-      if (!role || !allowedRoles.includes(role)) {
-        const dest = role === 'admin' ? '/admin' : ['staff', 'cashier', 'manager'].includes(role || '') ? '/staff' : '/login'
+    if (allowedRoles?.length && role) {
+      if (!allowedRoles.includes(role)) {
+        const dest = role === 'admin' ? '/admin' : ['staff', 'cashier', 'manager'].includes(role) ? '/staff' : '/login'
         if (dest === '/login') localStorage.clear()
         navigate({ to: dest, replace: true })
         return
       }
     }
 
+    setIsAuthorized(true)
     setIsChecking(false)
-  }, [navigate, allowedRoles, requireAuth])
+  }, [])
 
   useEffect(() => {
+    if (!isAuthorized || hasSetupAutoLogoutRef.current) return
+    
     const role = localStorage.getItem(ROLE_KEY)
-    if (!['staff'].includes(role || '')) return
+    if (!role || !['staff', 'cashier', 'manager'].includes(role)) return
 
-    let timer: ReturnType<typeof setTimeout>
+    hasSetupAutoLogoutRef.current = true
 
     const logout = async () => {
       const token = localStorage.getItem(TOKEN_KEY)
+      
       if (token) {
-        try {
-          localStorage.clear()
-          await fetch(`${API_URL}/api/auth/logout`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          })
-        } catch {}
+        fetch(`${API_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+        }).catch(() => {})
       }
-      navigate({ to: '/login', replace: true })
+      
+      localStorage.clear()
+      window.location.href = '/login'
     }
 
-    const reset = () => {
-      clearTimeout(timer)
-      timer = setTimeout(logout, 30000)
+    const resetTimer = () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+      }
+      timerRef.current = setTimeout(logout, INACTIVITY_TIMEOUT)
     }
 
-    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click']
-    events.forEach(e => document.addEventListener(e, reset, true))
-    reset()
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']
+    
+    events.forEach(e => document.addEventListener(e, resetTimer, { passive: true }))
+    resetTimer()
 
     return () => {
-      clearTimeout(timer)
-      events.forEach(e => document.removeEventListener(e, reset, true))
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+      }
+      events.forEach(e => document.removeEventListener(e, resetTimer))
     }
-  }, [navigate])
+  }, [isAuthorized])
 
   if (isChecking) {
     return (
