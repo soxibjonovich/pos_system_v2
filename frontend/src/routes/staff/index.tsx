@@ -4,7 +4,6 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { Check, Grid3x3, List, Minus, Plus, Search, ShoppingCart, X, Receipt, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-const CURRENT_USER_ID = Number(localStorage.getItem("userId"))
 
 interface Product {
   id: number
@@ -51,6 +50,8 @@ export default function POSTerminal() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [showKeyboard, setShowKeyboard] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
+  
+  const CURRENT_USER_ID = Number(localStorage.getItem("userId"))
 
   useEffect(() => {
     fetchData()
@@ -133,7 +134,7 @@ export default function POSTerminal() {
     try {
       const response = await fetch(`${api.staff.base}/${api.staff.orders}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json'},
         body: JSON.stringify({
           user_id: CURRENT_USER_ID,
           items: cart.map(item => ({

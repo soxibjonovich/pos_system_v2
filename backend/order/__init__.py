@@ -115,7 +115,7 @@ async def get_orders_by_status(
 
 @app.get("/user/{user_id}", response_model=schemas.OrdersResponse)
 async def get_orders_by_user(
-    user_id: int, _: schemas.User = Depends(get_current_staff)
+    user_id: int
 ):
     orders = await crud.get_orders_by_user(user_id)
     return schemas.OrdersResponse(orders=orders, total=len(orders))
