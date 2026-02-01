@@ -8,8 +8,6 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { Receipt, Search, ArrowLeft, Plus, Minus, X, Check, RefreshCw, Package } from 'lucide-react'
 import { useEffect, useState, useCallback } from 'react'
 
-const UID = Number(localStorage.getItem("userId"))
-
 interface OrderItem {
   id: number
   product_id: number
@@ -35,13 +33,21 @@ interface Product {
   price: number
 }
 
-const STATUSES = [
-  { value: 'pending', label: 'Kutilmoqda', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'preparing', label: 'Tayyorlanmoqda', color: 'bg-blue-100 text-blue-800' },
-  { value: 'ready', label: 'Tayyor', color: 'bg-purple-100 text-purple-800' },
-  { value: 'completed', label: 'Yakunlangan', color: 'bg-green-100 text-green-800' },
-  { value: 'cancelled', label: 'Bekor qilingan', color: 'bg-red-100 text-red-800' },
-]
+const STATUSES = {
+  pending:    { label: 'Kutilmoqda',      bg: '#fef9c3', text: '#854d0e', border: '#eab308' },
+  preparing:  { label: 'Tayyorlanmoqda',  bg: '#dbeafe', text: '#1e40af', border: '#3b82f6' },
+  ready:      { label: 'Tayyor',          bg: '#f3e8ff', text: '#6b21a8', border: '#a855f7' },
+  completed:  { label: 'Yakunlangan',     bg: '#dcfce7', text: '#166534', border: '#22c55e' },
+  cancelled:  { label: 'Bekor qilingan',  bg: '#fee2e2', text: '#991b1b', border: '#ef4444' },
+} as const
+
+type StatusKey = keyof typeof STATUSES
+
+const ORDERS_URL = `${api.staff.base}/${api.staff.orders}`
+const PRODUCTS_URL = `${api.staff.base}/${api.staff.products}`
+const TOKEN = localStorage.getItem("postoken")
+const UID = Number(localStorage.getItem("userId"))
+
 
 export const Route = createFileRoute('/staff/orders/')({
   component: () => (
@@ -51,32 +57,58 @@ export const Route = createFileRoute('/staff/orders/')({
   ),
 })
 
+function StatusBadge({ status }: { status: string }) {
+  const s = STATUSES[status as StatusKey] || { label: status, bg: '#f3f4f6', text: '#374151', border: '#9ca3af' }
+  return (
+    <span style={{ backgroundColor: s.bg, color: s.text, border: `1px solid ${s.border}` }} className="inline-flex px-3 py-1 rounded-full text-xs font-bold">
+      {s.label}
+    </span>
+  )
+}
+
+function StatusButton({ status, active, onClick }: { status: string, active: boolean, onClick: () => void }) {
+  const s = STATUSES[status as StatusKey] || { label: status, bg: '#f3f4f6', text: '#374151', border: '#9ca3af' }
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        backgroundColor: active ? s.bg : 'white',
+        color: active ? s.text : '#374151',
+        border: `2px solid ${active ? s.border : '#e5e7eb'}`,
+        fontWeight: active ? 700 : 500,
+      }}
+      className="px-4 py-2 rounded-lg text-sm transition-all active:scale-95"
+    >
+      {s.label}
+    </button>
+  )
+}
+
 function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
-
   const [detailModal, setDetailModal] = useState(false)
   const [editModal, setEditModal] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [editingOrder, setEditingOrder] = useState<Order | null>(null)
+  const [originalOrder, setOriginalOrder] = useState<Order | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const fetchOrders = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`${api.staff.base}/${api.staff.orders}/user/${UID}`)
+      // GET /orders/user/{user_id} -> { orders[], total }
+      const res = await fetch(`${ORDERS_URL}/user/${UID}`)
       if (!res.ok) throw new Error('Failed')
       const data = await res.json()
-      console.log(data)
-      const list = Array.isArray(data) ? data : (data.orders || [])
-      setOrders(list)
-      setFilteredOrders(list)
+      setOrders(data.orders || [])
+      setFilteredOrders(data.orders || [])
     } catch {
       setError('Failed to load orders')
     } finally {
@@ -86,11 +118,11 @@ function OrdersPage() {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const res = await fetch(`${api.staff.base}/${api.staff.products}`)
+      // GET /products -> { products[], total }
+      const res = await fetch(PRODUCTS_URL)
       if (!res.ok) return
       const data = await res.json()
-      console.log(data)
-      setProducts(Array.isArray(data) ? data : (data.products || []))
+      setProducts(data.products || [])
     } catch {}
   }, [])
 
@@ -102,7 +134,7 @@ function OrdersPage() {
   useEffect(() => {
     let filtered = [...orders]
     if (searchQuery.trim()) {
-      filtered = filtered.filter(o => o.id.toString().includes(searchQuery.toLowerCase()))
+      filtered = filtered.filter(o => o.id.toString().includes(searchQuery))
     }
     if (statusFilter) {
       filtered = filtered.filter(o => o.status === statusFilter)
@@ -110,29 +142,50 @@ function OrdersPage() {
     setFilteredOrders(filtered)
   }, [searchQuery, statusFilter, orders])
 
-  const viewOrder = async (order: Order) => {
+  // GET /orders/{order_id} -> OrderResponse
+  const fetchOrderDetail = async (orderId: number): Promise<Order | null> => {
     try {
-      const res = await fetch(`${api.staff.base}/${api.staff.orders}/${order.id}`)
-      if (!res.ok) throw new Error('Failed')
-      const data = await res.json()
-      setSelectedOrder(data)
-      setDetailModal(true)
+      const res = await fetch(`${api.orders.base}/orders/${orderId}`, {
+        headers: {"Authorization": `Bearer ${TOKEN}`}
+      })
+      if (!res.ok) return null
+      return await res.json()
     } catch {
+      return null
+    }
+  }
+
+  const viewOrder = async (order: Order) => {
+    const detail = await fetchOrderDetail(order.id)
+    if (detail) {
+      setSelectedOrder(detail)
+      setDetailModal(true)
+    } else {
       alert('Failed to load order details')
     }
   }
 
-  const openEdit = (order: Order) => {
-    setEditingOrder({ ...order })
-    setEditModal(true)
+  const openEdit = async (order: Order) => {
+    const detail = await fetchOrderDetail(order.id)
+    if (detail) {
+      setOriginalOrder(detail)
+      setEditingOrder(JSON.parse(JSON.stringify(detail)))
+      setEditModal(true)
+    } else {
+      alert('Failed to load order')
+    }
   }
 
-  const updateStatus = async (orderId: number, status: string) => {
+  // PATCH /orders/{order_id}/status -> body: { status: enum }
+  const updateStatus = async (orderId: number, newStatus: string) => {
     try {
-      const res = await fetch(`${api.staff.base}/${api.staff.orders}/${orderId}/status`, {
+      const res = await fetch(`${api.orders.base}/orders/${orderId}/status`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status })
+        headers: {
+          'Content-Type': 'application/json',
+          "Authorization": `Bearer ${TOKEN}`
+      },
+      body: JSON.stringify({ status: newStatus })
       })
       if (!res.ok) throw new Error('Failed')
       await fetchOrders()
@@ -145,14 +198,16 @@ function OrdersPage() {
 
   const updateItemQty = (itemId: number, delta: number) => {
     if (!editingOrder) return
-    const updated = editingOrder.items.map(i => {
-      if (i.id === itemId) {
-        const newQty = i.quantity + delta
-        return newQty > 0 ? { ...i, quantity: newQty, subtotal: i.price * newQty } : null
-      }
-      return i
-    }).filter(Boolean) as OrderItem[]
-    
+    const updated = editingOrder.items
+      .map(i => {
+        if (i.id === itemId) {
+          const newQty = i.quantity + delta
+          return newQty > 0 ? { ...i, quantity: newQty, subtotal: i.price * newQty } : null
+        }
+        return i
+      })
+      .filter(Boolean) as OrderItem[]
+
     setEditingOrder({
       ...editingOrder,
       items: updated,
@@ -160,55 +215,76 @@ function OrdersPage() {
     })
   }
 
+  // DELETE /orders/{order_id}/items/{item_id} -> OrderResponse
   const removeItem = async (itemId: number) => {
     if (!editingOrder) return
     try {
-      const res = await fetch(`${api.staff.base}/${api.staff.orders}/${editingOrder.id}/items/${itemId}`, { method: 'DELETE' })
+      const res = await fetch(`${api.orders.base}/orders/${editingOrder.id}/items/${itemId}`, {
+        method: 'DELETE',
+        headers: {"Authorization": `Bearer ${TOKEN}`}
+      })
       if (!res.ok) throw new Error('Failed')
-      const updated = await res.json()
+      const updated: Order = await res.json()
       setEditingOrder(updated)
+      setOriginalOrder(updated)
       await fetchOrders()
     } catch {
       alert('Failed to remove item')
     }
   }
 
-  const saveChanges = async () => {
-    if (!editingOrder) return
+  // PUT /orders/{order_id}/items/{item_id} -> body: { quantity?, price? }
+  const saveItemChanges = async () => {
+    if (!editingOrder || !originalOrder) return
+    setSaving(true)
     try {
       for (const item of editingOrder.items) {
-        await fetch(`${api.staff.base}/${api.staff.orders}/${editingOrder.id}/items/${item.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ quantity: item.quantity, price: item.price })
-        })
+        const orig = originalOrder.items.find(i => i.id === item.id)
+        if (orig && (orig.quantity !== item.quantity || orig.price !== item.price)) {
+          const res = await fetch(`${api.orders.base}/orders/${editingOrder.id}/items/${item.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({ quantity: item.quantity, price: item.price })
+          })
+          if (!res.ok) throw new Error('Failed to update item')
+        }
       }
-      if (editingOrder.status) {
-        await fetch(`${api.staff.base}/${api.staff.orders}/${editingOrder.id}/status`, {
+
+      // PATCH /orders/{order_id}/status if status changed
+      if (originalOrder.status !== editingOrder.status) {
+        const res = await fetch(`${api.orders}/orders/${editingOrder.id}/status`, {
           method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+          },
           body: JSON.stringify({ status: editingOrder.status })
         })
+        if (!res.ok) throw new Error('Failed to update status')
       }
+
       await fetchOrders()
       setEditModal(false)
     } catch {
-      alert('Failed to save')
+      alert('Failed to save changes')
+    } finally {
+      setSaving(false)
     }
   }
 
   const getProductName = (id: number) => products.find(p => p.id === id)?.title || `#${id}`
   const formatPrice = (n: number) => `${Math.floor(n).toLocaleString('uz-UZ')} so'm`
   const formatDate = (d: string) => new Date(d).toLocaleString('uz-UZ', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-  const getStatusColor = (s: string) => STATUSES.find(st => st.value === s.toLowerCase())?.color || 'bg-gray-100 text-gray-800'
-  const getStatusText = (s: string) => STATUSES.find(st => st.value === s.toLowerCase())?.label || s
 
   if (loading) {
     return (
-      <div className="p-6 flex items-center justify-center h-screen bg-white">
+      <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
           <RefreshCw className="size-12 animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-xl font-semibold text-gray-900">Yuklanmoqda...</p>
+          <p className="text-xl font-semibold text-gray-700">Yuklanmoqda...</p>
         </div>
       </div>
     )
@@ -216,11 +292,11 @@ function OrdersPage() {
 
   if (error) {
     return (
-      <div className="p-6 flex items-center justify-center h-screen bg-white">
+      <div className="flex items-center justify-center h-screen bg-gray-50">
         <div className="text-center">
           <Package className="size-16 text-red-500 mx-auto mb-4" />
-          <p className="text-xl font-semibold text-red-600">{error}</p>
-          <Button onClick={fetchOrders} className="mt-4">
+          <p className="text-xl font-semibold text-red-600 mb-4">{error}</p>
+          <Button onClick={fetchOrders}>
             <RefreshCw className="size-4 mr-2" />
             Qayta yuklash
           </Button>
@@ -256,10 +332,10 @@ function OrdersPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
             <Input type="text" placeholder="Buyurtma #..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-10 h-12 text-lg" />
           </div>
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-12 rounded-md border px-4 text-base bg-white">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="h-12 rounded-md border px-4 text-base bg-white text-gray-900">
             <option value="">Barcha holatlar</option>
-            {Array.from(new Set(orders.map(o => o.status))).map(s => (
-              <option key={s} value={s}>{getStatusText(s)}</option>
+            {Object.entries(STATUSES).map(([key, val]) => (
+              <option key={key} value={key}>{val.label}</option>
             ))}
           </select>
           {(searchQuery || statusFilter) && (
@@ -269,13 +345,40 @@ function OrdersPage() {
           )}
         </div>
 
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setStatusFilter('')}
+            className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${!statusFilter ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-300'}`}
+          >
+            Hammasi ({orders.length})
+          </button>
+          {Object.entries(STATUSES).map(([key, val]) => {
+            const count = orders.filter(o => o.status === key).length
+            if (!count) return null
+            return (
+              <button
+                key={key}
+                onClick={() => setStatusFilter(key)}
+                style={{
+                  backgroundColor: statusFilter === key ? val.bg : 'white',
+                  color: statusFilter === key ? val.text : '#374151',
+                  border: `2px solid ${statusFilter === key ? val.border : '#e5e7eb'}`,
+                }}
+                className="px-4 py-2 rounded-full text-sm font-bold transition-all"
+              >
+                {val.label} ({count})
+              </button>
+            )
+          })}
+        </div>
+
         <div className="border rounded-lg shadow-lg overflow-hidden bg-white">
           <Table>
             <TableCaption className="py-4 text-gray-600">
               {!filteredOrders.length ? 'Buyurtmalar topilmadi' : `${filteredOrders.length} / ${orders.length} ta`}
             </TableCaption>
             <TableHeader>
-              <TableRow className="bg-gray-50">
+              <TableRow style={{ backgroundColor: '#f9fafb' }}>
                 <TableHead className="font-bold text-gray-900">#</TableHead>
                 <TableHead className="font-bold text-gray-900">Summa</TableHead>
                 <TableHead className="font-bold text-gray-900">Holat</TableHead>
@@ -287,9 +390,10 @@ function OrdersPage() {
             <TableBody>
               {!filteredOrders.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12">
-                    <Package className="size-16 mx-auto mb-4 opacity-30 text-gray-400" />
-                    <p className="text-gray-600 text-lg">Buyurtmalar yo'q</p>
+                  <TableCell colSpan={6} className="text-center py-16">
+                    <Package className="size-16 mx-auto mb-4 text-gray-300" />
+                    <p className="text-gray-500 text-lg font-semibold">Buyurtmalar yo'q</p>
+                    <p className="text-gray-400 text-sm mt-1">Hali hichiday buyurtma berilmagan</p>
                   </TableCell>
                 </TableRow>
               ) : (
@@ -297,13 +401,9 @@ function OrdersPage() {
                   <TableRow key={o.id} className="hover:bg-gray-50">
                     <TableCell className="font-bold text-lg text-gray-900">#{o.id}</TableCell>
                     <TableCell className="font-bold text-green-600 text-lg">{formatPrice(o.total)}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${getStatusColor(o.status)}`}>
-                        {getStatusText(o.status)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="font-semibold text-gray-900">{o.items?.length || 0} ta</TableCell>
-                    <TableCell className="text-sm text-gray-600">{formatDate(o.created_at)}</TableCell>
+                    <TableCell><StatusBadge status={o.status} /></TableCell>
+                    <TableCell className="font-semibold text-gray-700">{o.items?.length || 0} ta</TableCell>
+                    <TableCell className="text-sm text-gray-500">{formatDate(o.created_at)}</TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button variant="outline" size="sm" onClick={() => viewOrder(o)}>Ko'rish</Button>
                       {o.status !== 'completed' && o.status !== 'cancelled' && (
@@ -317,6 +417,7 @@ function OrdersPage() {
           </Table>
         </div>
 
+        {/* Detail Modal */}
         <Dialog open={detailModal} onOpenChange={setDetailModal}>
           <DialogContent className="sm:max-w-[700px]">
             <DialogHeader>
@@ -335,9 +436,7 @@ function OrdersPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Holat</p>
-                    <span className={`inline-flex px-3 py-1 rounded-full text-sm font-bold ${getStatusColor(selectedOrder.status)}`}>
-                      {getStatusText(selectedOrder.status)}
-                    </span>
+                    <StatusBadge status={selectedOrder.status} />
                   </div>
                   <div className="col-span-2">
                     <p className="text-sm font-medium text-gray-500">Jami</p>
@@ -345,11 +444,11 @@ function OrdersPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Yaratildi</p>
-                    <p className="text-sm text-gray-900">{formatDate(selectedOrder.created_at)}</p>
+                    <p className="text-sm text-gray-700">{formatDate(selectedOrder.created_at)}</p>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Yangilandi</p>
-                    <p className="text-sm text-gray-900">{selectedOrder.updated_at ? formatDate(selectedOrder.updated_at) : '-'}</p>
+                    <p className="text-sm text-gray-700">{selectedOrder.updated_at ? formatDate(selectedOrder.updated_at) : '-'}</p>
                   </div>
                 </div>
 
@@ -368,8 +467,8 @@ function OrdersPage() {
                       {selectedOrder.items?.map(i => (
                         <TableRow key={i.id}>
                           <TableCell className="font-medium text-gray-900">{getProductName(i.product_id)}</TableCell>
-                          <TableCell className="text-gray-900">{i.quantity} ta</TableCell>
-                          <TableCell className="text-gray-900">{formatPrice(i.price)}</TableCell>
+                          <TableCell className="text-gray-700">{i.quantity} ta</TableCell>
+                          <TableCell className="text-gray-700">{formatPrice(i.price)}</TableCell>
                           <TableCell className="text-right font-bold text-green-600">{formatPrice(i.subtotal)}</TableCell>
                         </TableRow>
                       ))}
@@ -378,13 +477,13 @@ function OrdersPage() {
                 </div>
 
                 {selectedOrder.status !== 'completed' && selectedOrder.status !== 'cancelled' && (
-                  <div className="flex gap-2 flex-wrap pt-4 border-t">
-                    <p className="w-full text-sm font-semibold mb-2 text-gray-900">Holatni o'zgartirish:</p>
-                    {STATUSES.filter(s => s.value !== selectedOrder.status).map(s => (
-                      <Button key={s.value} variant="outline" size="sm" onClick={() => updateStatus(selectedOrder.id, s.value)}>
-                        {s.label}
-                      </Button>
-                    ))}
+                  <div className="pt-4 border-t">
+                    <p className="text-sm font-semibold mb-3 text-gray-700">Holatni o'zgartirish:</p>
+                    <div className="flex gap-2 flex-wrap">
+                      {Object.keys(STATUSES).filter(k => k !== selectedOrder.status).map(key => (
+                        <StatusButton key={key} status={key} active={false} onClick={() => updateStatus(selectedOrder.id, key)} />
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -392,6 +491,7 @@ function OrdersPage() {
           </DialogContent>
         </Dialog>
 
+        {/* Edit Modal */}
         <Dialog open={editModal} onOpenChange={setEditModal}>
           <DialogContent className="sm:max-w-[800px]">
             <DialogHeader>
@@ -400,30 +500,32 @@ function OrdersPage() {
             </DialogHeader>
             {editingOrder && (
               <div className="space-y-4">
-                <div className="max-h-96 overflow-y-auto space-y-3 p-4 bg-gray-50 rounded-lg">
-                  {editingOrder.items.map(i => (
-                    <div key={i.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow">
+                <div className="max-h-80 overflow-y-auto space-y-3 p-4 bg-gray-50 rounded-lg">
+                  {!editingOrder.items.length ? (
+                    <p className="text-center text-gray-500 py-6">Mahsulotlar yo'q</p>
+                  ) : editingOrder.items.map(i => (
+                    <div key={i.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow-sm border">
                       <div className="flex-1">
-                        <p className="font-bold text-lg text-gray-900">{getProductName(i.product_id)}</p>
-                        <p className="text-sm text-gray-600">{formatPrice(i.price)} × {i.quantity}</p>
+                        <p className="font-bold text-gray-900">{getProductName(i.product_id)}</p>
+                        <p className="text-sm text-gray-500">{formatPrice(i.price)} × {i.quantity} = <span className="text-green-600 font-semibold">{formatPrice(i.subtotal)}</span></p>
                       </div>
-                      <div className="flex items-center gap-3">
-                        <Button variant="outline" size="icon" onClick={() => updateItemQty(i.id, -1)}>
-                          <Minus className="size-4" />
-                        </Button>
-                        <span className="w-16 text-center font-black text-xl text-gray-900">{i.quantity}</span>
-                        <Button variant="outline" size="icon" onClick={() => updateItemQty(i.id, 1)}>
-                          <Plus className="size-4" />
-                        </Button>
-                        <Button variant="destructive" size="icon" onClick={() => removeItem(i.id)}>
-                          <X className="size-4" />
-                        </Button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => updateItemQty(i.id, -1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-100 active:scale-95">
+                          <Minus className="size-4 text-gray-700" />
+                        </button>
+                        <span className="w-10 text-center font-black text-lg text-gray-900">{i.quantity}</span>
+                        <button onClick={() => updateItemQty(i.id, 1)} className="p-2 rounded-lg border border-gray-200 hover:bg-gray-100 active:scale-95">
+                          <Plus className="size-4 text-gray-700" />
+                        </button>
+                        <button onClick={() => removeItem(i.id)} className="p-2 rounded-lg bg-red-50 border border-red-200 hover:bg-red-100 active:scale-95 ml-2">
+                          <X className="size-4 text-red-600" />
+                        </button>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="flex justify-between items-center text-2xl font-black p-4 bg-green-50 rounded-lg">
+                <div className="flex justify-between items-center text-2xl font-black p-4 bg-green-50 rounded-lg border border-green-200">
                   <span className="text-gray-900">Jami:</span>
                   <span className="text-green-600">{formatPrice(editingOrder.total)}</span>
                 </div>
@@ -431,23 +533,21 @@ function OrdersPage() {
                 <div className="space-y-3">
                   <p className="font-bold text-gray-900">Holat:</p>
                   <div className="flex gap-2 flex-wrap">
-                    {STATUSES.map(s => (
-                      <Button
-                        key={s.value}
-                        variant={editingOrder.status === s.value ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setEditingOrder({ ...editingOrder, status: s.value })}
-                      >
-                        {s.label}
-                      </Button>
+                    {Object.keys(STATUSES).map(key => (
+                      <StatusButton
+                        key={key}
+                        status={key}
+                        active={editingOrder.status === key}
+                        onClick={() => setEditingOrder({ ...editingOrder, status: key })}
+                      />
                     ))}
                   </div>
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
-                  <Button variant="outline" onClick={() => setEditModal(false)}>Bekor qilish</Button>
-                  <Button onClick={saveChanges}>
-                    <Check className="size-4 mr-2" />
+                  <Button variant="outline" onClick={() => setEditModal(false)} disabled={saving}>Bekor qilish</Button>
+                  <Button onClick={saveItemChanges} disabled={saving}>
+                    {saving ? <RefreshCw className="size-4 mr-2 animate-spin" /> : <Check className="size-4 mr-2" />}
                     Saqlash
                   </Button>
                 </div>

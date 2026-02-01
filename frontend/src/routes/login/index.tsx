@@ -2,6 +2,7 @@ import { api } from "@/config"
 import { useAuth } from "@/contexts/auth-context"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
+import { useI18n, LanguageSwitcher } from "@/i18n"
 
 const PIN_MIN = 4
 const PIN_MAX = 6
@@ -38,6 +39,8 @@ function LoginPage() {
   const [isDark, setIsDark] = useState(true)
 
   const isPinValid = pin.length >= PIN_MIN && pin.length <= PIN_MAX
+
+  const { t } = useI18n()
 
   useEffect(() => {
     const token = localStorage.getItem(TOKEN_KEY)
@@ -105,7 +108,7 @@ function LoginPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        setError(err.detail || "Invalid PIN")
+        setError(err.detail || t('auth.invalidPin') )
         setPin("")
         setIsLoading(false)
         return
@@ -126,7 +129,7 @@ function LoginPage() {
       setPin("")
       setIsLoading(false)
     }
-  }, [selectedUser, isPinValid, isLoading, pin, login, navigate])
+  }, [selectedUser, isPinValid, isLoading, pin, login, navigate, t])
 
   useEffect(() => {
     if (!selectedUser) return
@@ -157,8 +160,9 @@ function LoginPage() {
     <div className={`min-h-screen flex items-center justify-center p-6 ${bg}`}>
       <div className="w-full max-w-4xl">
         <header className="text-center mb-8">
-          <h1 className={`text-4xl font-bold ${text}`}>POS System</h1>
-          <p className={`text-xl mt-2 ${textSub}`}>Select user and enter PIN</p>
+          <LanguageSwitcher dark={isDark} />
+          <h1 className={`text-4xl font-bold ${text}`}>{t(`common.pos`)}</h1>
+          <p className={`text-xl mt-2 ${textSub}`}>{t(`auth.selectUser`)}</p>
         </header>
 
         <div className={`rounded-2xl p-8 shadow-2xl space-y-8 ${cardBg}`}>
@@ -172,9 +176,9 @@ function LoginPage() {
             <h3 className={`mb-4 font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>Users</h3>
 
             {loadingUsers ? (
-              <p className="text-center text-gray-400">Loading...</p>
+              <p className="text-center text-gray-400">{t('common.loading')}</p>
             ) : !users.length ? (
-              <p className="text-center text-gray-400">No users available</p>
+                <p className="text-center text-gray-400">{ t('auth.noActiveUsers') }</p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {users.map(u => (
@@ -206,7 +210,7 @@ function LoginPage() {
 
           <section className="space-y-4">
             <p className={`text-center font-medium ${isDark ? "text-gray-300" : "text-gray-700"}`}>
-              {selectedUser ? `PIN for ${selectedUser.username}` : "Select a user"}
+              {selectedUser ? t('auth.pinFor', {name: selectedUser.username}) : t('auth.selectAUser')}
             </p>
 
             <div
@@ -260,11 +264,11 @@ function LoginPage() {
             disabled={!selectedUser || !isPinValid || isLoading}
             className="w-full py-5 rounded-xl bg-indigo-600 text-white text-lg font-bold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
           >
-            {isLoading ? "Logging in..." : "Login"}
+            {isLoading ? t('auth.loggingIn') : t('auth.login')}
           </button>
 
           {selectedUser && (
-            <p className="text-center text-sm text-gray-400">Press Enter to login or Esc to clear PIN</p>
+            <p className="text-center text-sm text-gray-400">{t('auth.enterHint')}</p>
           )}
         </div>
       </div>

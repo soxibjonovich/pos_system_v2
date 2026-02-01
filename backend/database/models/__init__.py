@@ -97,7 +97,6 @@ class Product(Base):
     )
     quantity = Column(Integer, nullable=False, default=-1)
     price = Column(Numeric(10, 2), nullable=False)
-    cost = Column(Numeric(10, 2), nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -109,7 +108,6 @@ class Product(Base):
 
     __table_args__ = (
         CheckConstraint("price > 0", name="check_price_positive"),
-        CheckConstraint("cost >= 0 OR cost IS NULL", name="check_cost_non_negative"),
         CheckConstraint("quantity >= -1", name="check_quantity_valid"),
     )
 
@@ -119,7 +117,7 @@ class Product(Base):
     @property
     def profit_margin(self):
         if self.cost and float(self.price) > 0:
-            return ((float(self.price) - float(self.cost)) / float(self.price)) * 100
+            return (float(self.price) / float(self.price)) * 100
         return 0.0
 
 

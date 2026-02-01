@@ -6,6 +6,20 @@ class StaffOrderCreate(BaseModel):
     items: list[dict] = Field(..., description="Order items")
 
 
+class StaffOrderUpdate(BaseModel):
+    user_id: int = Field(..., description="Staff user ID")
+    items: list[dict] = Field(..., description="Order items")
+
+
+class OrderStatusUpdate(BaseModel):
+    status: str = Field(..., description="Order status", pattern="^(pending|preparing|ready|completed|cancelled)$")
+
+
+class OrderItemUpdate(BaseModel):
+    quantity: int | None = Field(None, description="Item quantity", gt=0)
+    price: float | None = Field(None, description="Item price", gt=0)
+
+
 class StaffProductSearch(BaseModel):
     query: str | None = None
     category_id: int | None = None
@@ -19,7 +33,6 @@ class StaffOrderResponse(BaseModel):
     status: str
     items: list[dict]
     created_at: str
-
     model_config = {"from_attributes": True}
 
 

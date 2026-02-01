@@ -10,7 +10,6 @@ class ProductBase(BaseModel):
 
 
 class ProductCreate(ProductBase):
-    cost: float | None = Field(None, ge=0)
     is_active: bool = True
 
 
@@ -19,15 +18,14 @@ class ProductUpdate(BaseModel):
     description: str | None = None
     quantity: int | None = Field(None, ge=-1)
     price: float | None = Field(None, gt=0)
-    cost: float | None = Field(None, ge=0)
+    category_id: int | None = Field(None)
     is_active: bool | None = None
 
 
 class ProductResponse(ProductBase):
     id: int
-    cost: float | None = None
     is_active: bool
-    category_id: int
+    category_id: int | None
     created_at: datetime
     updated_at: datetime | None = None
 

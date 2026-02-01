@@ -13,16 +13,21 @@ async def get_users(db: AsyncSession) -> Sequence[User]:
 
 
 async def get_usernames(db: AsyncSession, status: str) -> Sequence[str]:
-    if not status:
+    if not status or not status.strip():
         return []
 
     target_status = status.strip().upper()
 
-    result = await db.execute(
-        select(User.username).where(func.upper(func.trim(User.status)) == target_status)
+    # Используем select(User.username) и фильтруем на уровне БД
+    query = select(User.username).where(
+        func.upper(func.trim(User.status)) == target_status
     )
+    
+    result = await db.execute(query)
+    usernames = result.scalars().all()
 
-    return result.scalars().all()
+    return usernames
+
 
 
 async def get_user_by_id(db: AsyncSession, id: int) -> User | None:

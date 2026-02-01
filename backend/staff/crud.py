@@ -33,7 +33,6 @@ async def get_active_products():
                 detail="Failed to fetch products",
             )
         data = response.json()
-        # Filter only active products
         all_products = data.get("products", [])
         active_products = [p for p in all_products if p.get("is_active", False)]
         return {"products": active_products, "total": len(active_products)}
@@ -63,10 +62,8 @@ async def search_products(query: str | None, category_id: int | None):
         data = response.json()
         products = data.get("products", [])
 
-        # Filter active products
         products = [p for p in products if p.get("is_active", False)]
 
-        # Apply search filter
         if query:
             query_lower = query.lower()
             products = [
@@ -76,7 +73,6 @@ async def search_products(query: str | None, category_id: int | None):
                 or query_lower in p.get("description", "").lower()
             ]
 
-        # Apply category filter
         if category_id is not None:
             products = [p for p in products if p.get("category_id") == category_id]
 
@@ -99,7 +95,7 @@ async def get_product_by_id(product_id: int):
     """Get a single product by ID"""
     try:
         response = await staff_client.db_client.get(f"/products/{product_id}")
-        if response.status_code == 404:
+        if response.status_code == 404: 
             return None
         if response.status_code != 200:
             raise HTTPException(
@@ -131,7 +127,6 @@ async def get_active_categories():
                 detail="Failed to fetch categories",
             )
         data = response.json()
-        # Filter only active categories
         all_categories = data.get("categories", [])
         active_categories = [c for c in all_categories if c.get("is_active", False)]
         return {"categories": active_categories, "total": len(active_categories)}
@@ -156,7 +151,6 @@ async def create_staff_order(user_id: int, items: list[dict]):
     """Create a new order from staff POS"""
     try:
         order_data = {"user_id": user_id, "items": items}
-
         response = await staff_client.order_client.post("/orders", json=order_data)
 
         if response.status_code == 400:
@@ -173,8 +167,7 @@ async def create_staff_order(user_id: int, items: list[dict]):
             )
 
         return response.json()
-    except httpx.ConnectError as e:
-        print(e)
+    except httpx.ConnectError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Order service unavailable",
@@ -182,7 +175,6 @@ async def create_staff_order(user_id: int, items: list[dict]):
     except HTTPException:
         raise
     except Exception as e:
-        print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error creating order: {str(e)}",
@@ -199,8 +191,6 @@ async def get_staff_orders(user_id: int, limit: int = 50):
 
         data = response.json()
         orders = data.get("orders", [])
-
-        # Limit results
         orders = orders[:limit]
 
         return {"orders": orders, "total": len(orders)}
@@ -246,7 +236,6 @@ async def get_today_orders(user_id: int):
         data = response.json()
         all_orders = data.get("orders", [])
 
-        # Filter today's orders
         today = datetime.now().date()
         today_orders = [
             order
@@ -265,10 +254,9 @@ async def get_today_orders(user_id: int):
         return {"orders": [], "total": 0}
 
 
-async def cancel_order(order_id: int, user_id: int):
-    """Cancel an order (staff can only cancel their own pending orders)"""
+async def update_staff_order(order_id: int, user_id: int, items: list[dict]):
+    """Update an existing order"""
     try:
-        # Get order details first
         order = await get_order_by_id(order_id)
 
         if not order:
@@ -276,21 +264,224 @@ async def cancel_order(order_id: int, user_id: int):
                 status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
             )
 
-        # Verify ownership
+        if order.get("user_id") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only update your own orders",
+            )
+
+        if order.get("status") in ["completed", "cancelled"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot update {order.get('status')} order",
+            )
+
+        response = await staff_client.order_client.put(
+            f"/orders/{order_id}", json={"items": items}
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update order",
+            )
+
+        return response.json()
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Order service unavailable",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating order: {str(e)}",
+        )
+	
+
+async def update_order_status(order_id: int, ord_status: str):
+    """Update order status"""
+    try:
+        response = await staff_client.order_client.patch(
+            f"/orders/{order_id}/status", json={"status": ord_status}
+        )
+
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+            )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update order status",
+            )
+
+        return response.json()
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Order service unavailable",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating order status: {str(e)}",
+        )
+
+
+async def update_order_status(order_id: int, new_status: str):
+    """Update order status"""
+    try:
+        response = await staff_client.order_client.patch(
+            f"/orders/{order_id}/status", json={"status": new_status}
+        )
+
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+            )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update order status",
+            )
+
+        return response.json()
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Order service unavailable",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating order status: {str(e)}",
+        )
+
+async def remove_order_item(order_id: int, item_id: int, user_id: int):
+    """Remove an item from an order"""
+    try:
+        order = await get_order_by_id(order_id)
+
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+            )
+
+        if order.get("user_id") != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only modify your own orders",
+            )
+
+        if order.get("status") in ["completed", "cancelled"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot modify {order.get('status')} order",
+            )
+
+        response = await staff_client.order_client.delete(
+            f"/orders/{order_id}/items/{item_id}"
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to remove order item",
+            )
+
+        return response.json()
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Order service unavailable",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error removing order item: {str(e)}",
+        )
+
+
+async def update_order_item(
+    order_id: int, item_id: int, quantity: int | None, price: float | None
+):
+    """Update an order item"""
+    try:
+        update_data = {}
+        if quantity is not None:
+            update_data["quantity"] = quantity
+        if price is not None:
+            update_data["price"] = price
+
+        if not update_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No update data provided",
+            )
+
+        response = await staff_client.order_client.put(
+            f"/orders/{order_id}/items/{item_id}", json=update_data
+        )
+
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Order or item not found"
+            )
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update order item",
+            )
+
+        return response.json()
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Order service unavailable",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating order item: {str(e)}",
+        )
+
+
+async def cancel_order(order_id: int, user_id: int):
+    """Cancel an order (staff can only cancel their own pending orders)"""
+    try:
+        order = await get_order_by_id(order_id)
+
+        if not order:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
+            )
+
         if order.get("user_id") != user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You can only cancel your own orders",
             )
 
-        # Check if order can be cancelled (only pending orders)
         if order.get("status") not in ["pending", "preparing"]:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot cancel order with status: {order.get('status')}",
             )
 
-        # Update order status to cancelled
         response = await staff_client.order_client.patch(
             f"/orders/{order_id}/status", json={"status": "cancelled"}
         )

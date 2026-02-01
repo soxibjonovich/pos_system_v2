@@ -43,8 +43,13 @@ auth_app.add_middleware(
 async def get_login_options():
     """Get list of active users for login selection"""
     users = await get_active_users()
-    return auth_schemas.UserLoginOptionsResponse(users=users)
-
+    valid_users = []
+    for user in auth_schemas.UserLoginOptionsResponse(users=users).users:
+        if not user.status == "active":
+            continue
+        valid_users.append(user)
+    
+    return {"users": valid_users}
 
 @auth_app.post(
     "/register",

@@ -52,6 +52,7 @@ class UserLoginOption(BaseModel):
     username: str
     full_name: str
     role: str
+    status: str
 
     # Very useful if your API returns snake_case
     model_config = ConfigDict(

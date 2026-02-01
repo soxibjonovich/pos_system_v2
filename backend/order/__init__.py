@@ -55,7 +55,7 @@ mapp = FastAPI(title="Order Microservice", version="1.0", lifespan=lifespan, roo
 
 mapp.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://127.0.0.1:5173/"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -94,7 +94,7 @@ async def get_orders(_: schemas.User = Depends(get_current_staff)):
 @app.get(
     "/{order_id}", response_model=schemas.OrderResponse, status_code=status.HTTP_200_OK
 )
-async def get_order(order_id: int, _: schemas.User = Depends(get_current_staff)):
+async def get_order(order_id: int):
     order = await crud.get_order_by_id(order_id)
 
     if not order:

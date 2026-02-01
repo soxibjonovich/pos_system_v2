@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client'
 import './index.css'
 
 // Import the generated route tree
+import { I18nProvider } from './i18n'
 import { routeTree } from './routeTree.gen'
 
 // Create a new router instance
@@ -22,7 +23,9 @@ if (!rootElement.innerHTML) {
   const root = ReactDOM.createRoot(rootElement)
   root.render(
     <StrictMode>
-      <RouterProvider router={router} />
+      <I18nProvider>
+        <RouterProvider router={router} />
+      </I18nProvider>
     </StrictMode>,
   )
 }

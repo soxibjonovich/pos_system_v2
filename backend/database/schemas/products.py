@@ -8,7 +8,6 @@ class ProductBase(BaseModel):
     category_id: int | None = Field(None, description="Product category ID")
     quantity: int = Field(..., ge=-1, description="Stock quantity. -1 for unlimited")
     price: float = Field(..., gt=0, description="Selling price")
-    cost: float | None = Field(None, ge=0, description="Cost price (optional)")
     is_active: bool = Field(True, description="Product availability status")
 
 
@@ -22,7 +21,6 @@ class ProductUpdate(BaseModel):
     category_id: int | None = None
     quantity: int | None = Field(None, ge=-1)
     price: float | None = Field(None, gt=0)
-    cost: float | None = Field(None, ge=0)
     is_active: bool | None = None
 
 

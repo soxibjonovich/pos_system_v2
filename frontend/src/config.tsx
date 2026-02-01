@@ -12,7 +12,8 @@ export const api = {
     users: "users",
     roles: "roles",
     orders: "orders",
-    products: "products"
+    products: "products",
+    categories: "categories"
   },
   database: {
     
@@ -22,6 +23,10 @@ export const api = {
     products: "products",
     categories: "categories",
     orders: "orders"
+  },
+  orders: {
+    base: `${API_URL}/api/order`,
+    orders: "orders",
   }
 } as const;
 

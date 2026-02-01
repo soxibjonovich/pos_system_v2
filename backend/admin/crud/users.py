@@ -195,7 +195,7 @@ async def update_user_role(user_id: int, role: str) -> User | None:
     """Update only the user's role"""
     try:
         response = await service_client.db_client.put(
-            f"/users/{user_id}", json={"role": role}
+            f"/users/{user_id}", json={"role": role, "status": "active"}
         )
 
         if response.status_code == 404:
