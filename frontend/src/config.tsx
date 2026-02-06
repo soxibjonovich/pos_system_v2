@@ -1,34 +1,32 @@
-export const API_URL = "http://127.0.0.1"
+export const API_URL="http://127.0.0.1"
 
-export const api = {
-  auth: {
-    base: `${API_URL}/api/auth`,
-    login: "login",
-    logout: "logout",
-    users_option: "users/login-options"
+export const api={
+  auth:{
+    base:`${API_URL}/api/auth`,
+    login:"login",
+    logout:"logout",
+    users_option:"users/login-options"
   },
-  admin: {
-    base: `${API_URL}/api/admin`,
-    users: "users",
-    roles: "roles",
-    orders: "orders",
-    products: "products",
-    categories: "categories",
-    tables: "tables"
+  admin:{
+    base:`${API_URL}/api/admin`,
+    users:"users",
+    roles:"roles",
+    orders:"orders",
+    products:"products",
+    categories:"categories",
+    tables:"tables",
+    system_config:"system-config"
   },
-  database: {
-    
+  database:{},
+  staff:{
+    base:`${API_URL}/api/staff`,
+    products:"products",
+    categories:"categories",
+    orders:"orders",
+    tables:"tables"
   },
-  staff: {
-    base: `${API_URL}/api/staff`,
-    products: "products",
-    categories: "categories",
-    orders: "orders",
-    tables: "tables"
-  },
-  orders: {
-    base: `${API_URL}/api/order`,
-    orders: "orders",
+  orders:{
+    base:`${API_URL}/api/order`,
+    orders:"orders",
   }
-} as const;
-
+} as const

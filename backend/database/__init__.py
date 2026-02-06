@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from api import categories, order, products, users, table
+from api import categories, order, products, users, table, system_config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -52,6 +52,7 @@ app.include_router(products.router, prefix="/products", tags=["Products"])
 app.include_router(order.router, prefix="/orders", tags=["Orders"])
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(table.router, prefix="/tables", tags=["Tables"])
+app.include_router(system_config.router, prefix="/system-config", tags=["System Config"])
 
 
 def run_database():

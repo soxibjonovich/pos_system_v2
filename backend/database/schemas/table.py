@@ -25,7 +25,7 @@ class TableResponse(TableBase):
     id: int
     status: TableStatus
     created_at: datetime
-    updated_at: Optional[datetime]
+    # updated_at: Optional[datetime]
 
     class Config:
         from_attributes = True

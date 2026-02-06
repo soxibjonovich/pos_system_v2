@@ -1,10 +1,7 @@
-from typing import Optional
-
 from models import Table, TableStatus
-from schemas.table import TableCreate, TableUpdate
+from schemas.table import TableCreate, TableUpdate, TableResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 
 async def get_tables(db: AsyncSession, active_only: bool = False):
@@ -12,7 +9,7 @@ async def get_tables(db: AsyncSession, active_only: bool = False):
     if active_only:
         stmt = stmt.where(Table.is_active == True)
     result = await db.execute(stmt)
-    return result.scalars().all()
+    return [TableResponse.model_validate(table) for table in result.scalars().all()]
 
 
 async def get_table_by_id(db: AsyncSession, table_id: int):

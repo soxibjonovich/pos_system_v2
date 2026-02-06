@@ -1,30 +1,28 @@
-import { RouterProvider, createRouter } from '@tanstack/react-router'
-import { StrictMode } from 'react'
+import {RouterProvider,createRouter} from '@tanstack/react-router'
+import {StrictMode} from 'react'
 import ReactDOM from 'react-dom/client'
 import './index.css'
+import {I18nProvider} from './i18n'
+import {routeTree} from './routeTree.gen'
+import {BusinessProvider} from './contexts/business-context'
 
-// Import the generated route tree
-import { I18nProvider } from './i18n'
-import { routeTree } from './routeTree.gen'
+const router=createRouter({routeTree})
 
-// Create a new router instance
-const router = createRouter({ routeTree })
-
-// Register the router instance for type safety
-declare module '@tanstack/react-router' {
-  interface Register {
-    router: typeof router
+declare module '@tanstack/react-router'{
+  interface Register{
+    router:typeof router
   }
 }
 
-// Render the app
-const rootElement = document.getElementById('root')!
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement)
+const rootElement=document.getElementById('root')!
+if(!rootElement.innerHTML){
+  const root=ReactDOM.createRoot(rootElement)
   root.render(
     <StrictMode>
       <I18nProvider>
-        <RouterProvider router={router} />
+        <BusinessProvider>
+          <RouterProvider router={router}/>
+        </BusinessProvider>
       </I18nProvider>
     </StrictMode>,
   )
