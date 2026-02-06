@@ -411,7 +411,7 @@ function RouteComponent() {
 
       {/* Add Modal */}
       <Dialog open={addModal} onOpenChange={setAddModal}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-125">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="size-5 text-blue-600" />Mahsulot qo'shish
@@ -430,7 +430,7 @@ function RouteComponent() {
 
       {/* Edit Modal */}
       <Dialog open={editModal} onOpenChange={setEditModal}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-125">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="size-5 text-blue-600" />Mahsulotni tahrirlash
@@ -454,7 +454,7 @@ function RouteComponent() {
 
       {/* Delete Confirm Modal */}
       <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-100">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <Trash2 className="size-5" />Mahsulotni o'chish

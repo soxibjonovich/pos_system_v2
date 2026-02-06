@@ -1,10 +1,12 @@
-from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Literal
+from typing import Optional
+
+from models import BusinessType, OrderStatus
+from pydantic import BaseModel, Field
 
 
 class OrderItemBase(BaseModel):
-    product_id: int = Field(..., gt=0)
+    product_id: int
     quantity: int = Field(..., gt=0)
 
 
@@ -12,22 +14,21 @@ class OrderItemCreate(OrderItemBase):
     pass
 
 
-class OrderItemUpdate(BaseModel):
-    quantity: int | None = Field(None, gt=0)
-    price: float | None = Field(None, gt=0)
-
-
-class OrderItem(OrderItemBase):
+class OrderItemResponse(OrderItemBase):
     id: int
-    order_id: int
     price: float
     subtotal: float
+    product: Optional[dict] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
 class OrderBase(BaseModel):
-    user_id: int = Field(..., gt=0)
+    business_type: BusinessType = BusinessType.RESTAURANT
+    table_id: Optional[int] = None
+    customer_name: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = None
 
 
 class OrderCreate(OrderBase):
@@ -35,28 +36,28 @@ class OrderCreate(OrderBase):
 
 
 class OrderUpdate(BaseModel):
-    status: (
-        Literal["pending", "preparing", "ready", "completed", "cancelled"] | None
-    ) = None
-
-
-class OrderStatusUpdate(BaseModel):
-    status: Literal["pending", "preparing", "ready", "completed", "cancelled"]
+    table_id: Optional[int] = None
+    customer_name: Optional[str] = Field(None, max_length=100)
+    status: Optional[OrderStatus] = None
+    notes: Optional[str] = None
 
 
 class OrderResponse(OrderBase):
     id: int
+    user_id: int
     total: float
-    status: str
-    notes: str | None = None
+    status: OrderStatus
     created_at: datetime
-    updated_at: datetime | None = None
-    completed_at: datetime | None = None
-    items: list[OrderItem] = []
+    updated_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    items: list[OrderItemResponse]
+    user: Optional[dict] = None
+    table: Optional[dict] = None
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 
 
 class OrdersResponse(BaseModel):
-    orders: list[OrderResponse] = []
-    total: int = 0
+    orders: list[OrderResponse]
+    total: int

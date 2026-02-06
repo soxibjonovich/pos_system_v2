@@ -57,6 +57,10 @@ const data = {
       url: "/admin/orders",
     },
     {
+      title: "Tables",
+      url: "/admin/tables"
+    },
+    {
       title: "Reports",
       url: "/admin/reports",
     },

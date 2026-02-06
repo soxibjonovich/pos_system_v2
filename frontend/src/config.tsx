@@ -13,7 +13,8 @@ export const api = {
     roles: "roles",
     orders: "orders",
     products: "products",
-    categories: "categories"
+    categories: "categories",
+    tables: "tables"
   },
   database: {
     
@@ -22,7 +23,8 @@ export const api = {
     base: `${API_URL}/api/staff`,
     products: "products",
     categories: "categories",
-    orders: "orders"
+    orders: "orders",
+    tables: "tables"
   },
   orders: {
     base: `${API_URL}/api/order`,

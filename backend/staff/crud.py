@@ -1,4 +1,5 @@
 import httpx
+import schemas
 from config import settings
 from fastapi import HTTPException, status
 
@@ -144,13 +145,145 @@ async def get_active_categories():
         )
 
 
+# ==================== Tables ====================
+
+
+async def get_tables(active_only: bool = False):
+    """Get all tables for staff POS"""
+    try:
+        params = {"active_only": active_only} if active_only else {}
+        response = await staff_client.db_client.get("/tables", params=params)
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch tables"
+            )
+        
+        return response.json()
+    
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching tables: {str(e)}"
+        )
+
+
+async def get_available_tables():
+    """Get only available tables"""
+    try:
+        response = await staff_client.db_client.get("/tables/available")
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to fetch available tables"
+            )
+        
+        return response.json()
+    
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching available tables: {str(e)}"
+        )
+
+
+async def get_table_by_id(table_id: int):
+    """Get a single table by ID"""
+    try:
+        response = await staff_client.db_client.get(f"/tables/{table_id}")
+        
+        if response.status_code == 404:
+            return None
+        if response.status_code != 200:
+            return None
+        
+        return response.json()
+    
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable"
+        )
+    except Exception:
+        return None
+
+
+async def update_table_status(table_id: int, table_status: str):
+    """Update table status"""
+    try:
+        response = await staff_client.db_client.patch(
+            f"/tables/{table_id}/status",
+            json={"status": table_status}
+        )
+        
+        if response.status_code == 404:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Table not found"
+            )
+        
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update table status"
+            )
+        
+        return response.json()
+    
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database service unavailable"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error updating table status: {str(e)}"
+        )
+
+
 # ==================== Orders ====================
 
 
-async def create_staff_order(user_id: int, items: list[dict]):
+async def create_staff_order(
+    user_id: int,
+    items: list[dict],
+    table_id: int | None = None,
+    business_type: str = "restaurant",
+    customer_name: str | None = None
+):
     """Create a new order from staff POS"""
     try:
-        order_data = {"user_id": user_id, "items": items}
+        order_data = {
+            "user_id": user_id,
+            "items": items,
+            "business_type": business_type
+        }
+        
+        if table_id:
+            order_data["table_id"] = table_id
+        
+        if customer_name:
+            order_data["customer_name"] = customer_name
+        
         response = await staff_client.order_client.post("/orders", json=order_data)
 
         if response.status_code == 400:
@@ -223,6 +356,26 @@ async def get_order_by_id(order_id: int):
         return None
 
 
+async def get_orders_by_table(table_id: int):
+    """Get active orders for a specific table"""
+    try:
+        response = await staff_client.order_client.get(f"/orders/table/{table_id}")
+        
+        if response.status_code != 200:
+            return {"orders": [], "total": 0}
+        
+        data = response.json()
+        return data
+    
+    except httpx.ConnectError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Order service unavailable"
+        )
+    except Exception:
+        return {"orders": [], "total": 0}
+
+
 async def get_today_orders(user_id: int):
     """Get today's orders for a staff member"""
     try:
@@ -254,7 +407,12 @@ async def get_today_orders(user_id: int):
         return {"orders": [], "total": 0}
 
 
-async def update_staff_order(order_id: int, user_id: int, items: list[dict]):
+async def update_staff_order(
+    order_id: int,
+    user_id: int,
+    items: list[dict],
+    table_id: int | None = None
+):
     """Update an existing order"""
     try:
         order = await get_order_by_id(order_id)
@@ -276,8 +434,12 @@ async def update_staff_order(order_id: int, user_id: int, items: list[dict]):
                 detail=f"Cannot update {order.get('status')} order",
             )
 
+        update_data = {"items": items}
+        if table_id is not None:
+            update_data["table_id"] = table_id
+
         response = await staff_client.order_client.put(
-            f"/orders/{order_id}", json={"items": items}
+            f"/orders/{order_id}", json=update_data
         )
 
         if response.status_code != 200:
@@ -298,39 +460,6 @@ async def update_staff_order(order_id: int, user_id: int, items: list[dict]):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error updating order: {str(e)}",
-        )
-	
-
-async def update_order_status(order_id: int, ord_status: str):
-    """Update order status"""
-    try:
-        response = await staff_client.order_client.patch(
-            f"/orders/{order_id}/status", json={"status": ord_status}
-        )
-
-        if response.status_code == 404:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Order not found"
-            )
-
-        if response.status_code != 200:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to update order status",
-            )
-
-        return response.json()
-    except httpx.ConnectError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Order service unavailable",
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error updating order status: {str(e)}",
         )
 
 
@@ -365,6 +494,7 @@ async def update_order_status(order_id: int, new_status: str):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error updating order status: {str(e)}",
         )
+
 
 async def remove_order_item(order_id: int, item_id: int, user_id: int):
     """Remove an item from an order"""

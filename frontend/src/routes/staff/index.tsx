@@ -1,9 +1,9 @@
 import { api } from '@/config'
+import { useAuth } from '@/contexts/auth-context'
 import { AuthGuard } from '@/middlewares/AuthGuard'
-import { createFileRoute, Link } from '@tanstack/react-router'
-import { Check, Grid3x3, List, Minus, Plus, Search, ShoppingCart, X, Receipt, Trash2 } from 'lucide-react'
-import { useEffect, useRef, useState, useCallback } from 'react'
-
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { Check, Grid3x3, List, LogOut, Minus, Plus, Receipt, Search, ShoppingCart, Trash2, Users, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface Product {
   id: number
@@ -18,6 +18,14 @@ interface Product {
 interface Category {
   id: number
   name: string
+  is_active: boolean
+}
+
+interface TableItem {
+  id: number
+  number: string
+  capacity: number | null
+  status: 'available' | 'occupied' | 'reserved'
   is_active: boolean
 }
 
@@ -39,11 +47,18 @@ export const Route = createFileRoute('/staff/')({
 })
 
 export default function POSTerminal() {
+  const navigate = useNavigate()
+  const { logout } = useAuth()
+  
   const [products, setProducts] = useState<Product[]>([])
   const [categories, setCategories] = useState<Category[]>([])
+  const [tables, setTables] = useState<TableItem[]>([])
   const [cart, setCart] = useState<CartItem[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null)
+  const [selectedTable, setSelectedTable] = useState<TableItem | null>(null)
+  const [showTableSelect, setShowTableSelect] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [orderSuccess, setOrderSuccess] = useState(false)
@@ -60,16 +75,19 @@ export default function POSTerminal() {
   const fetchData = async () => {
     setIsLoading(true)
     try {
-      const [productsRes, categoriesRes] = await Promise.all([
+      const [productsRes, categoriesRes, tablesRes] = await Promise.all([
         fetch(`${api.staff.base}/${api.staff.products}`),
-        fetch(`${api.staff.base}/${api.staff.categories}`)
+        fetch(`${api.staff.base}/${api.staff.categories}`),
+        fetch(`${api.staff.base}/${api.staff.tables}`)
       ])
       
       const productsData = await productsRes.json()
       const categoriesData = await categoriesRes.json()
+      const tablesData = await tablesRes.json()
       
       setProducts(productsData.products || [])
       setCategories(categoriesData.categories || [])
+      setTables(tablesData.tables || [])
     } catch (err) {
       console.error('Error:', err)
     } finally {
@@ -83,6 +101,8 @@ export default function POSTerminal() {
     const isActive = p.is_active
     return matchesSearch && matchesCategory && isActive
   })
+
+  const availableTables = tables.filter(t => t.status === 'available' && t.is_active)
 
   const addToCart = useCallback((product: Product, quantity: number = 1) => {
     setCart(prev => {
@@ -122,13 +142,35 @@ export default function POSTerminal() {
     setCart(prev => prev.filter(item => item.product_id !== productId))
   }, [])
 
-  const clearCart = useCallback(() => setCart([]), [])
+  const clearCart = useCallback(() => {
+    setCart([])
+    setSelectedTable(null)
+  }, [])
 
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0)
 
-  const submitOrder = async () => {
+  const handleCheckout = () => {
     if (!cart.length) return
+    setShowTableSelect(true)
+  }
+
+  const handleLogout = () => {
+    if (cart.length > 0) {
+      setShowLogoutConfirm(true)
+    } else {
+      logout()
+      navigate({ to: '/login' })
+    }
+  }
+
+  const confirmLogout = () => {
+    logout()
+    navigate({ to: '/login' })
+  }
+
+  const submitOrder = async () => {
+    if (!cart.length || !selectedTable) return
 
     setIsSubmitting(true)
     try {
@@ -137,10 +179,11 @@ export default function POSTerminal() {
         headers: { 'Content-Type': 'application/json'},
         body: JSON.stringify({
           user_id: CURRENT_USER_ID,
+          table_id: selectedTable.id,
+          business_type: 'restaurant',
           items: cart.map(item => ({
             product_id: item.product_id,
-            quantity: item.quantity,
-            price: item.price
+            quantity: item.quantity
           }))
         })
       })
@@ -149,6 +192,8 @@ export default function POSTerminal() {
 
       setOrderSuccess(true)
       clearCart()
+      setShowTableSelect(false)
+      await fetchData()
       setTimeout(() => setOrderSuccess(false), 3000)
     } catch {
       alert('Failed to create order')
@@ -200,6 +245,13 @@ export default function POSTerminal() {
                 <Receipt className="size-6" />
                 Buyurtmalar
               </Link>
+              <button 
+                onClick={handleLogout}
+                className="px-6 py-5 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg active:scale-95 transition-all"
+              >
+                <LogOut className="size-6" />
+                Chiqish
+              </button>
             </div>
 
             <div className="mb-4 flex items-center gap-3 overflow-x-auto pb-2">
@@ -304,6 +356,21 @@ export default function POSTerminal() {
               )}
             </div>
 
+            {selectedTable && (
+              <div className="mb-4 p-4 bg-blue-600/30 rounded-xl border-2 border-blue-500">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="size-5" />
+                    <span className="font-bold">Stol: {selectedTable.number}</span>
+                    {selectedTable.capacity && <span className="text-sm text-blue-200">({selectedTable.capacity} odam)</span>}
+                  </div>
+                  <button onClick={() => setSelectedTable(null)} className="text-red-400 hover:text-red-300 p-1">
+                    <X className="size-5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex-1 overflow-y-auto mb-4 space-y-3">
               {!cart.length ? (
                 <div className="text-center py-16 text-gray-400">
@@ -355,23 +422,111 @@ export default function POSTerminal() {
                   </div>
                 </div>
                 <button
-                  onClick={submitOrder}
+                  onClick={handleCheckout}
                   disabled={isSubmitting}
                   className="w-full py-5 rounded-2xl text-white font-black transition-all disabled:opacity-50 flex items-center justify-center gap-3 text-xl shadow-xl active:scale-95"
-                  style={{ background: isSubmitting ? 'rgb(34, 197, 94)' : 'linear-gradient(to right, rgb(22, 163, 74), rgb(34, 197, 94))' }}
+                  style={{ background: 'linear-gradient(to right, rgb(22, 163, 74), rgb(34, 197, 94))' }}
                 >
-                  {isSubmitting ? "Yuklanmoqda..." : (
-                    <>
-                      <Check className="size-7" />
-                      Buyurtmani yakunlash
-                    </>
-                  )}
+                  <Check className="size-7" />
+                  Stolni tanlash
                 </button>
               </>
             )}
           </div>
         </div>
       </div>
+
+      {showTableSelect && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b flex items-center justify-between">
+              <h2 className="text-2xl font-black flex items-center gap-3">
+                <Users className="size-7 text-blue-600" />
+                Stolni tanlang
+              </h2>
+              <button onClick={() => setShowTableSelect(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X className="size-6" />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              {!availableTables.length ? (
+                <div className="text-center py-16 text-gray-400">
+                  <Users className="size-16 mx-auto mb-4 opacity-20" />
+                  <p className="text-xl">Bo'sh stol yo'q</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  {availableTables.map(table => (
+                    <button
+                      key={table.id}
+                      onClick={() => setSelectedTable(table)}
+                      className={`p-6 rounded-2xl border-2 transition-all ${
+                        selectedTable?.id === table.id
+                          ? 'border-blue-600 bg-blue-50 shadow-lg'
+                          : 'border-gray-200 hover:border-blue-400 hover:bg-blue-50'
+                      }`}
+                    >
+                      <div className="text-center">
+                        <Users className={`size-12 mx-auto mb-3 ${selectedTable?.id === table.id ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <div className="text-2xl font-black mb-1">{table.number}</div>
+                        {table.capacity && (
+                          <div className="text-sm text-gray-600">{table.capacity} odam</div>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {selectedTable && (
+              <div className="p-6 border-t bg-gray-50">
+                <button
+                  onClick={submitOrder}
+                  disabled={isSubmitting}
+                  className="w-full py-5 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black text-xl transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-xl active:scale-95"
+                >
+                  {isSubmitting ? "Yuklanmoqda..." : (
+                    <>
+                      <Check className="size-7" />
+                      Buyurtmani tasdiqlash
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <LogOut className="size-7 text-red-600" />
+              <h2 className="text-2xl font-black">Chiqishni tasdiqlang</h2>
+            </div>
+            <p className="text-gray-600 mb-6">
+              Savatda mahsulotlar bor. Chiqsangiz, barcha ma'lumotlar yo'qoladi. Davom etmoqchimisiz?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-3 rounded-xl border-2 border-gray-300 hover:bg-gray-100 font-bold transition-all"
+              >
+                Bekor qilish
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-all"
+              >
+                Ha, chiqish
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showKeyboard && (
         <div className="bg-slate-800 border-t-4 border-slate-700 p-4 shadow-2xl">

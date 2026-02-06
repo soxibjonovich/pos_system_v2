@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from api import categories, order, products, users
+from api import categories, order, products, users, table
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -49,8 +49,9 @@ async def health():
 
 app.include_router(users.user_router, prefix="/users", tags=["Users"])
 app.include_router(products.router, prefix="/products", tags=["Products"])
-app.include_router(order.order_router, prefix="/orders", tags=["Orders"])
+app.include_router(order.router, prefix="/orders", tags=["Orders"])
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
+app.include_router(table.router, prefix="/tables", tags=["Tables"])
 
 
 def run_database():

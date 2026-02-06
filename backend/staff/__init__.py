@@ -52,6 +52,56 @@ async def get_categories():
     """
     return await crud.get_active_categories()
 
+# ==================== Tables ====================
+@router.get("/tables")
+async def get_tables(
+    active_only: bool = Query(True, description="Only show active tables"),
+):
+    """
+    Get all tables for staff POS terminal
+    """
+    return await crud.get_tables(active_only)
+
+@router.get("/tables/available")
+async def get_available_tables():
+    """
+    Get only available tables for order assignment
+    """
+    return await crud.get_available_tables()
+
+@router.get("/tables/{table_id}")
+async def get_table(table_id: int):
+    """
+    Get a single table by ID
+    """
+    table = await crud.get_table_by_id(table_id)
+    if not table:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Table {table_id} not found",
+        )
+    return table
+
+@router.patch("/tables/{table_id}/status")
+async def update_table_status(table_id: int, status_data: schemas.TableStatusUpdate):
+    """
+    Update table status (available/occupied/reserved)
+    Example request body:
+```json
+    {
+        "status": "occupied"
+    }
+```
+    """
+    table = await crud.get_table_by_id(table_id)
+    if not table:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Table {table_id} not found"
+        )
+    
+    return await crud.update_table_status(table_id, status_data.status)
+
 # ==================== Orders ====================
 @router.post("/orders", status_code=status.HTTP_201_CREATED)
 async def create_order(info: schemas.StaffOrderCreate):
@@ -61,9 +111,11 @@ async def create_order(info: schemas.StaffOrderCreate):
 ```json
     {
         "user_id": 1,
+        "table_id": 5,
+        "business_type": "restaurant",
         "items": [
-            {"product_id": 1, "quantity": 2, "price": 10.50},
-            {"product_id": 3, "quantity": 1, "price": 5.00}
+            {"product_id": 1, "quantity": 2},
+            {"product_id": 3, "quantity": 1}
         ]
     }
 ```
@@ -73,7 +125,34 @@ async def create_order(info: schemas.StaffOrderCreate):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Order must contain at least one item",
         )
-    return await crud.create_staff_order(user_id=info.user_id, items=info.items)
+    
+    if info.business_type == "restaurant" and not info.table_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Table ID is required for restaurant orders",
+        )
+    
+    if info.table_id:
+        table = await crud.get_table_by_id(info.table_id)
+        if not table:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Table {info.table_id} not found"
+            )
+        
+        if table.get("status") != "available":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Table {table.get('number')} is not available"
+            )
+    
+    return await crud.create_staff_order(
+        user_id=info.user_id,
+        table_id=info.table_id,
+        business_type=info.business_type,
+        customer_name=info.customer_name,
+        items=info.items
+    )
 
 @router.get("/orders/user/{user_id}")
 async def get_user_orders(
@@ -91,6 +170,20 @@ async def get_today_orders(user_id: int):
     Get today's orders for a staff member
     """
     return await crud.get_today_orders(user_id=user_id)
+
+@router.get("/orders/table/{table_id}")
+async def get_table_orders(table_id: int):
+    """
+    Get active orders for a specific table
+    """
+    table = await crud.get_table_by_id(table_id)
+    if not table:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Table {table_id} not found"
+        )
+    
+    return await crud.get_orders_by_table(table_id)
 
 @router.get("/orders/{order_id}")
 async def get_order(order_id: int):
@@ -113,8 +206,9 @@ async def update_order(order_id: int, info: schemas.StaffOrderUpdate):
 ```json
     {
         "user_id": 1,
+        "table_id": 3,
         "items": [
-            {"product_id": 1, "quantity": 3, "price": 10.50}
+            {"product_id": 1, "quantity": 3}
         ]
     }
 ```
@@ -132,9 +226,26 @@ async def update_order(order_id: int, info: schemas.StaffOrderUpdate):
             detail=f"Cannot update {order.get('status')} order"
         )
     
+    if info.table_id and info.table_id != order.get("table_id"):
+        old_table_id = order.get("table_id")
+        new_table = await crud.get_table_by_id(info.table_id)
+        
+        if not new_table:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Table {info.table_id} not found"
+            )
+        
+        if new_table.get("status") != "available":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Table {new_table.get('number')} is not available"
+            )
+    
     return await crud.update_staff_order(
         order_id=order_id,
         user_id=info.user_id,
+        table_id=info.table_id,
         items=info.items
     )
     
