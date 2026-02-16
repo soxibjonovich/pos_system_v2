@@ -53,16 +53,13 @@ async def create_order(db: AsyncSession, order: OrderCreate, user_id: int):
     if order.business_type == BusinessType.RESTAURANT and not order.table_id:
         raise ValueError("Table ID is required for restaurant orders")
     
-    if order.business_type == BusinessType.SUPERMARKET and order.table_id:
-        raise ValueError("Table ID should not be set for supermarket orders")
+    if order.business_type == BusinessType.MARKET and order.table_id:
+        raise ValueError("Table ID should not be set for market orders")
     
     db_order = Order(
         user_id=user_id,
         table_id=order.table_id,
-        business_type=order.business_type,
-        customer_name=order.customer_name,
-        notes=order.notes,
-        status=OrderStatus.PENDING
+        status=OrderStatus.COMPLETED
     )
     
     total = 0.0
@@ -96,21 +93,29 @@ async def create_order(db: AsyncSession, order: OrderCreate, user_id: int):
     
     db_order.total = total
     
-    if order.table_id:
-        await update_table_status(db, order.table_id, TableStatus.OCCUPIED)
+    # if order.table_id:
+    #     await update_table_status(db, order.table_id, TableStatus.OCCUPIED)
     
     db.add(db_order)
     await db.commit()
     await db.refresh(db_order)
     
+    # Eagerly load relationships to avoid lazy loading issues
     stmt = select(Order).options(
         selectinload(Order.items).selectinload(OrderItem.product),
         selectinload(Order.user),
         selectinload(Order.table)
     ).where(Order.id == db_order.id)
     result = await db.execute(stmt)
-    return result.scalar_one()
-
+    loaded_order = result.scalar_one()
+    
+    # Access the relationships to load them into memory
+    _ = loaded_order.items
+    _ = loaded_order.user
+    if loaded_order.table:
+        _ = loaded_order.table
+    
+    return loaded_order
 
 async def update_order(db: AsyncSession, order_id: int, order: OrderUpdate):
     stmt = select(Order).where(Order.id == order_id)

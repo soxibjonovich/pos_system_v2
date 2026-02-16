@@ -170,6 +170,32 @@ services:
     networks:
       - pos_network
 
+  printer_api:
+    build:
+      context: ./backend/printer
+      dockerfile: Dockerfile
+    container_name: printer_api
+    expose:
+      - 8006
+    environment:
+      PYTHON_UNBUFFERED: 1
+      DATABASE_SERVICE_URL: http://database_api:8002
+      ORDER_SERVICE_URL: http://order_api:8004
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+      ALGORITHM: HS256
+      TOKEN_EXPIRE_DAYS: 7
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      database_api:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - pos_network
   # =========================
   # Frontend (Nginx)
   # =========================

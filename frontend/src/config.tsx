@@ -1,32 +1,40 @@
 export const API_URL="http://127.0.0.1"
 
-export const api={
-  auth:{
-    base:`${API_URL}/api/auth`,
-    login:"login",
-    logout:"logout",
-    users_option:"users/login-options"
+export const api = {
+  auth: {
+    base: '/api/auth',
+    login: 'login',
+    logout: 'logout',
+    refresh: 'refresh',
+    users_option: 'users/login-options'
   },
-  admin:{
-    base:`${API_URL}/api/admin`,
-    users:"users",
-    roles:"roles",
-    orders:"orders",
-    products:"products",
-    categories:"categories",
-    tables:"tables",
-    system_config:"system-config"
+  admin: {
+    base: '/api/admin',
+    users: 'users',
+    categories: 'categories',
+    products: 'products',
+    tables: 'tables',
+    reports: 'reports',
+    systemConfig: 'system-config',
   },
-  database:{},
+  orders: {
+    base: '/api/order',
+    orders: 'orders',
+    config: 'orders/config',
+    tables: 'orders/tables',
+  },
   staff:{
-    base:`${API_URL}/api/staff`,
-    products:"products",
-    categories:"categories",
-    orders:"orders",
-    tables:"tables"
+      base:`${API_URL}/api/staff`,
+      products:"products",
+      categories:"categories",
+      orders:"orders",
+      tables:"tables"
+    },
+  printer: {
+    base: '/api/printer',
+    receipts: 'receipts',
+    test: 'receipts/test',
+    download: (orderId: number) => `receipts/${orderId}/download`,
+    history: (orderId: number) => `receipts/history/${orderId}`,
   },
-  orders:{
-    base:`${API_URL}/api/order`,
-    orders:"orders",
-  }
-} as const
+}

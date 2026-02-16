@@ -1,8 +1,7 @@
 from datetime import datetime
-from typing import Optional
-
+from typing import Optional, Any
 from models import BusinessType, OrderStatus
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 
 
 class OrderItemBase(BaseModel):
@@ -11,35 +10,45 @@ class OrderItemBase(BaseModel):
 
 
 class OrderItemCreate(OrderItemBase):
-    pass
+    price: float = Field(..., gt=0)
 
 
 class OrderItemResponse(OrderItemBase):
     id: int
+    order_id: int  # ADD THIS LINE (it was missing!)
     price: float
     subtotal: float
-    product: Optional[dict] = None
+    product: Optional[Any] = None
+
+    @field_serializer('product')
+    def serialize_product(self, product: Any, _info):
+        if product is None:
+            return None
+        if hasattr(product, '__dict__'):
+            return {
+                'id': product.id,
+                'title': product.title,
+                'price': float(product.price),
+                'is_active': product.is_active
+            }
+        return product
 
     class Config:
         from_attributes = True
 
 
 class OrderBase(BaseModel):
-    business_type: BusinessType = BusinessType.RESTAURANT
     table_id: Optional[int] = None
-    customer_name: Optional[str] = Field(None, max_length=100)
-    notes: Optional[str] = None
 
 
 class OrderCreate(OrderBase):
+    business_type: BusinessType = BusinessType.MARKET
     items: list[OrderItemCreate] = Field(..., min_length=1)
 
 
 class OrderUpdate(BaseModel):
     table_id: Optional[int] = None
-    customer_name: Optional[str] = Field(None, max_length=100)
     status: Optional[OrderStatus] = None
-    notes: Optional[str] = None
 
 
 class OrderResponse(OrderBase):
@@ -48,11 +57,36 @@ class OrderResponse(OrderBase):
     total: float
     status: OrderStatus
     created_at: datetime
-    updated_at: Optional[datetime]
-    completed_at: Optional[datetime]
+    updated_at: Optional[datetime] = None
     items: list[OrderItemResponse]
-    user: Optional[dict] = None
-    table: Optional[dict] = None
+    user: Optional[Any] = None
+    table: Optional[Any] = None
+
+    @field_serializer('user')
+    def serialize_user(self, user: Any, _info):
+        if user is None:
+            return None
+        if hasattr(user, '__dict__'):
+            return {
+                'id': user.id,
+                'username': user.username,
+                'full_name': user.full_name,
+                'role': user.role
+            }
+        return user
+
+    @field_serializer('table')
+    def serialize_table(self, table: Any, _info):
+        if table is None:
+            return None
+        if hasattr(table, '__dict__'):
+            return {
+                'id': table.id,
+                'number': table.number,
+                'capacity': table.capacity,
+                'status': table.status
+            }
+        return table
 
     class Config:
         from_attributes = True
@@ -60,4 +94,4 @@ class OrderResponse(OrderBase):
 
 class OrdersResponse(BaseModel):
     orders: list[OrderResponse]
-    total: int
+    total: int = 0

@@ -81,8 +81,15 @@ async def get_user_by_username(username:str)->schemas.User|None:
     return schemas.User.model_validate_json(response.content)
 
 @handle_service_errors
-async def create_order(order:schemas.OrderCreate)->schemas.OrderResponse|None:
-    response=await service_client.db_client.post("/orders",json=order.model_dump())
+async def create_order(order:schemas.OrderCreate,business_type:str)->schemas.OrderResponse|None:
+    response=await service_client.db_client.post(
+        f"/orders?user_id={order.user_id}",
+        json={
+            "business_type":business_type,
+            "table_id":order.table_id,
+            "items":[{"product_id":item.product_id,"quantity":item.quantity,"price":item.price} for item in order.items]
+        }
+    )
     if response.status_code==201:
         return schemas.OrderResponse.model_validate(response.json())
     if response.status_code==400:

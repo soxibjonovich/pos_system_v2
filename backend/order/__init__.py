@@ -95,7 +95,7 @@ async def create_order(order:schemas.OrderCreate):
     business_type=await crud.get_business_type()
     if business_type=="restaurant" and order.table_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Table required for restaurant orders")
-    created_order=await crud.create_order(order)
+    created_order=await crud.create_order(order,business_type)
     if not created_order:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="Failed to create order")
     return created_order

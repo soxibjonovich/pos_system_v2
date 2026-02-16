@@ -1,10 +1,10 @@
-import {api} from '@/config'
-import {useAuth} from '@/contexts/auth-context'
-import {useBusiness} from '@/contexts/business-context'
-import {AuthGuard} from '@/middlewares/AuthGuard'
-import {createFileRoute,Link,useNavigate} from '@tanstack/react-router'
-import {Check,Grid3x3,List,LogOut,Minus,Plus,Receipt,Search,ShoppingCart,Trash2,Users,X} from 'lucide-react'
-import {useCallback,useEffect,useRef,useState} from 'react'
+import { api } from '@/config'
+import { useAuth } from '@/contexts/auth-context'
+import { useBusiness } from '@/contexts/business-context'
+import { AuthGuard } from '@/middlewares/AuthGuard'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
+import { Check, Grid3x3, List, LogOut, Minus, Plus, Receipt, Search, ShoppingCart, Trash2, Users, X } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface Product{
   id:number
@@ -182,41 +182,79 @@ export default function POSTerminal(){
     navigate({to:'/login'})
   }
 
-  const submitOrder=async()=>{
-    if(!cart.length)return
-    if(isRestaurant&&!selectedTable)return
-
+  const submitOrder = async () => {
+    if (!cart.length) return
+    if (isRestaurant && !selectedTable) return
+  
     setIsSubmitting(true)
-    try{
-      const payload:any={
-        user_id:CURRENT_USER_ID,
-        items:cart.map(item=>({
-          product_id:item.product_id,
-          quantity:item.quantity,
-          price:item.price
+    try {
+      const payload = {
+        user_id: CURRENT_USER_ID,
+        table_id: isRestaurant && selectedTable ? selectedTable.id : null,
+        items: cart.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price
         }))
       }
-
-      if(isRestaurant&&selectedTable){
-        payload.table_id=selectedTable.id
-      }
-
-      const response=await fetch(`${api.orders.base}/${api.orders.orders}`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify(payload)
+  
+      // Create order
+      const response = await fetch(`${api.orders.base}/${api.orders.orders}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('postoken')}`
+        },
+        body: JSON.stringify(payload)
       })
-
-      if(!response.ok)throw new Error('Failed')
-
+  
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const errorMsg = Array.isArray(errorData.detail)
+          ? errorData.detail.map((e: any) => `${e.loc?.join('.')}: ${e.msg}`).join(', ')
+          : errorData.detail || 'Failed'
+        throw new Error(errorMsg)
+      }
+  
+      const createdOrder = await response.json()
+      const orderId = createdOrder.id
+  
+      // Auto-print receipt
+      try {
+        const printResponse = await fetch(`${api.printer.base}/${api.printer.receipts}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('postoken')}`
+          },
+          body: JSON.stringify({
+            order_id: orderId,
+            copies: 1
+          })
+        })
+  
+        const printResult = await printResponse.json()
+        
+        if (printResponse.ok && printResult.status === 'success') {
+          console.log('Receipt printed successfully')
+        } else {
+          console.warn('Print failed:', printResult.message)
+        }
+      } catch (printError) {
+        console.error('Print error:', printError)
+        // Don't fail the order if printing fails
+      }
+  
+      // Show success and clear cart
       setOrderSuccess(true)
       clearCart()
       setShowTableSelect(false)
       await fetchData()
-      setTimeout(()=>setOrderSuccess(false),3000)
-    }catch{
-      alert('Failed to create order')
-    }finally{
+      
+      setTimeout(() => setOrderSuccess(false), 3000)
+    } catch (err) {
+      alert(`Failed to create order: ${err instanceof Error ? err.message : 'Unknown error'}`)
+    } finally {
       setIsSubmitting(false)
     }
   }

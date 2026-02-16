@@ -1,5 +1,6 @@
 import { api } from '@/config'
 import { useBusiness } from '@/contexts/business-context'
+import { useI18n } from '@/i18n'
 import { AuthGuard } from '@/middlewares/AuthGuard'
 import { createFileRoute } from '@tanstack/react-router'
 import { Building2, Check, Store } from 'lucide-react'
@@ -16,7 +17,9 @@ export const Route=createFileRoute('/admin/settings')({
 export default function AdminSettings(){
   const {businessType,setBusinessType}=useBusiness()
   const [isSubmitting,setIsSubmitting]=useState(false)
-  const [success,setSuccess]=useState(false)
+  const [success, setSuccess] = useState(false)
+  
+  const {t} = useI18n()
 
   const handleUpdate=async(type:'restaurant'|'market')=>{
     setIsSubmitting(true)
@@ -44,8 +47,8 @@ export default function AdminSettings(){
     <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl shadow-lg p-8">
-          <h1 className="text-3xl font-black mb-2 text-gray-900">Tizim Sozlamalari</h1>
-          <p className="text-gray-600 mb-8">Biznes turini tanlang</p>
+          <h1 className="text-3xl font-black mb-2 text-gray-900">{ t(`admin.settings.title`) }</h1>
+          <p className="text-gray-600 mb-8">{ t(`admin.settings.selectBusinessType`) }</p>
 
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -64,7 +67,7 @@ export default function AdminSettings(){
                   </div>
                 )}
                 <Building2 className={`size-16 mx-auto mb-4 ${businessType==='restaurant'?'text-blue-600':'text-gray-400'}`}/>
-                <h3 className="text-2xl font-black mb-2">Restoran</h3>
+                <h3 className="text-2xl font-black mb-2">{ t(`admin.settings.restaurant`) }</h3>
                 <p className="text-gray-600">Stol bilan buyurtmalar</p>
                 <ul className="mt-4 text-sm text-gray-700 text-left space-y-2">
                   <li className="flex items-center gap-2">
@@ -97,8 +100,8 @@ export default function AdminSettings(){
                   </div>
                 )}
                 <Store className={`size-16 mx-auto mb-4 ${businessType==='market'?'text-green-600':'text-gray-400'}`}/>
-                <h3 className="text-2xl font-black mb-2">Market</h3>
-                <p className="text-gray-600">Oddiy savdo</p>
+                <h3 className="text-2xl font-black mb-2">{ t(`admin.settings.market`) }</h3>
+                <p className="text-gray-600">{t(`admin.settings.simple_shopping`) }</p>
                 <ul className="mt-4 text-sm text-gray-700 text-left space-y-2">
                   <li className="flex items-center gap-2">
                     <Check className="size-4 text-green-600"/>
