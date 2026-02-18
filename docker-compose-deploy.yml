@@ -207,7 +207,7 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: DockerfilePublic
+      dockerfile: Dockerfile
     container_name: pos_frontend
     ports:
       - "80:80"
