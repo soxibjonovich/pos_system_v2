@@ -335,3 +335,7 @@ async def cancel_order(order_id: int, user_id: int = Query(...)):
     Cancel an order (staff can only cancel their own pending/preparing orders)
     """
     return await crud.cancel_order(order_id=order_id, user_id=user_id)
+    
+@router.get("/health", tags=["Health"])
+async def health():
+    return {"status": "ok", "service": "auth"}

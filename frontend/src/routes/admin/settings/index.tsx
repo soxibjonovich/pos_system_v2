@@ -6,7 +6,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Building2, Check, Store } from 'lucide-react'
 import { useState } from 'react'
 
-export const Route=createFileRoute('/admin/settings')({
+export const Route=createFileRoute('/admin/settings/')({
   component:()=>(
     <AuthGuard allowedRoles={['admin']}>
       <AdminSettings/>

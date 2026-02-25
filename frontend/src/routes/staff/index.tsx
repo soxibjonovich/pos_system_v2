@@ -2,7 +2,7 @@ import { api } from '@/config'
 import { useAuth } from '@/contexts/auth-context'
 import { useBusiness } from '@/contexts/business-context'
 import { AuthGuard } from '@/middlewares/AuthGuard'
-import { printService } from '@/utils/printService'  // NEW: Import print service
+import { printService } from '@/utils/printService'
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { Check, Grid3x3, List, LogOut, Minus, Plus, Receipt, Search, ShoppingCart, Trash2, Users, X, Printer } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -49,7 +49,7 @@ export const Route=createFileRoute('/staff/')({
 
 export default function POSTerminal(){
   const navigate=useNavigate()
-  const {logout, user}=useAuth()  // Get user info for receipt
+  const {logout}=useAuth()  // FIXED: Removed user from destructuring
   const {isRestaurant,isLoading:businessLoading}=useBusiness()
   
   const [products,setProducts]=useState<Product[]>([])
@@ -67,22 +67,23 @@ export default function POSTerminal(){
   const [viewMode,setViewMode]=useState<'grid'|'list'>('grid')
   const [showKeyboard,setShowKeyboard]=useState(false)
   
-  // NEW: Print status
+  // Print status
   const [printerStatus, setPrinterStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
   const [printNotification, setPrintNotification] = useState<string | null>(null)
   
   const searchInputRef=useRef<HTMLInputElement>(null)
   
   const CURRENT_USER_ID=Number(localStorage.getItem("userId"))
+  // FIXED: Get user name from localStorage instead
+  const CURRENT_USER_NAME=localStorage.getItem("userName") || "Staff"
 
   useEffect(()=>{
     if(!businessLoading){
       fetchData()
-      checkPrinterStatus()  // NEW: Check printer on mount
+      checkPrinterStatus()
     }
   },[businessLoading])
 
-  // NEW: Check printer status
   const checkPrinterStatus = async () => {
     const isAvailable = await printService.checkAgentStatus()
     setPrinterStatus(isAvailable ? 'connected' : 'disconnected')
@@ -195,7 +196,6 @@ export default function POSTerminal(){
     navigate({to:'/login'})
   }
 
-  // UPDATED: Submit order with local printer support
   const submitOrder = async () => {
     if (!cart.length) return
     if (isRestaurant && !selectedTable) return
@@ -239,7 +239,7 @@ export default function POSTerminal(){
           business_name: 'POS System',  // TODO: Get from settings
           business_address: '123 Main Street',  // TODO: Get from settings
           business_phone: '+998 90 123 4567',  // TODO: Get from settings
-          cashier: user?.full_name || 'Staff',
+          cashier: CURRENT_USER_NAME,  // FIXED: Use localStorage instead of user?.full_name
           table: selectedTable?.number,
           items: cart.map(item => ({
             name: item.title,
@@ -263,7 +263,6 @@ export default function POSTerminal(){
           setPrintNotification('❌ Chop etishda xatolik')
         }
         
-        // Clear notification after 3 seconds
         setTimeout(() => setPrintNotification(null), 3000)
         
       } catch (printError) {
@@ -338,7 +337,7 @@ export default function POSTerminal(){
                 )}
               </div>
               
-              {/* NEW: Printer status indicator */}
+              {/* Printer status indicator */}
               <button 
                 onClick={checkPrinterStatus}
                 className={`px-4 py-5 rounded-2xl font-bold flex items-center gap-2 shadow-lg transition-all ${
@@ -673,7 +672,6 @@ export default function POSTerminal(){
         </div>
       )}
 
-      {/* NEW: Order success notification */}
       {orderSuccess&&(
         <div className="fixed top-8 right-8 bg-green-600 text-white px-8 py-6 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce z-50">
           <Check className="size-10"/>
@@ -681,9 +679,8 @@ export default function POSTerminal(){
         </div>
       )}
 
-      {/* NEW: Print notification */}
       {printNotification && (
-        <div className="fixed top-24 right-8 bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50 animate-slide-in">
+        <div className="fixed top-24 right-8 bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50">
           <Printer className="size-6" />
           <span className="font-bold">{printNotification}</span>
         </div>

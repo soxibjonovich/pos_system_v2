@@ -80,7 +80,7 @@ const COLORS=['#0088FE','#00C49F','#FFBB28','#FF8042','#8884D8']
 
 const formatPrice=(n:number)=>`${Math.floor(n).toLocaleString('uz-UZ')} so'm`
 
-export const Route=createFileRoute('/admin')({
+export const Route=createFileRoute('/admin/')({
   component:()=>(
     <AuthGuard allowedRoles={['admin']}>
       <DashboardPage/>
