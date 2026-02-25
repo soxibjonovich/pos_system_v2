@@ -2,8 +2,9 @@ import { api } from '@/config'
 import { useAuth } from '@/contexts/auth-context'
 import { useBusiness } from '@/contexts/business-context'
 import { AuthGuard } from '@/middlewares/AuthGuard'
+import { printService } from '@/utils/printService'  // NEW: Import print service
 import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
-import { Check, Grid3x3, List, LogOut, Minus, Plus, Receipt, Search, ShoppingCart, Trash2, Users, X } from 'lucide-react'
+import { Check, Grid3x3, List, LogOut, Minus, Plus, Receipt, Search, ShoppingCart, Trash2, Users, X, Printer } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface Product{
@@ -48,7 +49,7 @@ export const Route=createFileRoute('/staff/')({
 
 export default function POSTerminal(){
   const navigate=useNavigate()
-  const {logout}=useAuth()
+  const {logout, user}=useAuth()  // Get user info for receipt
   const {isRestaurant,isLoading:businessLoading}=useBusiness()
   
   const [products,setProducts]=useState<Product[]>([])
@@ -65,6 +66,11 @@ export default function POSTerminal(){
   const [orderSuccess,setOrderSuccess]=useState(false)
   const [viewMode,setViewMode]=useState<'grid'|'list'>('grid')
   const [showKeyboard,setShowKeyboard]=useState(false)
+  
+  // NEW: Print status
+  const [printerStatus, setPrinterStatus] = useState<'checking' | 'connected' | 'disconnected'>('checking')
+  const [printNotification, setPrintNotification] = useState<string | null>(null)
+  
   const searchInputRef=useRef<HTMLInputElement>(null)
   
   const CURRENT_USER_ID=Number(localStorage.getItem("userId"))
@@ -72,8 +78,15 @@ export default function POSTerminal(){
   useEffect(()=>{
     if(!businessLoading){
       fetchData()
+      checkPrinterStatus()  // NEW: Check printer on mount
     }
   },[businessLoading])
+
+  // NEW: Check printer status
+  const checkPrinterStatus = async () => {
+    const isAvailable = await printService.checkAgentStatus()
+    setPrinterStatus(isAvailable ? 'connected' : 'disconnected')
+  }
 
   const fetchData=async()=>{
     setIsLoading(true)
@@ -182,6 +195,7 @@ export default function POSTerminal(){
     navigate({to:'/login'})
   }
 
+  // UPDATED: Submit order with local printer support
   const submitOrder = async () => {
     if (!cart.length) return
     if (isRestaurant && !selectedTable) return
@@ -198,7 +212,7 @@ export default function POSTerminal(){
         }))
       }
   
-      // Create order
+      // 1. Create order on server
       const response = await fetch(`${api.orders.base}/${api.orders.orders}`, {
         method: 'POST',
         headers: {
@@ -217,43 +231,57 @@ export default function POSTerminal(){
       }
   
       const createdOrder = await response.json()
-      const orderId = createdOrder.id
-  
-      // Auto-print receipt
+      
+      // 2. Print to LOCAL printer via PrintAgent
       try {
-        const printResponse = await fetch(`${api.printer.base}/${api.printer.receipts}`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('postoken')}`
-          },
-          body: JSON.stringify({
-            order_id: orderId,
-            copies: 1
-          })
-        })
-  
-        const printResult = await printResponse.json()
-        
-        if (printResponse.ok && printResult.status === 'success') {
-          console.log('Receipt printed successfully')
-        } else {
-          console.warn('Print failed:', printResult.message)
+        const printReceipt = {
+          order_id: createdOrder.id,
+          business_name: 'POS System',  // TODO: Get from settings
+          business_address: '123 Main Street',  // TODO: Get from settings
+          business_phone: '+998 90 123 4567',  // TODO: Get from settings
+          cashier: user?.full_name || 'Staff',
+          table: selectedTable?.number,
+          items: cart.map(item => ({
+            name: item.title,
+            quantity: item.quantity,
+            price: item.price,
+            subtotal: item.quantity * item.price
+          })),
+          total: createdOrder.total || total
         }
+
+        // Print to local printer (non-blocking)
+        const printResult = await printService.printReceipt(printReceipt)
+        
+        if (printResult.status === 'success') {
+          setPrintNotification('✅ Chek chop etildi!')
+        } else if (printResult.status === 'agent_unavailable') {
+          setPrintNotification('⚠️ Printer topilmadi')
+        } else if (printResult.status === 'saved') {
+          setPrintNotification('💾 Chek faylga saqlandi')
+        } else {
+          setPrintNotification('❌ Chop etishda xatolik')
+        }
+        
+        // Clear notification after 3 seconds
+        setTimeout(() => setPrintNotification(null), 3000)
+        
       } catch (printError) {
         console.error('Print error:', printError)
-        // Don't fail the order if printing fails
+        setPrintNotification('⚠️ Chop etishda xatolik')
+        setTimeout(() => setPrintNotification(null), 3000)
       }
   
-      // Show success and clear cart
+      // 3. Show success and clear cart
       setOrderSuccess(true)
       clearCart()
       setShowTableSelect(false)
       await fetchData()
       
       setTimeout(() => setOrderSuccess(false), 3000)
+      
     } catch (err) {
-      alert(`Failed to create order: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      alert(`Buyurtma yaratishda xatolik: ${err instanceof Error ? err.message : 'Noma\'lum xatolik'}`)
     } finally {
       setIsSubmitting(false)
     }
@@ -309,6 +337,22 @@ export default function POSTerminal(){
                   </button>
                 )}
               </div>
+              
+              {/* NEW: Printer status indicator */}
+              <button 
+                onClick={checkPrinterStatus}
+                className={`px-4 py-5 rounded-2xl font-bold flex items-center gap-2 shadow-lg transition-all ${
+                  printerStatus === 'connected' 
+                    ? 'bg-green-600 hover:bg-green-700 text-white' 
+                    : printerStatus === 'disconnected'
+                    ? 'bg-red-600 hover:bg-red-700 text-white'
+                    : 'bg-gray-600 text-white'
+                }`}
+                title={printerStatus === 'connected' ? 'Printer ulangan' : 'Printer ulanmagan'}
+              >
+                <Printer className="size-6"/>
+              </button>
+              
               <Link to="/staff/orders" className="px-6 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg active:scale-95 transition-all">
                 <Receipt className="size-6"/>
                 Buyurtmalar
@@ -629,10 +673,19 @@ export default function POSTerminal(){
         </div>
       )}
 
+      {/* NEW: Order success notification */}
       {orderSuccess&&(
         <div className="fixed top-8 right-8 bg-green-600 text-white px-8 py-6 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce z-50">
           <Check className="size-10"/>
           <span className="font-black text-2xl">Buyurtma yaratildi!</span>
+        </div>
+      )}
+
+      {/* NEW: Print notification */}
+      {printNotification && (
+        <div className="fixed top-24 right-8 bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50 animate-slide-in">
+          <Printer className="size-6" />
+          <span className="font-bold">{printNotification}</span>
         </div>
       )}
     </div>
