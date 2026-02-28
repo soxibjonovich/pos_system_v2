@@ -4,6 +4,7 @@ import { api } from '@/config'
 import { useAuth } from '@/contexts/auth-context'
 import { AuthGuard } from '@/middlewares/AuthGuard'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { useI18n } from '@/i18n'
 import {
     AlertTriangle,
     ArrowDown,
@@ -25,7 +26,7 @@ import {
     YAxis
 } from 'recharts'
 
-interface DashboardStats{
+interface DashboardStats {
   sales:SalesStats
   inventory:InventoryStats
   orders:OrderStats
@@ -89,71 +90,72 @@ export const Route=createFileRoute('/admin/')({
 })
 
 // Mock t() function - replace with your actual i18n implementation
-const t=(key:string)=>{
-  const translations:{[key:string]:string}={
-    // Dashboard
-    'dashboard.title':'Boshqaruv Paneli',
-    'dashboard.welcome':'Xush kelibsiz',
-    'dashboard.overview':'Umumiy ko\'rsatkichlar',
-    'dashboard.refresh':'Yangilash',
-    'dashboard.lastUpdated':'Oxirgi yangilanish',
+// const t=(key:string)=>{
+//   const translations:{[key:string]:string}={
+//     // Dashboard
+//     'dashboard.title':'Boshqaruv Paneli',
+//     'dashboard.welcome':'Xush kelibsiz',
+//     'dashboard.overview':'Umumiy ko\'rsatkichlar',
+//     'dashboard.refresh':'Yangilash',
+//     'dashboard.lastUpdated':'Oxirgi yangilanish',
     
-    // Stats Cards
-    'dashboard.stats.sales':'Bugungi savdo',
-    'dashboard.stats.orders':'Bugungi buyurtmalar',
-    'dashboard.stats.products':'Jami mahsulotlar',
-    'dashboard.stats.users':'Foydalanuvchilar',
-    'dashboard.stats.averageOrder':'O\'rtacha chek',
-    'dashboard.stats.pending':'Kutilmoqda',
-    'dashboard.stats.completed':'Bajarildi',
-    'dashboard.stats.lowStock':'Kam qoldi',
-    'dashboard.stats.outOfStock':'Tugagan',
-    'dashboard.stats.inventoryValue':'Ombor qiymati',
+//     // Stats Cards
+//     'dashboard.stats.sales':'Bugungi savdo',
+//     'dashboard.stats.orders':'Bugungi buyurtmalar',
+//     'dashboard.stats.products':'Jami mahsulotlar',
+//     'dashboard.stats.users':'Foydalanuvchilar',
+//     'dashboard.stats.averageOrder':'O\'rtacha chek',
+//     'dashboard.stats.pending':'Kutilmoqda',
+//     'dashboard.stats.completed':'Bajarildi',
+//     'dashboard.stats.lowStock':'Kam qoldi',
+//     'dashboard.stats.outOfStock':'Tugagan',
+//     'dashboard.stats.inventoryValue':'Ombor qiymati',
     
-    // Trends
-    'dashboard.trend.up':'Oshdi',
-    'dashboard.trend.down':'Tushdi',
-    'dashboard.trend.same':'O\'zgarmadi',
-    'dashboard.trend.vsYesterday':'Kechaga nisbatan',
+//     // Trends
+//     'dashboard.trend.up':'Oshdi',
+//     'dashboard.trend.down':'Tushdi',
+//     'dashboard.trend.same':'O\'zgarmadi',
+//     'dashboard.trend.vsYesterday':'Kechaga nisbatan',
     
-    // Sections
-    'dashboard.section.recentOrders':'So\'nggi buyurtmalar',
-    'dashboard.section.topProducts':'Top mahsulotlar',
-    'dashboard.section.salesTrend':'Savdo tendensiyasi',
-    'dashboard.section.quickActions':'Tezkor harakatlar',
+//     // Sections
+//     'dashboard.section.recentOrders':'So\'nggi buyurtmalar',
+//     'dashboard.section.topProducts':'Top mahsulotlar',
+//     'dashboard.section.salesTrend':'Savdo tendensiyasi',
+//     'dashboard.section.quickActions':'Tezkor harakatlar',
     
-    // Quick Actions
-    'dashboard.action.newOrder':'Yangi buyurtma',
-    'dashboard.action.addProduct':'Mahsulot qo\'shish',
-    'dashboard.action.manageUsers':'Foydalanuvchilar',
-    'dashboard.action.viewReports':'Hisobotlar',
-    'dashboard.action.settings':'Sozlamalar',
+//     // Quick Actions
+//     'dashboard.action.newOrder':'Yangi buyurtma',
+//     'dashboard.action.addProduct':'Mahsulot qo\'shish',
+//     'dashboard.action.manageUsers':'Foydalanuvchilar',
+//     'dashboard.action.viewReports':'Hisobotlar',
+//     'dashboard.action.settings':'Sozlamalar',
     
-    // Recent Orders
-    'dashboard.order.id':'ID',
-    'dashboard.order.time':'Vaqt',
-    'dashboard.order.table':'Stol',
-    'dashboard.order.server':'Xizmatchi',
-    'dashboard.order.total':'Summa',
-    'dashboard.order.status':'Holat',
-    'dashboard.order.view':'Ko\'rish',
-    'dashboard.order.noOrders':'Buyurtmalar yo\'q',
+//     // Recent Orders
+//     'dashboard.order.id':'ID',
+//     'dashboard.order.time':'Vaqt',
+//     'dashboard.order.table':'Stol',
+//     'dashboard.order.server':'Xizmatchi',
+//     'dashboard.order.total':'Summa',
+//     'dashboard.order.status':'Holat',
+//     'dashboard.order.view':'Ko\'rish',
+//     'dashboard.order.noOrders':'Buyurtmalar yo\'q',
     
-    // Status
-    'status.pending':'Kutilmoqda',
-    'status.completed':'Bajarildi',
-    'status.cancelled':'Bekor qilindi',
+//     // Status
+//     'status.pending':'Kutilmoqda',
+//     'status.completed':'Bajarildi',
+//     'status.cancelled':'Bekor qilindi',
     
-    // Common
-    'common.viewAll':'Barchasini ko\'rish',
-    'common.loading':'Yuklanmoqda...',
-    'common.error':'Xatolik',
-  }
-  return translations[key]||key
-}
+//     // Common
+//     'common.viewAll':'Barchasini ko\'rish',
+//     'common.loading':'Yuklanmoqda...',
+//     'common.error':'Xatolik',
+//   }
+//   return translations[key]||key
+// }
 
 function DashboardPage(){
-  const {token}=useAuth()
+  const { token } = useAuth()
+  const { t } = useI18n()
   
   const [isLoading,setIsLoading]=useState(true)
   const [error,setError]=useState<string|null>(null)
@@ -443,8 +445,8 @@ function DashboardPage(){
           <CardContent>
             <div className="text-2xl font-bold">{userStats.totalUsers}</div>
             <div className="flex gap-3 text-xs mt-1 text-muted-foreground">
-              <span>{userStats.activeUsers} Faol</span>
-              <span>{userStats.staffCount} Xodim</span>
+              <span>{userStats.activeUsers} { t('dashboard.userStatus.active') }</span>
+              <span>{userStats.staffCount} {t('dashboard.stats.users')}</span>
             </div>
           </CardContent>
         </Card>
@@ -456,7 +458,7 @@ function DashboardPage(){
         <Card>
           <CardHeader>
             <CardTitle>{t('dashboard.section.salesTrend')}</CardTitle>
-            <CardDescription>So'nggi 7 kun</CardDescription>
+            <CardDescription>{t(`dashboard.stats.lastSevenDays`)}</CardDescription>
           </CardHeader>
           <CardContent>
             {salesTrend.length>0?(
@@ -471,7 +473,7 @@ function DashboardPage(){
               </ResponsiveContainer>
             ):(
               <div className="flex items-center justify-center h-64 text-muted-foreground">
-                Ma'lumot yo'q
+                {t('dashboard.trend.noInfo')}
               </div>
             )}
           </CardContent>
@@ -481,7 +483,7 @@ function DashboardPage(){
         <Card>
           <CardHeader>
             <CardTitle>{t('dashboard.section.topProducts')}</CardTitle>
-            <CardDescription>So'nggi 7 kun</CardDescription>
+            <CardDescription>{t(`dashboard.stats.lastSevenDays`)}</CardDescription>
           </CardHeader>
           <CardContent>
             {topProducts.length>0?(
@@ -501,7 +503,7 @@ function DashboardPage(){
               </div>
             ):(
               <div className="flex items-center justify-center h-64 text-muted-foreground">
-                Ma'lumot yo'q
+                {t('dashboard.trend.noInfo')}
               </div>
             )}
           </CardContent>

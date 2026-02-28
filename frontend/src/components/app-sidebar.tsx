@@ -1,6 +1,3 @@
-import * as React from "react"
-import { GalleryVerticalEnd, Minus, Plus } from "lucide-react"
-
 import { SearchForm } from "@/components/search-form"
 import {
   Collapsible,
@@ -21,6 +18,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { Link } from "@tanstack/react-router"
+import { GalleryVerticalEnd, Minus, Plus } from "lucide-react"
+import * as React from "react"
 
 const data = {
   navMain: [

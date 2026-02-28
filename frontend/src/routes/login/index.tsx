@@ -186,7 +186,7 @@ function LoginPage() {
 
         <div className={`rounded-2xl p-6 shadow-2xl space-y-6 ${cardBg}`}>
           <section>
-            <h3 className={`mb-3 font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>Users</h3>
+            <h3 className={`mb-3 font-semibold ${isDark ? "text-gray-200" : "text-gray-800"}`}>{t(`auth.users`)}</h3>
 
             {loadingUsers ? (
               <p className="text-center text-gray-400">{t('common.loading')}</p>
@@ -253,7 +253,7 @@ function LoginPage() {
                 disabled={!selectedUser || !pin.length}
                 className="py-4 rounded-xl bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition text-sm font-medium"
               >
-                Clear
+                {t(`common.clear`)}
               </button>
               <button
                 onClick={() => addDigit("0")}

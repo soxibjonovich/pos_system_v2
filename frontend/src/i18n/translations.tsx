@@ -15,6 +15,7 @@ export const translations = {
       loadFailed: "Failed to load users",
       invalidPin: "Invalid PIN",
       networkError: "Network error",
+      users: "Users"
     },
     // POS
     pos: {
@@ -179,10 +180,14 @@ export const translations = {
       overview: "Overview",
       refresh: "Refresh",
       lastUpdated: "Last Updated",
+      userStatus: {
+        active: "Active"
+      },
       stats: {
         sales: "Today's Sales",
         orders: "Today's Orders",
         products: "Total Products",
+        lastSevenDays: "Last 7 days",
         users: "Users",
         averageOrder: "Average Order",
         pending: "Pending",
@@ -196,6 +201,7 @@ export const translations = {
         down: "Down",
         same: "Same",
         vsYesterday: "vs Yesterday",
+        noInfo: "No enough information"
       },
       section: {
         recentOrders: "Recent Orders",
@@ -277,6 +283,7 @@ export const translations = {
       confirm: "Confirm",
       success: "Success",
       failed: "Failed",
+      clear: "Clear"
     },
     // Status - NEW
     status: {
@@ -287,6 +294,7 @@ export const translations = {
       ready: "Ready",
     },
   },
+  
   uz: {
     auth: {
       selectUser: "Foydalanuvchi tanlang va PIN kiriting",
@@ -300,6 +308,7 @@ export const translations = {
       loadFailed: "Foydalanuvchiler yuklanish xatosi",
       invalidPin: "Noto'g'ri PIN",
       networkError: "Tarmoq xatosi",
+      users: "Foydalanuvchilar"
     },
     pos: {
       search: "Qidirish...",
@@ -461,10 +470,14 @@ export const translations = {
       overview: "Umumiy ko'rsatkichlar",
       refresh: "Yangilash",
       lastUpdated: "Oxirgi yangilanish",
+      userStatus: {
+        active: "Faol"
+      },
       stats: {
         sales: "Bugungi savdo",
         orders: "Bugungi buyurtmalar",
         products: "Jami mahsulotlar",
+        lastSevenDays: "So'ngi 7 kunda",
         users: "Foydalanuvchilar",
         averageOrder: "O'rtacha chek",
         pending: "Kutilmoqda",
@@ -478,6 +491,7 @@ export const translations = {
         down: "Tushdi",
         same: "O'zgarmadi",
         vsYesterday: "Kechaga nisbatan",
+        noInfo: "Ma'lumot yo'q"
       },
       section: {
         recentOrders: "So'nggi buyurtmalar",
@@ -559,6 +573,7 @@ export const translations = {
       confirm: "Tasdiqlash",
       success: "Muvaffaqiyatli",
       failed: "Muvaffaqiyatsiz",
+      clear: "Tozalash"
     },
     // Status - NEW
     status: {
@@ -582,6 +597,7 @@ export const translations = {
       loadFailed: "Не удалось загрузить пользователей",
       invalidPin: "Неверный PIN",
       networkError: "Ошибка сети",
+      users: "Пользователи"
     },
     pos: {
       search: "Поиск...",
@@ -743,10 +759,14 @@ export const translations = {
       overview: "Обзор",
       refresh: "Обновить",
       lastUpdated: "Последнее обновление",
+      userStatus: {
+        active: "Актив"
+      },
       stats: {
         sales: "Продажи сегодня",
         orders: "Заказы сегодня",
         products: "Всего товаров",
+        lastSevenDays: "Последние 7 дни",
         users: "Пользователи",
         averageOrder: "Средний чек",
         pending: "Ожидание",
@@ -760,6 +780,7 @@ export const translations = {
         down: "Упало",
         same: "Без изменений",
         vsYesterday: "к вчера",
+        noInfo: "Недостаточно информации"
       },
       section: {
         recentOrders: "Последние заказы",
@@ -841,6 +862,7 @@ export const translations = {
       confirm: "Подтвердить",
       success: "Успешно",
       failed: "Ошибка",
+      clear: "Очистить"
     },
     // Status - NEW
     status: {

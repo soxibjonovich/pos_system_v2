@@ -178,7 +178,6 @@ function RouteComponent() {
   const updateUser = async (id: number, data: UserUpdateData) => {
     setIsSubmitting(true)
     try {
-      console.log('Sending update:', data)
       const response = await fetch(`${USERS_API}/${id}`, {
         method: 'PUT',
         headers: {
@@ -187,7 +186,6 @@ function RouteComponent() {
         },
         body: JSON.stringify(data),
       })
-      console.log('Response status:', response.status)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
