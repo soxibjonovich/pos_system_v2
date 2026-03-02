@@ -1,29 +1,29 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { api } from '@/config'
+import { api, API_URL } from '@/config'
 import { useAuth } from '@/contexts/auth-context'
 import { AuthGuard } from '@/middlewares/AuthGuard'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { useI18n } from '@/i18n'
 import {
-    AlertTriangle,
-    ArrowDown,
-    ArrowUp,
-    BarChart3,
-    Calendar,
-    Clock,
-    DollarSign, Minus,
-    Package,
-    RefreshCw,
-    ShoppingCart, Users
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  BarChart3,
+  Calendar,
+  Clock,
+  DollarSign, Minus,
+  Package,
+  RefreshCw,
+  ShoppingCart, Users
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
-    CartesianGrid, Line,
-    LineChart, ResponsiveContainer,
-    Tooltip,
-    XAxis,
-    YAxis
+  CartesianGrid, Line,
+  LineChart, ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
 } from 'recharts'
 
 interface DashboardStats {
@@ -77,8 +77,6 @@ interface TopProduct{
   revenue:number
 }
 
-const COLORS=['#0088FE','#00C49F','#FFBB28','#FF8042','#8884D8']
-
 const formatPrice=(n:number)=>`${Math.floor(n).toLocaleString('uz-UZ')} so'm`
 
 export const Route=createFileRoute('/admin/')({
@@ -88,70 +86,6 @@ export const Route=createFileRoute('/admin/')({
     </AuthGuard>
   ),
 })
-
-// Mock t() function - replace with your actual i18n implementation
-// const t=(key:string)=>{
-//   const translations:{[key:string]:string}={
-//     // Dashboard
-//     'dashboard.title':'Boshqaruv Paneli',
-//     'dashboard.welcome':'Xush kelibsiz',
-//     'dashboard.overview':'Umumiy ko\'rsatkichlar',
-//     'dashboard.refresh':'Yangilash',
-//     'dashboard.lastUpdated':'Oxirgi yangilanish',
-    
-//     // Stats Cards
-//     'dashboard.stats.sales':'Bugungi savdo',
-//     'dashboard.stats.orders':'Bugungi buyurtmalar',
-//     'dashboard.stats.products':'Jami mahsulotlar',
-//     'dashboard.stats.users':'Foydalanuvchilar',
-//     'dashboard.stats.averageOrder':'O\'rtacha chek',
-//     'dashboard.stats.pending':'Kutilmoqda',
-//     'dashboard.stats.completed':'Bajarildi',
-//     'dashboard.stats.lowStock':'Kam qoldi',
-//     'dashboard.stats.outOfStock':'Tugagan',
-//     'dashboard.stats.inventoryValue':'Ombor qiymati',
-    
-//     // Trends
-//     'dashboard.trend.up':'Oshdi',
-//     'dashboard.trend.down':'Tushdi',
-//     'dashboard.trend.same':'O\'zgarmadi',
-//     'dashboard.trend.vsYesterday':'Kechaga nisbatan',
-    
-//     // Sections
-//     'dashboard.section.recentOrders':'So\'nggi buyurtmalar',
-//     'dashboard.section.topProducts':'Top mahsulotlar',
-//     'dashboard.section.salesTrend':'Savdo tendensiyasi',
-//     'dashboard.section.quickActions':'Tezkor harakatlar',
-    
-//     // Quick Actions
-//     'dashboard.action.newOrder':'Yangi buyurtma',
-//     'dashboard.action.addProduct':'Mahsulot qo\'shish',
-//     'dashboard.action.manageUsers':'Foydalanuvchilar',
-//     'dashboard.action.viewReports':'Hisobotlar',
-//     'dashboard.action.settings':'Sozlamalar',
-    
-//     // Recent Orders
-//     'dashboard.order.id':'ID',
-//     'dashboard.order.time':'Vaqt',
-//     'dashboard.order.table':'Stol',
-//     'dashboard.order.server':'Xizmatchi',
-//     'dashboard.order.total':'Summa',
-//     'dashboard.order.status':'Holat',
-//     'dashboard.order.view':'Ko\'rish',
-//     'dashboard.order.noOrders':'Buyurtmalar yo\'q',
-    
-//     // Status
-//     'status.pending':'Kutilmoqda',
-//     'status.completed':'Bajarildi',
-//     'status.cancelled':'Bekor qilindi',
-    
-//     // Common
-//     'common.viewAll':'Barchasini ko\'rish',
-//     'common.loading':'Yuklanmoqda...',
-//     'common.error':'Xatolik',
-//   }
-//   return translations[key]||key
-// }
 
 function DashboardPage(){
   const { token } = useAuth()
@@ -221,23 +155,23 @@ function DashboardPage(){
       })
       
       const [todaySales,yesterdaySales,inventory,orders,users,topProds]=await Promise.all([
-        fetch(`${api.admin.base}/${api.admin.reports}/sales?${todayParams}`,{
+        fetch(`${API_URL}${api.admin.base}/${api.admin.reports}/sales?${todayParams}`,{
           headers:{'Authorization':`Bearer ${token}`}
         }).then(r=>r.json()),
         
-        fetch(`${api.admin.base}/${api.admin.reports}/sales?${yesterdayParams}`,{
+        fetch(`${API_URL}${api.admin.base}/${api.admin.reports}/sales?${yesterdayParams}`,{
           headers:{'Authorization':`Bearer ${token}`}
         }).then(r=>r.json()),
         
-        fetch(`${api.admin.base}/${api.admin.reports}/inventory`,{
+        fetch(`${API_URL}${api.admin.base}/${api.admin.reports}/inventory`,{
           headers:{'Authorization':`Bearer ${token}`}
         }).then(r=>r.json()),
         
-        fetch(`${api.orders.base}/${api.orders.orders}`,{
+        fetch(`${API_URL}${api.orders.base}/${api.orders.orders}`,{
           headers:{'Authorization':`Bearer ${token}`}
         }).then(r=>r.json()),
         
-        fetch(`${api.admin.base}/${api.admin.users}`,{
+        fetch(`${API_URL}${api.admin.base}/${api.admin.users}`,{
           headers:{'Authorization':`Bearer ${token}`}
         }).then(r=>r.json()),
         
@@ -248,7 +182,7 @@ function DashboardPage(){
           const params=new URLSearchParams({
             start_date:last7Days.toISOString()
           })
-          return fetch(`${api.admin.base}/${api.admin.reports}/sales?${params}`,{
+          return fetch(`${API_URL}${api.admin.base}/${api.admin.reports}/sales?${params}`,{
             headers:{'Authorization':`Bearer ${token}`}
           }).then(r=>r.json())
         })()
@@ -515,7 +449,7 @@ function DashboardPage(){
         <CardHeader className="flex flex-row items-center justify-between">
           <div>
             <CardTitle>{t('dashboard.section.recentOrders')}</CardTitle>
-            <CardDescription>So'nggi 5 ta buyurtma</CardDescription>
+            <CardDescription>{ t('dashboard.stats.lastFiveOrders') }</CardDescription>
           </div>
           <Link to="/admin/orders">
             <Button variant="outline" size="sm">

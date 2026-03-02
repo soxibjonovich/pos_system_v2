@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Textarea } from "@/components/ui/textarea"
-import { api } from '@/config'
+import { api, API_URL } from '@/config'
 import { useAuth } from '@/contexts/auth-context'
 import { AuthGuard } from '@/middlewares/AuthGuard'
 import { createFileRoute } from '@tanstack/react-router'
@@ -38,8 +38,8 @@ interface ProductFormData{
   is_active:boolean
 }
 
-const PRODUCTS_URL=`${api.admin.base}/${api.admin.products}`
-const CATEGORIES_URL=`${api.admin.base}/${api.admin.categories}`
+const PRODUCTS_URL=`${API_URL}${api.admin.base}/${api.admin.products}`
+const CATEGORIES_URL=`${API_URL}${api.admin.base}/${api.admin.categories}`
 
 const formatPrice=(n:number)=>`${Math.floor(n).toLocaleString('uz-UZ')} so'm`
 

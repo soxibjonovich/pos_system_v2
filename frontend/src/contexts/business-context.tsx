@@ -1,5 +1,5 @@
 import {createContext,useContext,useState,useEffect,type ReactNode} from 'react'
-import {api} from '@/config'
+import {api, API_URL} from '@/config'
 
 type BusinessType='restaurant'|'market'
 
@@ -31,7 +31,7 @@ export function BusinessProvider({children}:{children:ReactNode}){
 
   const fetchBusinessType=async()=>{
     try{
-      const res=await fetch(`${api.orders.base}/${api.orders.orders}/config`)
+      const res=await fetch(`${API_URL}${api.orders.base}/${api.orders.orders}/config`)
       if(res.ok){
         const data=await res.json()
         setBusinessType(data.business_type)

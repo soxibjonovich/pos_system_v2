@@ -14,14 +14,14 @@ export default defineConfig({
     tailwindcss()
   ],
   server: {
-    host: '0.0.0.0', // Позволяет Docker пробрасывать порты
+    host: '0.0.0.0',
     port: 5173,
     strictPort: true,
     watch: {
-      usePolling: true, // Критично для Windows/macOS, чтобы изменения файлов подхватывались
+      usePolling: true,
     },
     hmr: {
-      clientPort: 5173, // Гарантирует, что браузер стучится на правильный порт хоста
+      clientPort: 5173,
     },
   },
   resolve: {

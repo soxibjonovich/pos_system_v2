@@ -21,6 +21,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import { API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
+import { useI18n } from "@/i18n"
 import { AuthGuard } from "@/middlewares/AuthGuard"
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Pencil, Plus, Search, Tag, Trash2 } from 'lucide-react'
@@ -52,6 +53,7 @@ export const Route = createFileRoute('/admin/categories/')({
 })
 
 function RouteComponent() {
+  const { t } = useI18n()
   const { token } = useAuth()
   const navigate = useNavigate()
   
@@ -152,7 +154,7 @@ function RouteComponent() {
       resetForm()
     } catch (err) {
       console.error('Error adding category:', err)
-      alert(err instanceof Error ? err.message : 'Failed to add category')
+      alert(err instanceof Error ? err.message : t('admin.categories.failedAdd'))
     } finally {
       setIsSubmitting(false)
     }
@@ -181,14 +183,14 @@ function RouteComponent() {
       resetForm()
     } catch (err) {
       console.error('Error updating category:', err)
-      alert(err instanceof Error ? err.message : 'Failed to update category')
+      alert(err instanceof Error ? err.message : t('admin.categories.failedUpdate'))
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const deleteCategory = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this category? Products in this category will be uncategorized.')) {
+    if (!confirm(t('admin.categories.deleteConfirm'))) {
       return
     }
 
@@ -212,7 +214,7 @@ function RouteComponent() {
       setSelectedCategory(null)
     } catch (err) {
       console.error('Error deleting category:', err)
-      alert(err instanceof Error ? err.message : 'Failed to delete category')
+      alert(err instanceof Error ? err.message : t('admin.categories.failedDelete'))
     } finally {
       setIsSubmitting(false)
     }
@@ -262,7 +264,7 @@ function RouteComponent() {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading categories...</p>
+          <p className="text-muted-foreground">{t('admin.categories.loading')}</p>
         </div>
       </div>
     )
@@ -272,7 +274,7 @@ function RouteComponent() {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
-          <p className="text-destructive">Error: {error}</p>
+          <p className="text-destructive">{t('admin.categories.error')}: {error}</p>
         </div>
       </div>
     )
@@ -283,11 +285,11 @@ function RouteComponent() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Tag className="size-6 text-orange-600" />
-          <h1 className="text-2xl font-bold">Categories</h1>
+          <h1 className="text-2xl font-bold">{t('admin.categories.title')}</h1>
         </div>
         <Button onClick={handleAddClick} className="bg-orange-600 hover:bg-orange-700">
           <Plus className="size-4" />
-          Add Category
+          {t('admin.categories.addButton')}
         </Button>
       </div>
 
@@ -296,7 +298,7 @@ function RouteComponent() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search categories..."
+            placeholder={t('admin.categories.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -308,10 +310,10 @@ function RouteComponent() {
           onChange={(e) => setStatusFilter(e.target.value)}
           className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <option value="">All Statuses</option>
+          <option value="">{t('admin.categories.allStatuses')}</option>
           {statuses.map((status) => (
             <option key={status} value={status}>
-              {status}
+              {t(`admin.categories.${status}`)}
             </option>
           ))}
         </select>
@@ -324,7 +326,7 @@ function RouteComponent() {
               setStatusFilter('')
             }}
           >
-            Clear Filters
+            {t('admin.categories.clearFilters')}
           </Button>
         )}
       </div>
@@ -333,24 +335,24 @@ function RouteComponent() {
         <Table>
           <TableCaption>
             {filteredCategories.length === 0
-              ? 'No categories found'
-              : `Showing ${filteredCategories.length} of ${categories.length} categories`}
+              ? t('admin.categories.noCategoriesFound')
+              : t('admin.categories.showing', { filtered: filteredCategories.length, total: categories.length })}
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Created</TableHead>
-              <TableHead className="w-0 text-right">Actions</TableHead>
+              <TableHead>{t('admin.categories.id')}</TableHead>
+              <TableHead>{t('admin.categories.name')}</TableHead>
+              <TableHead>{t('admin.categories.description')}</TableHead>
+              <TableHead>{t('admin.categories.status')}</TableHead>
+              <TableHead>{t('admin.categories.created')}</TableHead>
+              <TableHead className="w-0 text-right">{t('admin.categories.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredCategories.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
-                  No categories match your filters
+                  {t('admin.categories.noMatch')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -376,7 +378,7 @@ function RouteComponent() {
                     <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
                       category.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
                     }`}>
-                      {category.is_active ? 'Active' : 'Inactive'}
+                      {t(`admin.categories.${category.is_active ? 'active' : 'inactive'}`)}
                     </span>
                   </TableCell>
                   <TableCell 
@@ -410,31 +412,31 @@ function RouteComponent() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Tag className="size-5 text-orange-600" />
-              Add New Category
+              {t('admin.categories.addTitle')}
             </DialogTitle>
             <DialogDescription>
-              Create a new product category.
+              {t('admin.categories.addDesc')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="name">Name *</Label>
+                <Label htmlFor="name">{t('admin.categories.nameLabel')}</Label>
                 <Input
                   id="name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
-                  placeholder="e.g., Beverages, Desserts, Main Dishes"
+                  placeholder={t('admin.categories.namePlaceholder')}
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
+                <Label htmlFor="description">{t('admin.categories.descLabel')}</Label>
                 <Textarea
                   id="description"
                   value={formData.description || ''}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value || null })}
-                  placeholder="Category description (optional)"
+                  placeholder={t('admin.categories.descPlaceholder')}
                   rows={3}
                 />
               </div>
@@ -447,16 +449,16 @@ function RouteComponent() {
                   className="size-4 rounded border-gray-300"
                 />
                 <Label htmlFor="is_active" className="cursor-pointer">
-                  Category is active
+                  {t('admin.categories.isActive')}
                 </Label>
               </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting} className="bg-orange-600 hover:bg-orange-700">
-                {isSubmitting ? 'Adding...' : 'Add Category'}
+                {isSubmitting ? t('admin.categories.adding') : t('admin.categories.addSubmit')}
               </Button>
             </DialogFooter>
           </form>
@@ -466,30 +468,30 @@ function RouteComponent() {
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Edit Category</DialogTitle>
+            <DialogTitle>{t('admin.categories.editTitle')}</DialogTitle>
             <DialogDescription>
-              Update category information.
+              {t('admin.categories.editDesc')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-name">Name *</Label>
+                <Label htmlFor="edit-name">{t('admin.categories.nameLabel')}</Label>
                 <Input
                   id="edit-name"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   required
-                  placeholder="Category name"
+                  placeholder={t('admin.categories.namePlaceholder')}
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-description">Description</Label>
+                <Label htmlFor="edit-description">{t('admin.categories.descLabel')}</Label>
                 <Textarea
                   id="edit-description"
                   value={formData.description || ''}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value || null })}
-                  placeholder="Category description (optional)"
+                  placeholder={t('admin.categories.descPlaceholder')}
                   rows={3}
                 />
               </div>
@@ -502,7 +504,7 @@ function RouteComponent() {
                   className="size-4 rounded border-gray-300"
                 />
                 <Label htmlFor="edit-is_active" className="cursor-pointer">
-                  Category is active
+                  {t('admin.categories.isActive')}
                 </Label>
               </div>
             </div>
@@ -514,14 +516,14 @@ function RouteComponent() {
                 disabled={isSubmitting}
               >
                 <Trash2 className="size-4 mr-2" />
-                Delete
+                {t('admin.categories.deleteButton')}
               </Button>
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Updating...' : 'Update Category'}
+                  {isSubmitting ? t('admin.categories.updating') : t('admin.categories.updateSubmit')}
                 </Button>
               </div>
             </DialogFooter>

@@ -1,7 +1,7 @@
 // src/i18n/LanguageSwitcher.tsx
 
 import { useI18n } from './i18nContext'
-import { Lang } from './translations'
+import { type Lang } from './translations'
 
 const LANGS: { key: Lang, label: string, flag: string }[] = [
   { key: 'uz', label: "O'zbek", flag: '🇺🇿' },

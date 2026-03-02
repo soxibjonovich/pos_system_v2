@@ -1,4 +1,4 @@
-import { api } from "@/config"
+import { api, API_URL } from "@/config"
 import { useAuth } from "@/contexts/auth-context"
 import { LanguageSwitcher, useI18n } from "@/i18n"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
@@ -66,7 +66,7 @@ function LoginPage() {
   useEffect(() => {
     if (isAuthenticated) return
 
-    fetch(`${api.auth.base}/${api.auth.users_option}`)
+    fetch(`${API_URL}${api.auth.base}/${api.auth.users_option}`)
       .then(r => r.ok ? r.json() : Promise.reject())
       .then(d => {
         const u = Array.isArray(d) ? d : d.users || []
@@ -100,7 +100,7 @@ function LoginPage() {
     setError("")
 
     try {
-      const res = await fetch(`${api.auth.base}/${api.auth.login}`, {
+      const res = await fetch(`${API_URL}/${api.auth.base}/${api.auth.login}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: selectedUser.id, pin: parseInt(pin, 10) }),

@@ -18,7 +18,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import { api } from '@/config'
+import { api, API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
 import { AuthGuard } from "@/middlewares/AuthGuard"
 import { createFileRoute } from '@tanstack/react-router'
@@ -41,7 +41,7 @@ interface TableFormData {
   is_active: boolean
 }
 
-const TABLES_URL = `${api.admin.base}/${api.admin.tables}`
+const TABLES_URL = `${API_URL}${api.admin.base}/${api.admin.tables}`
 
 const getStatusConfig = (status: string) => {
   switch (status) {

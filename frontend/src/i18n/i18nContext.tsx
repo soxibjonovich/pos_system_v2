@@ -1,7 +1,7 @@
 // src/i18n/i18nContext.tsx
 
-import { createContext, useContext, useState, useMemo, ReactNode } from 'react'
-import { translations, Lang } from './translations'
+import { createContext, useContext, useState, useMemo } from 'react'
+import { translations, type Lang } from './translations'
 
 interface I18nContextType {
   lang: Lang

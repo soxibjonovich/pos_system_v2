@@ -1,39 +1,38 @@
-import {Button} from '@/components/ui/button'
-import {Card,CardContent,CardDescription,CardHeader,CardTitle} from '@/components/ui/card'
-import {Input} from '@/components/ui/input'
-import {Label} from '@/components/ui/label'
-import {Table,TableBody,TableCell,TableHead,TableHeader,TableRow} from '@/components/ui/table'
-import {api} from '@/config'
-import {useAuth} from '@/contexts/auth-context'
-import {AuthGuard} from '@/middlewares/AuthGuard'
-import {createFileRoute} from '@tanstack/react-router'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { api, API_URL } from '@/config'
+import { useAuth } from '@/contexts/auth-context'
+import { AuthGuard } from '@/middlewares/AuthGuard'
+import { createFileRoute } from '@tanstack/react-router'
 import {
+  AlertTriangle,
   BarChart3,
+  Calendar,
+  DollarSign,
   Download,
   Package,
   RefreshCw,
   ShoppingCart,
-  TrendingUp,
-  AlertTriangle,
-  DollarSign,
-  Calendar,
-  Clock
+  TrendingUp
 } from 'lucide-react'
-import {useEffect,useState} from 'react'
+import { useEffect, useState } from 'react'
 import {
-  LineChart,
-  Line,
-  BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
+  BarChart,
   CartesianGrid,
-  Tooltip,
+  Cell,
   Legend,
-  ResponsiveContainer
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis
 } from 'recharts'
 
 interface SalesSummary{
@@ -111,7 +110,7 @@ function ReportsPage(){
       if(startDate)params.append('start_date',new Date(startDate).toISOString())
       if(endDate)params.append('end_date',new Date(endDate).toISOString())
       
-      const response=await fetch(`${api.admin.base}/${api.admin.reports}/sales?${params}`,{
+      const response=await fetch(`${API_URL}${api.admin.base}/${api.admin.reports}/sales?${params}`,{
         headers:{'Authorization':`Bearer ${token}`}
       })
       

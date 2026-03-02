@@ -20,10 +20,12 @@ import {
 } from "@/components/ui/table"
 import { API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
+import { useI18n } from "@/i18n"
 import { AuthGuard } from '@/middlewares/AuthGuard'
 import { createFileRoute } from '@tanstack/react-router'
 import { Pencil, Plus, Search, Shield, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+
 
 const USERS_API = `${API_URL}/api/database/users`
 const ADMIN_API = `${API_URL}/api/databse/users/admin`
@@ -59,6 +61,7 @@ export const Route = createFileRoute('/admin/admins/')({
 })
 
 function RouteComponent() {
+  const { t } = useI18n()
   const { token } = useAuth()
   
   const [users, setUsers] = useState<User[]>([])
@@ -169,7 +172,7 @@ function RouteComponent() {
       resetForm()
     } catch (err) {
       console.error('Error adding admin:', err)
-      alert(err instanceof Error ? err.message : 'Failed to add admin')
+      alert(err instanceof Error ? err.message : t('admin.admins.failedAdd'))
     } finally {
       setIsSubmitting(false)
     }
@@ -198,14 +201,14 @@ function RouteComponent() {
       resetForm()
     } catch (err) {
       console.error('Error updating user:', err)
-      alert(err instanceof Error ? err.message : 'Failed to update user')
+      alert(err instanceof Error ? err.message : t('admin.admins.failedUpdate'))
     } finally {
       setIsSubmitting(false)
     }
   }
 
   const deleteUser = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this admin? This action cannot be undone.')) {
+    if (!confirm(t('admin.admins.deleteConfirm'))) {
       return
     }
 
@@ -229,7 +232,7 @@ function RouteComponent() {
       setSelectedUser(null)
     } catch (err) {
       console.error('Error deleting admin:', err)
-      alert(err instanceof Error ? err.message : 'Failed to delete admin')
+      alert(err instanceof Error ? err.message : t('admin.admins.failedDelete'))
     } finally {
       setIsSubmitting(false)
     }
@@ -300,7 +303,7 @@ function RouteComponent() {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading administrators...</p>
+          <p className="text-muted-foreground">{t('admin.admins.loading')}</p>
         </div>
       </div>
     )
@@ -310,7 +313,7 @@ function RouteComponent() {
     return (
       <div className="p-6">
         <div className="flex items-center justify-center h-64">
-          <p className="text-destructive">Error: {error}</p>
+          <p className="text-destructive">{t('admin.admins.error')}: {error}</p>
         </div>
       </div>
     )
@@ -321,11 +324,11 @@ function RouteComponent() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Shield className="size-6 text-purple-600" />
-          <h1 className="text-2xl font-bold">Administrators</h1>
+          <h1 className="text-2xl font-bold">{t('admin.admins.title')}</h1>
         </div>
         <Button onClick={handleAddClick} className="bg-purple-600 hover:bg-purple-700">
           <Plus className="size-4" />
-          Add Administrator
+          {t('admin.admins.addButton')}
         </Button>
       </div>
 
@@ -334,7 +337,7 @@ function RouteComponent() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search administrators..."
+            placeholder={t('admin.admins.searchPlaceholder')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9"
@@ -347,10 +350,10 @@ function RouteComponent() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <option value="">All Statuses</option>
+            <option value="">{t('admin.admins.allStatuses')}</option>
             {uniqueStatuses.map((status) => (
               <option key={status} value={status}>
-                {status}
+                {t(`admin.products.${status}`)}
               </option>
             ))}
           </select>
@@ -364,7 +367,7 @@ function RouteComponent() {
               setStatusFilter('')
             }}
           >
-            Clear Filters
+            {t('admin.admins.clearFilters')}
           </Button>
         )}
       </div>
@@ -373,24 +376,24 @@ function RouteComponent() {
         <Table>
           <TableCaption>
             {filteredUsers.length === 0
-              ? 'No administrators found'
-              : `Showing ${filteredUsers.length} of ${users.length} administrators`}
+              ? t('admin.admins.noAdminsFound')
+              : t('admin.admins.showing', { filtered: filteredUsers.length, total: users.length })}
           </TableCaption>
           <TableHeader>
             <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>Username</TableHead>
-              <TableHead>Full Name</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Last Login</TableHead>
-              <TableHead className="w-0 text-right">Actions</TableHead>
+              <TableHead>{t('admin.admins.id')}</TableHead>
+              <TableHead>{t('admin.admins.username')}</TableHead>
+              <TableHead>{t('admin.admins.fullName')}</TableHead>
+              <TableHead>{t('admin.admins.status')}</TableHead>
+              <TableHead>{t('admin.admins.lastLogin')}</TableHead>
+              <TableHead className="w-0 text-right">{t('admin.admins.actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filteredUsers.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center text-muted-foreground">
-                  No administrators match your filters
+                  {t('admin.admins.noMatch')}
                 </TableCell>
               </TableRow>
             ) : (
@@ -408,11 +411,11 @@ function RouteComponent() {
                     <span className={`inline-flex px-2 py-1 rounded text-xs font-medium ${
                       user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                     }`}>
-                      {user.status}
+                      {t(`admin.products.${user.status}`)}
                     </span>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}
+                    {user.last_login ? new Date(user.last_login).toLocaleString() : t('admin.admins.never')}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button
@@ -436,16 +439,16 @@ function RouteComponent() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Shield className="size-5 text-purple-600" />
-              Add New Administrator
+              {t('admin.admins.addTitle')}
             </DialogTitle>
             <DialogDescription>
-              Create a new administrator account. PIN must be 4-6 digits.
+              {t('admin.admins.addDesc')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleAddSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="username">Username *</Label>
+                <Label htmlFor="username">{t('admin.admins.usernameLabel')}</Label>
                 <Input
                   id="username"
                   value={formData.username}
@@ -457,7 +460,7 @@ function RouteComponent() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="full_name">Full Name *</Label>
+                <Label htmlFor="full_name">{t('admin.admins.fullNameLabel')}</Label>
                 <Input
                   id="full_name"
                   value={formData.full_name}
@@ -469,7 +472,7 @@ function RouteComponent() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="pin">PIN Code *</Label>
+                <Label htmlFor="pin">{t('admin.admins.pinLabel')}</Label>
                 <Input
                   id="pin"
                   type="number"
@@ -484,10 +487,10 @@ function RouteComponent() {
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button type="submit" disabled={isSubmitting} className="bg-purple-600 hover:bg-purple-700">
-                {isSubmitting ? 'Adding...' : 'Add Administrator'}
+                {isSubmitting ? t('admin.admins.adding') : t('admin.admins.addButton')}
               </Button>
             </DialogFooter>
           </form>
@@ -497,15 +500,15 @@ function RouteComponent() {
       <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Edit Administrator</DialogTitle>
+            <DialogTitle>{t('admin.admins.editTitle')}</DialogTitle>
             <DialogDescription>
-              Update administrator information. Leave PIN empty to keep current.
+              {t('admin.admins.editDesc')}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit}>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
-                <Label htmlFor="edit-full_name">Full Name *</Label>
+                <Label htmlFor="edit-full_name">{t('admin.admins.fullNameLabel')}</Label>
                 <Input
                   id="edit-full_name"
                   value={editData.full_name}
@@ -516,7 +519,7 @@ function RouteComponent() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-pin">New PIN (optional)</Label>
+                <Label htmlFor="edit-pin">{t('admin.admins.newPinLabel')}</Label>
                 <Input
                   id="edit-pin"
                   type="number"
@@ -528,7 +531,7 @@ function RouteComponent() {
                 />
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="edit-status">Status</Label>
+                <Label htmlFor="edit-status">{t('admin.admins.statusLabel')}</Label>
                 <select
                   id="edit-status"
                   value={editData.status}
@@ -537,7 +540,7 @@ function RouteComponent() {
                 >
                   {statuses.map((status) => (
                     <option key={status} value={status}>
-                      {status}
+                      {t(`admin.products.${status}`)}
                     </option>
                   ))}
                 </select>
@@ -551,14 +554,14 @@ function RouteComponent() {
                 disabled={isSubmitting}
               >
                 <Trash2 className="size-4 mr-2" />
-                Delete
+                {t('admin.admins.deleteButton')}
               </Button>
               <div className="flex gap-2">
                 <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button type="submit" disabled={isSubmitting}>
-                  {isSubmitting ? 'Updating...' : 'Update Admin'}
+                  {isSubmitting ? t('admin.admins.updating') : t('admin.admins.updateSubmit')}
                 </Button>
               </div>
             </DialogFooter>
