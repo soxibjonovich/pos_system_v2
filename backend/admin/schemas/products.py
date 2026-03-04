@@ -26,6 +26,8 @@ class ProductResponse(ProductBase):
     id: int
     is_active: bool
     category_id: int | None
+    image_url: str | None = None
+    image_filename: str | None = None
     created_at: datetime
     updated_at: datetime | None = None
 

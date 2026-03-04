@@ -6,7 +6,7 @@ from config import auth, settings
 from crud import (
     create_user_in_db,
     get_active_users,
-    get_user_by_credentials,
+    get_user_by_pin,
     update_last_login,
 )
 from deps import get_current_user
@@ -24,7 +24,9 @@ async def lifespan(app: FastAPI):
     await redis_client.close()
 
 
-auth_app = FastAPI(title="Auth Microservice", version="1.7", lifespan=lifespan, root_path="/api/auth")
+auth_app = FastAPI(
+    title="Auth Microservice", version="1.7", lifespan=lifespan, root_path="/api/auth"
+)
 
 auth_app.add_middleware(
     CORSMiddleware,
@@ -48,8 +50,9 @@ async def get_login_options():
         if not user.status == "active":
             continue
         valid_users.append(user)
-    
+
     return {"users": valid_users}
+
 
 @auth_app.post(
     "/register",
@@ -76,7 +79,7 @@ async def register(user_in: auth_schemas.UserCreate):
     tags=["Authentication"],
 )
 async def login(user_in: auth_schemas.UserLogin):
-    user = await get_user_by_credentials(user_in.user_id, user_in.pin)
+    user = await get_user_by_pin(user_in.pin)
 
     if not user:
         raise HTTPException(
@@ -92,7 +95,11 @@ async def login(user_in: auth_schemas.UserLogin):
     await redis_client.set_token(user.username, token)
     await update_last_login(user.id, user.username)
     return auth_schemas.TokenResponse(
-        access_token=token, role=user.role, token_type="bearer", expires_at=7
+        access_token=token,
+        role=user.role,
+        user_id=user.id,
+        token_type="bearer",
+        expires_at=7,
     )
 
 

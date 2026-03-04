@@ -34,7 +34,7 @@ async def create_user(
     user_in: schema.UserCreate,
     _: User = Depends(get_current_admin),
 ):
-    """Create a new user (cashier/manager)"""
+    """Create a new user (staff/chef/admin)"""
     user = await crud.create_user(user_in)
     if not user:
         raise HTTPException(
@@ -78,7 +78,7 @@ async def update_user_role(
     role_data: schema.UserRoleUpdate,
     # current_admin: User = Depends(get_current_admin),
 ):
-    """Update user role (admin, manager, cashier)"""
+    """Update user role (admin, staff, chef)"""
     try:
         # # Prevent self-demotion
         # if user_id == current_admin.id and role_data.role != "admin":
@@ -95,7 +95,7 @@ async def update_user_role(
             )
 
         # Validate role
-        valid_roles = ["admin", "manager", "cashier"]
+        valid_roles = ["admin", "staff", "chef"]
         if role_data.role not in valid_roles:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

@@ -1,515 +1,525 @@
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Textarea } from "@/components/ui/textarea"
-import { api, API_URL } from '@/config'
-import { useAuth } from '@/contexts/auth-context'
-import { AuthGuard } from '@/middlewares/AuthGuard'
+// frontend/src/routes/admin/products/index.tsx - COMPLETE WITH IMAGES
+
+import { useState, useEffect } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
-import { Package, Pencil, Plus, RefreshCw, Search, Tag, Trash2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Plus, Edit, Trash2, Image as ImageIcon, Search, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { api, API_URL } from '@/config'
+import { AuthGuard } from '@/middlewares/AuthGuard'
 
-interface Product{
-  id:number
-  title:string
-  description:string|null
-  category_id:number|null
-  quantity:number
-  price:number
-  is_active:boolean
-  created_at:string
-  updated_at:string|null
-}
-
-interface Category{
-  id:number
-  name:string
-  is_active:boolean
-}
-
-interface ProductFormData{
-  title:string
-  description:string
-  category_id:number|null
-  quantity:number
-  price:number
-  is_active:boolean
-}
-
-const PRODUCTS_URL=`${API_URL}${api.admin.base}/${api.admin.products}`
-const CATEGORIES_URL=`${API_URL}${api.admin.base}/${api.admin.categories}`
-
-const formatPrice=(n:number)=>`${Math.floor(n).toLocaleString('uz-UZ')} so'm`
-
-export const Route=createFileRoute('/admin/products/')({
-  component:()=>(
+export const Route = createFileRoute('/admin/products/')({
+  component: () => (
     <AuthGuard allowedRoles={['admin']}>
-      <RouteComponent/>
+      <ProductsPage />
     </AuthGuard>
   ),
 })
 
-function RouteComponent(){
-  const {token}=useAuth()
+interface Product {
+  id: number
+  title: string
+  description?: string
+  price: number
+  quantity: number
+  category_id?: number
+  is_active: boolean
+  image_url?: string
+  image_filename?: string
+  created_at: string
+  updated_at?: string
+}
 
-  const [products,setProducts]=useState<Product[]>([])
-  const [categories,setCategories]=useState<Category[]>([])
-  const [filteredProducts,setFilteredProducts]=useState<Product[]>([])
-  const [isLoading,setIsLoading]=useState(true)
-  const [error,setError]=useState<string|null>(null)
+interface Category {
+  id: number
+  name: string
+  is_active: boolean
+}
 
-  const [searchQuery,setSearchQuery]=useState('')
-  const [categoryFilter,setCategoryFilter]=useState('')
-  const [statusFilter,setStatusFilter]=useState('')
+export default function ProductsPage() {
+  const [products, setProducts] = useState<Product[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const [addModal,setAddModal]=useState(false)
-  const [editModal,setEditModal]=useState(false)
-  const [deleteConfirm,setDeleteConfirm]=useState(false)
-  const [selectedProduct,setSelectedProduct]=useState<Product|null>(null)
-  const [isSubmitting,setIsSubmitting]=useState(false)
-
-  const [formData,setFormData]=useState<ProductFormData>({
-    title:'',
-    description:'',
-    category_id:null,
-    quantity:0,
-    price:0,
-    is_active:true,
+  // Form state
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    price: 0,
+    quantity: -1,
+    category_id: undefined as number | undefined,
+    is_active: true,
   })
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [removeImage, setRemoveImage] = useState(false)
 
-  const fetchData=async()=>{
-    setIsLoading(true)
-    setError(null)
-    try{
-      const headers={
-        'Content-Type':'application/json',
-        'Authorization':`Bearer ${token}`,
-      }
-      
-      const [prodRes,catRes]=await Promise.all([
-        fetch(PRODUCTS_URL,{headers}),
-        fetch(CATEGORIES_URL,{headers})
-      ])
-      
-      if(!prodRes.ok||!catRes.ok)throw new Error('Yuklanish xatosi')
+  useEffect(() => {
+    fetchProducts()
+    fetchCategories()
+  }, [])
 
-      const prodData=await prodRes.json()
-      const catData=await catRes.json()
-      const products=prodData.products||[]
-
-      setProducts(products)
-      setCategories(catData.categories||[])
-      setFilteredProducts(products)
-    }catch(e){
-      setError(e instanceof Error?e.message:'Xato')
-    }finally{
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(()=>{
-    if(token)fetchData()
-  },[token])
-
-  useEffect(()=>{
-    let filtered=[...products]
-    if(searchQuery.trim()){
-      const q=searchQuery.toLowerCase()
-      filtered=filtered.filter(p=>
-        p.title.toLowerCase().includes(q)||
-        (p.description||'').toLowerCase().includes(q)
-      )
-    }
-    if(categoryFilter)filtered=filtered.filter(p=>p.category_id===parseInt(categoryFilter))
-    if(statusFilter)filtered=filtered.filter(p=>(p.is_active?'active':'inactive')===statusFilter)
-    setFilteredProducts(filtered)
-  },[searchQuery,categoryFilter,statusFilter,products])
-
-  const addProduct=async()=>{
-    setIsSubmitting(true)
-    try{
-      const headers={
-        'Content-Type':'application/json',
-        'Authorization':`Bearer ${token}`,
-      }
-      
-      const res=await fetch(PRODUCTS_URL,{
-        method:'POST',
-        headers,
-        body:JSON.stringify({
-          title:formData.title,
-          description:formData.description||null,
-          category_id:formData.category_id,
-          quantity:formData.quantity,
-          price:formData.price,
-          is_active:formData.is_active,
-        })
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch(`${API_URL}${api.admin.base}/${api.admin.products}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('postoken')}`
+        }
       })
-      
-      if(!res.ok){
-        const err=await res.json().catch(()=>({}))
-        throw new Error(err.detail||'Qo\'shish xatosi')
-      }
-      
-      await fetchData()
-      setAddModal(false)
-      resetForm()
-    }catch(e){
-      alert(e instanceof Error?e.message:'Xato')
-    }finally{
-      setIsSubmitting(false)
+      const data = await response.json()
+      setProducts(data.products || [])
+    } catch (error) {
+      console.error('Failed to fetch products:', error)
     }
   }
 
-  const updateProduct=async()=>{
-    if(!selectedProduct)return
-    setIsSubmitting(true)
-    try{
-      const headers={
-        'Content-Type':'application/json',
-        'Authorization':`Bearer ${token}`,
-      }
-      
-      const res=await fetch(`${PRODUCTS_URL}/${selectedProduct.id}`,{
-        method:'PUT',
-        headers,
-        body:JSON.stringify({
-          title:formData.title,
-          description:formData.description||null,
-          category_id:formData.category_id?Number(formData.category_id):null,
-          quantity:formData.quantity,
-          price:formData.price,
-          is_active:formData.is_active,
-        })
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`${API_URL}${api.admin.base}/${api.admin.categories}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('postoken')}`
+        }
       })
-      
-      if(!res.ok){
-        const err=await res.json().catch(()=>({}))
-        throw new Error(err.detail||'Yangilash xatosi')
-      }
-      
-      await fetchData()
-      setEditModal(false)
-      resetForm()
-    }catch(e){
-      alert(e instanceof Error?e.message:'Xato')
-    }finally{
-      setIsSubmitting(false)
+      const data = await response.json()
+      setCategories(data.categories || [])
+    } catch (error) {
+      console.error('Failed to fetch categories:', error)
     }
   }
 
-  const deleteProduct=async()=>{
-    if(!selectedProduct)return
-    setIsSubmitting(true)
-    try{
-      const headers={
-        'Content-Type':'application/json',
-        'Authorization':`Bearer ${token}`,
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+      if (!allowedTypes.includes(file.type)) {
+        alert('Invalid file type. Allowed: JPG, PNG, WEBP, GIF')
+        return
       }
       
-      const res=await fetch(`${PRODUCTS_URL}/${selectedProduct.id}`,{
-        method:'DELETE',
-        headers
+      if (file.size > 5 * 1024 * 1024) {
+        alert('File too large. Maximum size: 5MB')
+        return
+      }
+      
+      setImageFile(file)
+      setRemoveImage(false)
+      
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleRemoveImage = () => {
+    setImageFile(null)
+    setImagePreview(null)
+    setRemoveImage(true)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+
+    try {
+      const payload = new FormData()
+      payload.append('title', formData.title)
+      payload.append('price', String(formData.price))
+      payload.append('quantity', String(formData.quantity))
+      payload.append('is_active', String(formData.is_active))
+
+      if (formData.description.trim()) {
+        payload.append('description', formData.description)
+      }
+
+      if (formData.category_id !== undefined) {
+        payload.append('category_id', String(formData.category_id))
+      }
+
+      if (imageFile) {
+        payload.append('image', imageFile)
+      }
+
+      if (removeImage) {
+        payload.append('remove_image', 'true')
+      }
+
+      const url = editingProduct
+        ? `${API_URL}${api.admin.base}/${api.admin.products}/${editingProduct.id}`
+        : `${API_URL}${api.admin.base}/${api.admin.products}`
+
+      const response = await fetch(url, {
+        method: editingProduct ? 'PUT' : 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('postoken')}`,
+        },
+        body: payload
       })
-      
-      if(!res.ok){
-        const err=await res.json().catch(()=>({}))
-        throw new Error(err.detail||'O\'chish xatosi')
+
+      if (response.ok) {
+        await fetchProducts()
+        handleCloseForm()
+      } else {
+        const error = await response.json().catch(() => ({}))
+        const detail = Array.isArray(error?.detail)
+          ? error.detail[0]?.msg || 'Failed to save product'
+          : error?.detail || 'Failed to save product'
+        alert(`Error: ${detail}`)
       }
-      
-      await fetchData()
-      setDeleteConfirm(false)
-      setEditModal(false)
-      setSelectedProduct(null)
-      resetForm()
-    }catch(e){
-      alert(e instanceof Error?e.message:'Xato')
-    }finally{
-      setIsSubmitting(false)
+    } catch (error) {
+      console.error('Error saving product:', error)
+      alert('Failed to save product')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const resetForm=()=>setFormData({title:'',description:'',category_id:null,quantity:0,price:0,is_active:true})
+  const handleDelete = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this product?')) return
 
-  const openAdd=()=>{resetForm();setAddModal(true)}
+    try {
+      const response = await fetch(`${API_URL}${api.admin.base}/${api.admin.products}/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('postoken')}`
+        }
+      })
 
-  const openEdit=(p:Product)=>{
-    setSelectedProduct(p)
-    setFormData({title:p.title,description:p.description||'',category_id:p.category_id,quantity:p.quantity,price:p.price,is_active:p.is_active})
-    setEditModal(true)
+      if (response.ok) {
+        await fetchProducts()
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error)
+    }
   }
 
-  const getCategoryName=(id:number|null)=>{
-    if(!id)return '-'
-    return categories.find(c=>c.id===id)?.name||'-'
+  const handleEdit = (product: Product) => {
+    setEditingProduct(product)
+    setFormData({
+      title: product.title,
+      description: product.description || '',
+      price: product.price,
+      quantity: product.quantity,
+      category_id: product.category_id,
+      is_active: product.is_active,
+    })
+    setImagePreview(product.image_url ? `${API_URL}${api.admin.base}${product.image_url}` : null)
+    setImageFile(null)
+    setRemoveImage(false)
+    setShowForm(true)
   }
 
-  if(isLoading){
-    return(
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <RefreshCw className="size-10 animate-spin text-blue-600 mx-auto mb-3"/>
-          <p className="text-muted-foreground">Yuklanmoqda...</p>
-        </div>
-      </div>
-    )
+  const handleCloseForm = () => {
+    setShowForm(false)
+    setEditingProduct(null)
+    setFormData({
+      title: '',
+      description: '',
+      price: 0,
+      quantity: -1,
+      category_id: undefined,
+      is_active: true,
+    })
+    setImageFile(null)
+    setImagePreview(null)
+    setRemoveImage(false)
   }
 
-  if(error){
-    return(
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <Package className="size-16 text-red-400 mx-auto mb-4"/>
-          <p className="text-destructive font-semibold mb-4">{error}</p>
-          <Button onClick={fetchData}><RefreshCw className="size-4 mr-2"/>Qayta yuklash</Button>
-        </div>
-      </div>
-    )
-  }
+  const filteredProducts = products.filter(p =>
+    p.title.toLowerCase().includes(searchQuery.toLowerCase())
+  )
 
-  return(
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Package className="size-7 text-blue-600"/>
-          <h1 className="text-2xl font-bold">Mahsulotlar</h1>
-          <span className="text-sm text-muted-foreground bg-muted px-3 py-1 rounded-full font-semibold">{products.length} ta</span>
+  return (
+    <div className="p-6">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-3xl font-bold">Products</h1>
+          <p className="text-gray-600 mt-1">{products.length} total products</p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={fetchData}><RefreshCw className="size-4 mr-2"/>Yangilash</Button>
-          <Button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700">
-            <Plus className="size-4 mr-2"/>Mahsulot qo'shish
-          </Button>
-        </div>
+        <Button onClick={() => setShowForm(true)} size="lg">
+          <Plus className="mr-2 size-5" />
+          Add Product
+        </Button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-muted-foreground"/>
-          <Input type="text" placeholder="Mahsulot qidirish..." value={searchQuery} onChange={(e)=>setSearchQuery(e.target.value)} className="pl-10 h-11"/>
+      {/* Search */}
+      <div className="mb-6">
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
+          <Input
+            placeholder="Search products..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
         </div>
-        <select value={categoryFilter} onChange={(e)=>setCategoryFilter(e.target.value)} className="h-11 rounded-md border border-input bg-background px-4 text-sm">
-          <option value="">Barcha kategoriyalar</option>
-          {categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <select value={statusFilter} onChange={(e)=>setStatusFilter(e.target.value)} className="h-11 rounded-md border border-input bg-background px-4 text-sm">
-          <option value="">Barcha holatlar</option>
-          <option value="active">Faol</option>
-          <option value="inactive">Faol emas</option>
-        </select>
-        {(searchQuery||categoryFilter||statusFilter)&&(
-          <Button variant="outline" onClick={()=>{setSearchQuery('');setCategoryFilter('');setStatusFilter('')}}>Tozalash</Button>
-        )}
       </div>
 
-      <div className="border rounded-lg">
-        <Table>
-          <TableCaption>
-            {!filteredProducts.length?'Mahsulot topilmadi':`${filteredProducts.length} / ${products.length} ta mahsulot ko'rsatilmoqda`}
-          </TableCaption>
-          <TableHeader>
-            <TableRow>
-              <TableHead>#</TableHead>
-              <TableHead>Mahsulot</TableHead>
-              <TableHead>Kategoriya</TableHead>
-              <TableHead>Tavsif</TableHead>
-              <TableHead>Ombor</TableHead>
-              <TableHead>Narx</TableHead>
-              <TableHead>Holat</TableHead>
-              <TableHead className="text-right">Amal</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {!filteredProducts.length?(
-              <TableRow>
-                <TableCell colSpan={8} className="text-center py-16">
-                  <Package className="size-16 mx-auto mb-4 text-muted-foreground"/>
-                  <p className="text-muted-foreground text-lg font-semibold">Mahsulot topilmadi</p>
-                  <Button variant="link" className="mt-2" onClick={openAdd}>Mahsulot qo'shish</Button>
-                </TableCell>
-              </TableRow>
-            ):filteredProducts.map(p=>(
-              <TableRow key={p.id}>
-                <TableCell className="font-bold">{p.id}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg"><Package className="size-4 text-blue-600 dark:text-blue-400"/></div>
-                    <span className="font-semibold">{p.title}</span>
+      {/* Products Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {filteredProducts.map((product) => (
+          <div 
+            key={product.id} 
+            className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow bg-white dark:bg-black dark:border-gray-900"
+          >
+            {/* Product Image */}
+            {product.image_url ? (
+              <img
+                src={`${API_URL}${api.admin.base}${product.image_url}`}
+                alt={product.title}
+                className="w-full h-48 object-cover bg-gray-100"
+              />
+            ) : (
+              <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                <ImageIcon className="size-16 text-gray-300" />
+              </div>
+            )}
+            
+            {/* Product Info */}
+            <div className="p-4">
+              <div className="flex items-start justify-between mb-2">
+                <h3 className="font-bold text-lg line-clamp-1 flex-1">{product.title}</h3>
+                <span className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
+                  product.is_active 
+                    ? 'bg-green-100 text-green-700' 
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {product.is_active ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+
+              {product.description && (
+                <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                  {product.description}
+                </p>
+              )}
+
+              <div className="mb-3">
+                <p className="text-2xl font-bold text-green-600">
+                  {product.price.toLocaleString()} so'm
+                </p>
+              </div>
+              
+              <div className="flex items-center justify-between text-sm mb-4">
+                <span className={`font-medium ${
+                  product.quantity === -1 
+                    ? 'text-blue-600' 
+                    : product.quantity === 0 
+                    ? 'text-red-600' 
+                    : 'text-gray-600'
+                }`}>
+                  {product.quantity === -1 
+                    ? '∞ Unlimited' 
+                    : `Stock: ${product.quantity}`
+                  }
+                </span>
+                
+                {product.category_id && (
+                  <span className="text-gray-500">
+                    {categories.find(c => c.id === product.category_id)?.name || 'No Category'}
+                  </span>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEdit(product)}
+                  className="flex-1"
+                >
+                  <Edit className="mr-1 size-4" />
+                  Edit
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleDelete(product.id)}
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {filteredProducts.length === 0 && (
+        <div className="text-center py-16">
+          <ImageIcon className="size-16 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500 text-lg">No products found</p>
+          {searchQuery && (
+            <p className="text-gray-400 text-sm mt-2">
+              Try adjusting your search
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Product Form Dialog */}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">
+              {editingProduct ? 'Edit Product' : 'Add New Product'}
+            </DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="space-y-6 mt-4">
+            {/* Image Upload */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Product Image</label>
+              {imagePreview ? (
+                <div className="relative w-full h-64 border-2 border-gray-300 rounded-lg overflow-hidden">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-full h-full object-contain bg-gray-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-full hover:bg-red-700 shadow-lg"
+                  >
+                    <Trash2 className="size-5" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 transition-colors">
+                  <div className="flex flex-col items-center justify-center py-8">
+                    <ImageIcon className="size-16 text-gray-400 mb-3" />
+                    <p className="text-sm text-gray-600 font-medium mb-1">Click to upload image</p>
+                    <p className="text-xs text-gray-500">JPG, PNG, WEBP, GIF (max 5MB)</p>
                   </div>
-                </TableCell>
-                <TableCell>
-                  {p.category_id?(
-                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-400">
-                      <Tag className="size-3 mr-1"/>{getCategoryName(p.category_id)}
-                    </span>
-                  ):<span className="text-muted-foreground">-</span>}
-                </TableCell>
-                <TableCell className="text-muted-foreground max-w-xs truncate">{p.description||'-'}</TableCell>
-                <TableCell>
-                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${
-                    p.quantity===-1?'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-400':
-                    p.quantity===0?'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400':
-                    p.quantity<10?'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400':
-                    'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400'
-                  }`}>
-                    {p.quantity===-1?'∞ Cheksiz':p.quantity===0?'Tugangan':`${p.quantity} dona`}
-                  </span>
-                </TableCell>
-                <TableCell className="font-bold text-green-600 dark:text-green-400">{formatPrice(p.price)}</TableCell>
-                <TableCell>
-                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold ${
-                    p.is_active?'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400':'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-400'
-                  }`}>
-                    {p.is_active?'Faol':'Faol emas'}
-                  </span>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button variant="ghost" size="icon" onClick={()=>openEdit(p)}><Pencil className="size-4"/></Button>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Add Modal */}
-      <Dialog open={addModal} onOpenChange={setAddModal}>
-        <DialogContent className="sm:max-w-125">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Package className="size-5 text-blue-600"/>Mahsulot qo'shish
-            </DialogTitle>
-            <DialogDescription>Mahsulot ma'lumotlarini kiriting. Miqdorni -1 qilib cheksiz ombor qo'rtirish mumkin.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="add-title">Mahsulot nomi *</Label>
-              <Input id="add-title" value={formData.title} onChange={(e)=>setFormData(prev=>({...prev,title:e.target.value}))} required placeholder="Mahsulot nomi"/>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                    onChange={handleImageSelect}
+                    className="hidden"
+                  />
+                </label>
+              )}
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-category">Kategoriya</Label>
-              <select id="add-category" value={formData.category_id||''} onChange={(e)=>setFormData(prev=>({...prev,category_id:e.target.value?parseInt(e.target.value):null}))} className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <option value="">Kategoriya yo'q</option>
-                {categories.filter(c=>c.is_active).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+
+            {/* Title */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Product Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                required
+                placeholder="e.g., Pepperoni Pizza"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Description</label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Product description..."
+                rows={3}
+                className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            {/* Price and Quantity */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Price (so'm) <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  type="number"
+                  value={formData.price}
+                  onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
+                  required
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Stock Quantity</label>
+                <Input
+                  type="number"
+                  value={formData.quantity}
+                  onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) })}
+                  placeholder="-1 for unlimited"
+                />
+                <p className="text-xs text-gray-500 mt-1">-1 = Unlimited stock</p>
+              </div>
+            </div>
+
+            {/* Category */}
+            <div>
+              <label className="block text-sm font-medium mb-2">Category</label>
+              <select
+                value={formData.category_id || ''}
+                onChange={(e) => setFormData({ 
+                  ...formData, 
+                  category_id: e.target.value ? parseInt(e.target.value) : undefined 
+                })}
+                className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">No Category</option>
+                {categories.filter(c => c.is_active).map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
               </select>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="add-desc">Tavsif</Label>
-              <Textarea id="add-desc" value={formData.description} onChange={(e)=>setFormData(prev=>({...prev,description:e.target.value}))} placeholder="Mahsulot tavsifi" rows={3}/>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="add-qty">
-                  Miqdor *
-                  <span className="text-xs text-muted-foreground block">(-1 = cheksiz)</span>
-                </Label>
-                <Input id="add-qty" type="number" value={formData.quantity} onChange={(e)=>setFormData(prev=>({...prev,quantity:Number(e.target.value)}))} required/>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="add-price">Narx (so'm) *</Label>
-                <Input id="add-price" type="number" value={formData.price} onChange={(e)=>setFormData(prev=>({...prev,price:Number(e.target.value)}))} required placeholder="12000"/>
-              </div>
-            </div>
-            {formData.price>0&&(
-              <p className="text-sm text-muted-foreground">Narx: <span className="font-semibold text-green-600">{formatPrice(formData.price)}</span></p>
-            )}
-            <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-              <input type="checkbox" id="add-active" checked={formData.is_active} onChange={(e)=>setFormData(prev=>({...prev,is_active:e.target.checked}))} className="size-4 rounded border-gray-300"/>
-              <Label htmlFor="add-active" className="cursor-pointer">Mahsulot faol</Label>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={()=>setAddModal(false)}>Bekor</Button>
-            <Button onClick={addProduct} disabled={isSubmitting||!formData.title||formData.price<=0} className="bg-blue-600 hover:bg-blue-700">
-              {isSubmitting?<><RefreshCw className="size-4 mr-2 animate-spin"/>Qo'shilmoqda...</>:'Qo\'shish'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      {/* Edit Modal */}
-      <Dialog open={editModal} onOpenChange={setEditModal}>
-        <DialogContent className="sm:max-w-125">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Pencil className="size-5 text-blue-600"/>Mahsulotni tahrirlash
-            </DialogTitle>
-            <DialogDescription>Mahsulot #{selectedProduct?.id} ma'lumotlarini o'zgartiring</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="edit-title">Mahsulot nomi *</Label>
-              <Input id="edit-title" value={formData.title} onChange={(e)=>setFormData(prev=>({...prev,title:e.target.value}))} required placeholder="Mahsulot nomi"/>
+            {/* Active Status */}
+            <div className="flex items-center gap-3 p-4 border rounded-lg">
+              <input
+                type="checkbox"
+                id="is_active"
+                checked={formData.is_active}
+                onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
+                className="size-5 cursor-pointer"
+              />
+              <label htmlFor="is_active" className="text-sm font-medium cursor-pointer">
+                Active (visible to staff in POS)
+              </label>
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-category">Kategoriya</Label>
-              <select id="edit-category" value={formData.category_id||''} onChange={(e)=>setFormData(prev=>({...prev,category_id:e.target.value?parseInt(e.target.value):null}))} className="h-9 rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                <option value="">Kategoriya yo'q</option>
-                {categories.filter(c=>c.is_active).map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="edit-desc">Tavsif</Label>
-              <Textarea id="edit-desc" value={formData.description} onChange={(e)=>setFormData(prev=>({...prev,description:e.target.value}))} placeholder="Mahsulot tavsifi" rows={3}/>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="edit-qty">
-                  Miqdor *
-                  <span className="text-xs text-muted-foreground block">(-1 = cheksiz)</span>
-                </Label>
-                <Input id="edit-qty" type="number" value={formData.quantity} onChange={(e)=>setFormData(prev=>({...prev,quantity:Number(e.target.value)}))} required/>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="edit-price">Narx (so'm) *</Label>
-                <Input id="edit-price" type="number" value={formData.price} onChange={(e)=>setFormData(prev=>({...prev,price:Number(e.target.value)}))} required placeholder="12000"/>
-              </div>
-            </div>
-            {formData.price>0&&(
-              <p className="text-sm text-muted-foreground">Narx: <span className="font-semibold text-green-600">{formatPrice(formData.price)}</span></p>
-            )}
-            <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-              <input type="checkbox" id="edit-active" checked={formData.is_active} onChange={(e)=>setFormData(prev=>({...prev,is_active:e.target.checked}))} className="size-4 rounded border-gray-300"/>
-              <Label htmlFor="edit-active" className="cursor-pointer">Mahsulot faol</Label>
-            </div>
-          </div>
-          <DialogFooter className="flex justify-between">
-            <Button variant="destructive" onClick={()=>setDeleteConfirm(true)} disabled={isSubmitting}>
-              <Trash2 className="size-4 mr-2"/>O'chish
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={()=>setEditModal(false)}>Bekor</Button>
-              <Button onClick={updateProduct} disabled={isSubmitting||!formData.title||formData.price<=0}>
-                {isSubmitting?<><RefreshCw className="size-4 mr-2 animate-spin"/>Yangilanmoqda...</>:'Saqlash'}
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-4 border-t">
+              <Button type="submit" disabled={loading} className="flex-1" size="lg">
+                {loading ? (
+                  <>
+                    <div className="size-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    {editingProduct ? 'Update Product' : 'Create Product'}
+                  </>
+                )}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={handleCloseForm}
+                size="lg"
+              >
+                Cancel
               </Button>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirm Modal */}
-      <Dialog open={deleteConfirm} onOpenChange={setDeleteConfirm}>
-        <DialogContent className="sm:max-w-100">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 className="size-5"/>Mahsulotni o'chish
-            </DialogTitle>
-            <DialogDescription>
-              <span className="font-semibold">"{selectedProduct?.title}"</span> mahsulotini haqiqatdan o'chish istaysiz? Bu amal qaytarilmas.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={()=>setDeleteConfirm(false)}>Bekor</Button>
-            <Button variant="destructive" onClick={deleteProduct} disabled={isSubmitting}>
-              {isSubmitting?<><RefreshCw className="size-4 mr-2 animate-spin"/>O'chilmoqda...</>:'Ha, o\'chish'}
-            </Button>
-          </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
   )
 }
-
-export default RouteComponent

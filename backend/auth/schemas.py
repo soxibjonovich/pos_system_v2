@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserBase(BaseModel):
@@ -35,7 +36,6 @@ class UserResponse(UserBase):
 
 
 class UserLogin(BaseModel):
-    user_id: int = Field(..., gt=0, description="Selected user ID")
     pin: int = Field(..., ge=1000, le=999999, description="User PIN")
 
     @field_validator("pin")
@@ -71,6 +71,7 @@ class UserLoginOptionsResponse(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     role: str
+    user_id: int
     token_type: str = "bearer"
     expires_at: int  # unix timestamp usually
 

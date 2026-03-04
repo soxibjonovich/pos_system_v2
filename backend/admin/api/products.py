@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from .deps import get_current_admin
 from crud import products as product_crud
 from schemas import products as product_schema
@@ -38,10 +40,24 @@ async def get_product(
     status_code=status.HTTP_201_CREATED,
 )
 async def create_product(
-    product: product_schema.ProductCreate,
+    title: str = Form(...),
+    description: Optional[str] = Form(None),
+    price: float = Form(...),
+    quantity: int = Form(-1),
+    category_id: Optional[int] = Form(None),
+    is_active: bool = Form(True),
+    image: Optional[UploadFile] = File(None),
     _: user_schema.User = Depends(get_current_admin),
 ):
-    created_product = await product_crud.create_product(product)
+    created_product = await product_crud.create_product(
+        title=title,
+        description=description,
+        price=price,
+        quantity=quantity,
+        category_id=category_id,
+        is_active=is_active,
+        image=image,
+    )
 
     if not created_product:
         raise HTTPException(
@@ -58,10 +74,27 @@ async def create_product(
 )
 async def update_product(
     product_id: int,
-    product: product_schema.ProductUpdate,
+    title: Optional[str] = Form(None),
+    description: Optional[str] = Form(None),
+    price: Optional[float] = Form(None),
+    quantity: Optional[int] = Form(None),
+    category_id: Optional[int] = Form(None),
+    is_active: Optional[bool] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    remove_image: bool = Form(False),
     _: user_schema.User = Depends(get_current_admin),
 ):
-    updated_product = await product_crud.update_product(product_id, product)
+    updated_product = await product_crud.update_product(
+        product_id=product_id,
+        title=title,
+        description=description,
+        price=price,
+        quantity=quantity,
+        category_id=category_id,
+        is_active=is_active,
+        image=image,
+        remove_image=remove_image,
+    )
 
     if not updated_product:
         raise HTTPException(

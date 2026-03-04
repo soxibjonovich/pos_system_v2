@@ -1,5 +1,6 @@
 from authx.exceptions import AuthXException, MissingTokenError, NoAuthorizationError
 from fastapi import FastAPI, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
@@ -66,6 +67,21 @@ async def authx_error_handler(request: Request, exc: NoAuthorizationError):
         status_code=status.HTTP_401_UNAUTHORIZED,
         content={"detail": "Access denied: Authentication failed"},
         headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request: Request, exc: RequestValidationError):
+    sanitized_errors = []
+    for err in exc.errors():
+        cleaned = dict(err)
+        if isinstance(cleaned.get("input"), (bytes, bytearray)):
+            cleaned["input"] = "<binary>"
+        sanitized_errors.append(cleaned)
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": sanitized_errors},
     )
 
 

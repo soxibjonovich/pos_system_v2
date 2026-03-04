@@ -9,6 +9,8 @@ class ProductBase(BaseModel):
     quantity: int = Field(..., ge=-1, description="Stock quantity. -1 for unlimited")
     price: float = Field(..., gt=0, description="Selling price")
     is_active: bool = Field(True, description="Product availability status")
+    image_url: str | None = None
+    image_filename: str | None = None 
 
 
 class ProductCreate(ProductBase):
@@ -22,6 +24,8 @@ class ProductUpdate(BaseModel):
     quantity: int | None = Field(None, ge=-1)
     price: float | None = Field(None, gt=0)
     is_active: bool | None = None
+    image_url: str | None = None
+    image_filename: str | None = None
 
 
 class ProductResponse(ProductBase):

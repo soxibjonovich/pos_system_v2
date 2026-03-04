@@ -1,32 +1,33 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useAuth } from "@/contexts/auth-context";
 
 export const Route = createFileRoute("/")({
   component: IndexRoute,
-})
+});
 
 function IndexRoute() {
-  const navigate = useNavigate()
-  const { isAuthenticated, role, isLoading, checkAuth } = useAuth()
+  const navigate = useNavigate();
+  const { isAuthenticated, role, isLoading, checkAuth } = useAuth();
 
   useEffect(() => {
     const redirectUser = async () => {
-      if (isLoading) return
+      if (isLoading) return;
 
-      const hasAuth = checkAuth()
+      const hasAuth = checkAuth();
 
-      let target = "/login"
+      let target = "/login";
 
       if (hasAuth && isAuthenticated && role) {
-        target = role === "admin" ? "/admin" : "/staff"
+        target =
+          role === "admin" ? "/admin" : role === "chef" ? "/chef" : "/staff";
       }
 
-      navigate({ to: target, replace: true })
-    }
+      navigate({ to: target, replace: true });
+    };
 
-    redirectUser()
-  }, [isAuthenticated, role, isLoading, navigate, checkAuth])
+    redirectUser();
+  }, [isAuthenticated, role, isLoading, navigate, checkAuth]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-900">
@@ -35,5 +36,5 @@ function IndexRoute() {
         <p className="text-gray-300">Loading...</p>
       </div>
     </div>
-  )
+  );
 }

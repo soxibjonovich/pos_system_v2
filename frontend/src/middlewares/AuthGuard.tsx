@@ -1,101 +1,117 @@
-import { API_URL } from '@/config'
-import { useNavigate } from '@tanstack/react-router'
-import { useEffect, useState, useRef } from 'react'
+import { API_URL } from "@/config";
+import { useNavigate } from "@tanstack/react-router";
+import { useEffect, useState, useRef } from "react";
 
 interface AuthGuardProps {
-  children: React.ReactNode
-  allowedRoles?: string[]
-  requireAuth?: boolean
+  children: React.ReactNode;
+  allowedRoles?: string[];
+  requireAuth?: boolean;
 }
 
-const TOKEN_KEY = 'postoken'
-const ROLE_KEY = 'posrole'
-const USER_ID_KEY = 'userId'
-const INACTIVITY_TIMEOUT = 30000
+const TOKEN_KEY = "postoken";
+const ROLE_KEY = "posrole";
+const USER_ID_KEY = "userId";
+const INACTIVITY_TIMEOUT = 30000;
 
 export function AuthGuard({
   children,
   allowedRoles,
   requireAuth = true,
 }: AuthGuardProps) {
-  const navigate = useNavigate()
-  const [isChecking, setIsChecking] = useState(true)
-  const [isAuthorized, setIsAuthorized] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const hasCheckedRef = useRef(false)
-  const hasSetupAutoLogoutRef = useRef(false)
+  const navigate = useNavigate();
+  const [isChecking, setIsChecking] = useState(true);
+  const [isAuthorized, setIsAuthorized] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasCheckedRef = useRef(false);
+  const hasSetupAutoLogoutRef = useRef(false);
 
   useEffect(() => {
-    if (hasCheckedRef.current) return
-    hasCheckedRef.current = true
+    if (hasCheckedRef.current) return;
+    hasCheckedRef.current = true;
 
-    const token = localStorage.getItem(TOKEN_KEY)
-    const role = localStorage.getItem(ROLE_KEY)
-    const userId = localStorage.getItem(USER_ID_KEY)
+    const token = localStorage.getItem(TOKEN_KEY);
+    const role = localStorage.getItem(ROLE_KEY);
+    const userId = localStorage.getItem(USER_ID_KEY);
 
     if (requireAuth && (!token || !userId || !role)) {
-      localStorage.clear()
-      navigate({ to: '/login', replace: true })
-      return
+      localStorage.clear();
+      navigate({ to: "/login", replace: true });
+      return;
     }
 
     if (allowedRoles?.length && role) {
       if (!allowedRoles.includes(role)) {
-        const dest = role === 'admin' ? '/admin' : ['staff', 'cashier', 'manager'].includes(role) ? '/staff' : '/login'
-        if (dest === '/login') localStorage.clear()
-        navigate({ to: dest, replace: true })
-        return
+        const dest =
+          role === "admin"
+            ? "/admin"
+            : role === "chef"
+              ? "/chef"
+              : ["staff", "cashier", "manager"].includes(role)
+                ? "/staff"
+                : "/login";
+        if (dest === "/login") localStorage.clear();
+        navigate({ to: dest, replace: true });
+        return;
       }
     }
 
-    setIsAuthorized(true)
-    setIsChecking(false)
-  }, [])
+    setIsAuthorized(true);
+    setIsChecking(false);
+  }, []);
 
   useEffect(() => {
-    if (!isAuthorized || hasSetupAutoLogoutRef.current) return
-    
-    const role = localStorage.getItem(ROLE_KEY)
-    if (!role || !['staff', 'cashier', 'manager'].includes(role)) return
+    if (!isAuthorized || hasSetupAutoLogoutRef.current) return;
 
-    hasSetupAutoLogoutRef.current = true
+    const role = localStorage.getItem(ROLE_KEY);
+    if (!role || !["staff", "cashier", "manager"].includes(role)) return;
+
+    hasSetupAutoLogoutRef.current = true;
 
     const logout = async () => {
-      const token = localStorage.getItem(TOKEN_KEY)
-      
+      const token = localStorage.getItem(TOKEN_KEY);
+
       if (token) {
         fetch(`${API_URL}/api/auth/logout`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'Content-Type': 'application/json',
+            "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-        }).catch(() => {})
+        }).catch(() => {});
       }
-      
-      localStorage.clear()
-      window.location.href = '/login'
-    }
+
+      localStorage.clear();
+      window.location.href = "/login";
+    };
 
     const resetTimer = () => {
       if (timerRef.current) {
-        clearTimeout(timerRef.current)
+        clearTimeout(timerRef.current);
       }
-      timerRef.current = setTimeout(logout, INACTIVITY_TIMEOUT)
-    }
+      timerRef.current = setTimeout(logout, INACTIVITY_TIMEOUT);
+    };
 
-    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']
-    
-    events.forEach(e => document.addEventListener(e, resetTimer, { passive: true }))
-    resetTimer()
+    const events = [
+      "mousedown",
+      "mousemove",
+      "keydown",
+      "scroll",
+      "touchstart",
+      "click",
+    ];
+
+    events.forEach((e) =>
+      document.addEventListener(e, resetTimer, { passive: true }),
+    );
+    resetTimer();
 
     return () => {
       if (timerRef.current) {
-        clearTimeout(timerRef.current)
+        clearTimeout(timerRef.current);
       }
-      events.forEach(e => document.removeEventListener(e, resetTimer))
-    }
-  }, [isAuthorized])
+      events.forEach((e) => document.removeEventListener(e, resetTimer));
+    };
+  }, [isAuthorized]);
 
   if (isChecking) {
     return (
@@ -105,8 +121,8 @@ export function AuthGuard({
           <p className="text-gray-300">Checking permissions...</p>
         </div>
       </div>
-    )
+    );
   }
 
-  return <>{children}</>
+  return <>{children}</>;
 }

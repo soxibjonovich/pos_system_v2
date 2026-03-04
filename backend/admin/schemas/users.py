@@ -1,5 +1,6 @@
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class UserBase(BaseModel):
@@ -9,6 +10,7 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     pin: int = Field(..., ge=1000, le=999999)
+    role: str = Field("staff", description="Role (admin, staff, chef)")
 
     @field_validator("pin")
     @classmethod
@@ -16,6 +18,14 @@ class UserCreate(UserBase):
         pin_str = str(v)
         if len(pin_str) < 4 or len(pin_str) > 6:
             raise ValueError("PIN must be 4-6 digits")
+        return v
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v):
+        valid_roles = ["admin", "staff", "chef"]
+        if v not in valid_roles:
+            raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
         return v
 
 
@@ -54,7 +64,7 @@ class UserUpdate(BaseModel):
     @classmethod
     def validate_role(cls, v):
         if v is not None:
-            valid_roles = ["admin", "manager", "cashier"]
+            valid_roles = ["admin", "staff", "chef"]
             if v not in valid_roles:
                 raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
         return v
@@ -72,12 +82,12 @@ class UserUpdate(BaseModel):
 class UserRoleUpdate(BaseModel):
     """Schema for updating only user role"""
 
-    role: str = Field(..., description="User role: admin, manager, or cashier")
+    role: str = Field(..., description="User role: admin, staff, or chef")
 
     @field_validator("role")
     @classmethod
     def validate_role(cls, v):
-        valid_roles = ["admin", "manager", "cashier"]
+        valid_roles = ["admin", "staff", "chef"]
         if v not in valid_roles:
             raise ValueError(f"Role must be one of: {', '.join(valid_roles)}")
         return v

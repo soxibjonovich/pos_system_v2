@@ -266,6 +266,12 @@ async def update_order_status(order_id: int, info: schemas.OrderStatusUpdate):
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Order {order_id} not found"
         )
+
+    if info.status == "completed" and order.get("status") != "ready":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only ready orders can be marked as completed"
+        )
     
     return await crud.update_order_status(order_id, info.status)
 

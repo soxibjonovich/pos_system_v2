@@ -1,4 +1,4 @@
-import { api } from '@/config'
+import { api, API_URL } from '@/config'
 import { useAuth } from '@/contexts/auth-context'
 import { useBusiness } from '@/contexts/business-context'
 import { AuthGuard } from '@/middlewares/AuthGuard'
@@ -15,6 +15,8 @@ interface Product{
   quantity:number
   price:number
   is_active:boolean
+  image_url?:string
+  image_filename?:string
 }
 
 interface Category{
@@ -49,7 +51,7 @@ export const Route=createFileRoute('/staff/')({
 
 export default function POSTerminal(){
   const navigate=useNavigate()
-  const {logout}=useAuth()  // FIXED: Removed user from destructuring
+  const {logout}=useAuth()
   const {isRestaurant,isLoading:businessLoading}=useBusiness()
   
   const [products,setProducts]=useState<Product[]>([])
@@ -74,7 +76,6 @@ export default function POSTerminal(){
   const searchInputRef=useRef<HTMLInputElement>(null)
   
   const CURRENT_USER_ID=Number(localStorage.getItem("userId"))
-  // FIXED: Get user name from localStorage instead
   const CURRENT_USER_NAME=localStorage.getItem("userName") || "Staff"
 
   useEffect(()=>{
@@ -213,7 +214,7 @@ export default function POSTerminal(){
       }
   
       // 1. Create order on server
-      const response = await fetch(`${api.orders.base}/${api.orders.orders}`, {
+      const response = await fetch(`${API_URL}${api.orders.base}/${api.orders.orders}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -327,7 +328,7 @@ export default function POSTerminal(){
                   value={searchQuery}
                   onChange={(e)=>setSearchQuery(e.target.value)}
                   onFocus={()=>setShowKeyboard(true)}
-                  className="w-full pl-14 pr-16 py-5 text-xl border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 focus:outline-none font-medium"
+                  className="w-full pl-14 pr-16 py-5 text-xl text-black border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 focus:outline-none font-medium"
                   autoComplete="off"
                 />
                 {searchQuery&&(
@@ -390,10 +391,10 @@ export default function POSTerminal(){
             <div className="mb-4 flex items-center justify-between">
               <p className="text-base font-semibold text-gray-700">{filteredProducts.length} ta mahsulot</p>
               <div className="flex gap-2 bg-gray-100 p-2 rounded-xl">
-                <button onClick={()=>setViewMode('grid')} className={`p-3 rounded-lg transition-all ${viewMode==='grid'?'bg-white shadow-md':''}`}>
+                <button onClick={()=>setViewMode('grid')} className={`p-3 rounded-lg transition-all ${viewMode==='grid'?'bg-white shadow-md text-black':'text-gray-300'}`}>
                   <Grid3x3 className="size-5"/>
                 </button>
-                <button onClick={()=>setViewMode('list')} className={`p-3 rounded-lg transition-all ${viewMode==='list'?'bg-white shadow-md':''}`}>
+                <button onClick={()=>setViewMode('list')} className={`p-3 rounded-lg transition-all ${viewMode==='list'?'bg-white shadow-md text-black':'text-gray-300'}`}>
                   <List className="size-5"/>
                 </button>
               </div>
@@ -408,18 +409,35 @@ export default function POSTerminal(){
                     <button
                       key={p.id}
                       onClick={()=>addToCart(p)}
-                      className="p-4 border-2 border-gray-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 hover:shadow-xl transition-all text-left group active:scale-95"
+                      className="border-2 border-gray-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 hover:shadow-xl transition-all text-left group active:scale-95 overflow-hidden"
                     >
-                      <div className="font-bold text-base mb-3 line-clamp-2 min-h-12 text-gray-800">{p.title}</div>
-                      <div className="text-2xl font-black text-green-600 mb-3">{formatPrice(p.price)}</div>
-                      {p.quantity!==-1&&(
-                        <div className={`text-sm font-medium ${p.quantity===0?'text-red-600':'text-gray-600'}`}>
-                          {p.quantity===0?'Tugagan':`Ombor: ${p.quantity}`}
+                      {/* Product Image */}
+                      {p.image_url?(
+                        <div className="w-full h-32 overflow-hidden bg-gray-50">
+                          <img
+                            src={`${api.staff.base.replace('/staff','')}${p.image_url}`}
+                            alt={p.title}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ):(
+                        <div className="w-full h-32 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                          <span className="text-4xl opacity-20 font-bold">{p.title.charAt(0)}</span>
                         </div>
                       )}
-                      <div className="mt-3 flex items-center justify-center gap-2 text-blue-600 opacity-0 group-hover:opacity-100 transition-all">
-                        <Plus className="size-5"/>
-                        <span className="text-base font-bold">Qo'shish</span>
+                      
+                      <div className="p-4">
+                        <div className="font-bold text-base mb-3 line-clamp-2 min-h-12 text-gray-800">{p.title}</div>
+                        <div className="text-2xl font-black text-green-600 mb-3">{formatPrice(p.price)}</div>
+                        {p.quantity!==-1&&(
+                          <div className={`text-sm font-medium ${p.quantity===0?'text-red-600':'text-gray-600'}`}>
+                            {p.quantity===0?'Tugagan':`Ombor: ${p.quantity}`}
+                          </div>
+                        )}
+                        <div className="mt-3 flex items-center justify-center gap-2 text-blue-600 opacity-0 group-hover:opacity-100 transition-all">
+                          <Plus className="size-5"/>
+                          <span className="text-base font-bold">Qo'shish</span>
+                        </div>
                       </div>
                     </button>
                   ))}
@@ -430,8 +448,23 @@ export default function POSTerminal(){
                     <button
                       key={p.id}
                       onClick={()=>addToCart(p)}
-                      className="w-full p-4 border-2 border-gray-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 hover:shadow-xl transition-all text-left flex items-center justify-between group active:scale-[0.98]"
+                      className="w-full p-4 border-2 border-gray-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 hover:shadow-xl transition-all text-left flex items-center gap-4 group active:scale-[0.98]"
                     >
+                      {/* Product Image - Compact */}
+                      {p.image_url?(
+                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
+                          <img
+                            src={`${api.staff.base.replace('/staff','')}${p.image_url}`}
+                            alt={p.title}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ):(
+                        <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0">
+                          <span className="text-2xl opacity-20 font-bold">{p.title.charAt(0)}</span>
+                        </div>
+                      )}
+                      
                       <div className="flex-1">
                         <div className="font-bold text-lg mb-1 text-gray-800">{p.title}</div>
                         {p.description&&<div className="text-sm text-gray-600 line-clamp-1">{p.description}</div>}
@@ -614,7 +647,7 @@ export default function POSTerminal(){
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
               <LogOut className="size-7 text-red-600"/>
-              <h2 className="text-2xl font-black">Chiqishni tasdiqlang</h2>
+              <h2 className="text-2xl text-black font-black">Chiqishni tasdiqlang</h2>
             </div>
             <p className="text-gray-600 mb-6">
               Savatda mahsulotlar bor. Chiqsangiz, barcha ma'lumotlar yo'qoladi. Davom etmoqchimisiz?
@@ -622,7 +655,7 @@ export default function POSTerminal(){
             <div className="flex gap-3">
               <button
                 onClick={()=>setShowLogoutConfirm(false)}
-                className="flex-1 py-3 rounded-xl border-2 border-gray-300 hover:bg-gray-100 font-bold transition-all"
+                className="flex-1 py-3 rounded-xl text-black border-2 border-gray-300 hover:bg-gray-100 font-bold transition-all"
               >
                 Bekor qilish
               </button>

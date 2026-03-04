@@ -1,101 +1,118 @@
-from datetime import datetime
-from typing import List, Optional
-
-from models import Order, OrderItem, OrderStatus, Product
-from sqlalchemy import and_, func, select
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from datetime import datetime, date
+from typing import Optional, List, Dict, Any
+
+from models import Order, OrderItem, Product, User, OrderStatus
 
 
 async def get_orders_for_report(
     db: AsyncSession,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
-):
-    """Get all orders with items for reporting"""
-    stmt = select(Order).options(
-        selectinload(Order.items).selectinload(OrderItem.product),
-        selectinload(Order.user),
-        selectinload(Order.table)
-    ).order_by(Order.created_at.desc())
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+) -> List[Order]:
+    """Get orders for reporting (excluding cancelled orders)"""
     
-    # Apply date filters
-    if start_date:
-        stmt = stmt.where(Order.created_at >= start_date)
-    if end_date:
-        stmt = stmt.where(Order.created_at <= end_date)
-    
-    result = await db.execute(stmt)
-    return result.scalars().all()
-
-
-async def get_sales_summary(
-    db: AsyncSession,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
-):
-    """Get sales summary statistics"""
-    # Build WHERE conditions
+    # Build conditions list
     conditions = [Order.status != OrderStatus.CANCELLED]
     
     if start_date:
         conditions.append(Order.created_at >= start_date)
-    if end_date:
-        conditions.append(Order.created_at <= end_date)
     
-    # Main summary query
-    stmt = select(
-        func.count(Order.id).label('total_orders'),
-        func.coalesce(func.sum(Order.total), 0).label('total_sales'),
-        func.coalesce(func.avg(Order.total), 0).label('average_order_value')
-    ).where(and_(*conditions))
+    if end_date:
+        # Include the entire end date (until end of day)
+        conditions.append(Order.created_at < datetime.combine(end_date, datetime.max.time()))
+    
+    # Use and_() to combine conditions
+    stmt = select(Order).where(and_(*conditions)).order_by(Order.created_at.desc())
     
     result = await db.execute(stmt)
-    row = result.one()
+    return list(result.scalars().all())
+
+
+async def get_sales_summary(
+    db: AsyncSession,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+) -> Dict[str, Any]:
+    """Get sales summary statistics"""
     
-    # Get total items sold
-    items_stmt = select(
-        func.coalesce(func.sum(OrderItem.quantity), 0)
-    ).select_from(OrderItem).join(Order).where(and_(*conditions))
+    # Build conditions
+    conditions = [Order.status != OrderStatus.CANCELLED]
+    
+    if start_date:
+        conditions.append(Order.created_at >= start_date)
+    
+    if end_date:
+        conditions.append(Order.created_at < datetime.combine(end_date, datetime.max.time()))
+    
+    # Main summary query
+    stmt = (
+        select(
+            func.count(Order.id).label('total_orders'),
+            func.sum(Order.total).label('total_sales')
+        )
+        .where(and_(*conditions))
+    )
+    
+    result = await db.execute(stmt)
+    summary = result.first()
+    
+    # Items sold query
+    items_stmt = (
+        select(func.sum(OrderItem.quantity))
+        .select_from(OrderItem)
+        .join(Order)
+        .where(and_(*conditions))
+    )
     
     items_result = await db.execute(items_stmt)
-    total_items = items_result.scalar() or 0
+    items_sold = items_result.scalar() or 0
+    
+    total_orders = summary.total_orders or 0
+    total_sales = float(summary.total_sales or 0)
     
     return {
-        'total_orders': int(row.total_orders or 0),
-        'total_sales': float(row.total_sales or 0),
-        'average_order_value': float(row.average_order_value or 0),
-        'total_items': int(total_items)
+        'total_sales': total_sales,
+        'total_orders': total_orders,
+        'items_sold': int(items_sold),
+        'average_order_value': total_sales / total_orders if total_orders > 0 else 0
     }
 
 
 async def get_top_products(
     db: AsyncSession,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None,
     limit: int = 10
-):
+) -> List[Dict[str, Any]]:
     """Get top selling products by revenue"""
-    # Build WHERE conditions
+    
+    # Build conditions
     conditions = [Order.status != OrderStatus.CANCELLED]
     
     if start_date:
         conditions.append(Order.created_at >= start_date)
-    if end_date:
-        conditions.append(Order.created_at <= end_date)
     
-    stmt = select(
-        Product.id,
-        Product.title,
-        func.sum(OrderItem.quantity).label('total_quantity'),
-        func.sum(OrderItem.subtotal).label('total_revenue')
-    ).select_from(Product).join(OrderItem).join(Order).where(
-        and_(*conditions)
-    ).group_by(
-        Product.id, Product.title
-    ).order_by(
-        func.sum(OrderItem.subtotal).desc()
-    ).limit(limit)
+    if end_date:
+        conditions.append(Order.created_at < datetime.combine(end_date, datetime.max.time()))
+    
+    # Top products query
+    stmt = (
+        select(
+            Product.id,
+            Product.title,
+            func.sum(OrderItem.quantity).label('quantity_sold'),
+            func.sum(OrderItem.price * OrderItem.quantity).label('revenue')
+        )
+        .select_from(OrderItem)
+        .join(Product, OrderItem.product_id == Product.id)
+        .join(Order, OrderItem.order_id == Order.id)
+        .where(and_(*conditions))
+        .group_by(Product.id, Product.title)
+        .order_by(func.sum(OrderItem.price * OrderItem.quantity).desc())
+        .limit(limit)
+    )
     
     result = await db.execute(stmt)
     rows = result.all()
@@ -104,8 +121,8 @@ async def get_top_products(
         {
             'product_id': row.id,
             'product_name': row.title,
-            'quantity': int(row.total_quantity or 0),
-            'revenue': float(row.total_revenue or 0)
+            'quantity_sold': int(row.quantity_sold),
+            'revenue': float(row.revenue)
         }
         for row in rows
     ]
@@ -113,27 +130,30 @@ async def get_top_products(
 
 async def get_sales_by_day(
     db: AsyncSession,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
-):
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+) -> List[Dict[str, Any]]:
     """Get daily sales totals"""
-    # Build WHERE conditions
+    
+    # Build conditions
     conditions = [Order.status != OrderStatus.CANCELLED]
     
     if start_date:
         conditions.append(Order.created_at >= start_date)
-    if end_date:
-        conditions.append(Order.created_at <= end_date)
     
-    stmt = select(
-        func.date(Order.created_at).label('date'),
-        func.sum(Order.total).label('total')
-    ).where(
-        and_(*conditions)
-    ).group_by(
-        func.date(Order.created_at)
-    ).order_by(
-        func.date(Order.created_at)
+    if end_date:
+        conditions.append(Order.created_at < datetime.combine(end_date, datetime.max.time()))
+    
+    # Daily sales query
+    stmt = (
+        select(
+            func.date(Order.created_at).label('date'),
+            func.count(Order.id).label('orders'),
+            func.sum(Order.total).label('sales')
+        )
+        .where(and_(*conditions))
+        .group_by(func.date(Order.created_at))
+        .order_by(func.date(Order.created_at))
     )
     
     result = await db.execute(stmt)
@@ -141,8 +161,9 @@ async def get_sales_by_day(
     
     return [
         {
-            'date': str(row.date),
-            'total': float(row.total or 0)
+            'date': row.date.format() if row.date else None,
+            'orders': int(row.orders),
+            'sales': float(row.sales or 0)
         }
         for row in rows
     ]
@@ -150,30 +171,30 @@ async def get_sales_by_day(
 
 async def get_sales_by_hour(
     db: AsyncSession,
-    start_date: Optional[datetime] = None,
-    end_date: Optional[datetime] = None
-):
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+) -> List[Dict[str, Any]]:
     """Get hourly sales distribution"""
-    # Build WHERE conditions
+    
+    # Build conditions
     conditions = [Order.status != OrderStatus.CANCELLED]
     
     if start_date:
         conditions.append(Order.created_at >= start_date)
+    
     if end_date:
-        conditions.append(Order.created_at <= end_date)
+        conditions.append(Order.created_at < datetime.combine(end_date, datetime.max.time()))
     
-    # SQLite uses strftime for hour extraction
-    hour_expr = func.cast(func.strftime('%H', Order.created_at), int)
-    
-    stmt = select(
-        hour_expr.label('hour'),
-        func.sum(Order.total).label('total')
-    ).where(
-        and_(*conditions)
-    ).group_by(
-        func.strftime('%H', Order.created_at)
-    ).order_by(
-        func.strftime('%H', Order.created_at)
+    # Use strftime for SQLite compatibility
+    stmt = (
+        select(
+            func.strftime('%H', Order.created_at).label('hour'),
+            func.count(Order.id).label('orders'),
+            func.sum(Order.total).label('sales')
+        )
+        .where(and_(*conditions))
+        .group_by(func.strftime('%H', Order.created_at))
+        .order_by(func.strftime('%H', Order.created_at))
     )
     
     result = await db.execute(stmt)
@@ -181,60 +202,90 @@ async def get_sales_by_hour(
     
     return [
         {
-            'hour': int(row.hour or 0),
-            'total': float(row.total or 0)
+            'hour': int(row.hour) if row.hour else 0,
+            'orders': int(row.orders),
+            'sales': float(row.sales or 0)
         }
         for row in rows
     ]
 
 
-async def get_inventory_report(db: AsyncSession):
-    """Get inventory status for all products"""
-    stmt = select(Product).where(Product.is_active == True)
+async def get_inventory_report(db: AsyncSession) -> List[Dict[str, Any]]:
+    """Get inventory status report"""
+    
+    stmt = (
+        select(Product)
+        .where(Product.is_active == True)
+        .order_by(Product.quantity.asc())
+    )
+    
     result = await db.execute(stmt)
     products = result.scalars().all()
     
-    total_products = len(products)
-    low_stock_count = 0
-    out_of_stock_count = 0
-    total_value = 0.0
-    
-    inventory_items = []
-    
+    report = []
     for product in products:
-        quantity = product.quantity
-        price = float(product.price)
-        value = quantity * price if quantity != -1 else 0.0
-        
-        # Determine status
-        if quantity == 0:
-            status = 'out_of_stock'
-            out_of_stock_count += 1
-        elif quantity < 10 and quantity != -1:
-            status = 'low_stock'
-            low_stock_count += 1
-        elif quantity == -1:
+        # Determine stock status
+        if product.quantity == -1:
             status = 'unlimited'
+        elif product.quantity == 0:
+            status = 'out_of_stock'
+        elif product.quantity < 10:
+            status = 'low_stock'
         else:
             status = 'in_stock'
         
-        if quantity != -1:
-            total_value += value
-        
-        inventory_items.append({
+        report.append({
             'product_id': product.id,
             'product_name': product.title,
-            'quantity': quantity,
-            'price': price,
-            'value': value,
+            'quantity': product.quantity,
+            'price': float(product.price),
             'status': status,
-            'category_id': product.category_id
+            'value': float(product.price * product.quantity) if product.quantity > 0 else 0
         })
     
-    return {
-        'total_products': total_products,
-        'low_stock_count': low_stock_count,
-        'out_of_stock_count': out_of_stock_count,
-        'total_value': total_value,
-        'products': inventory_items
-    }
+    return report
+
+
+async def get_user_sales(
+    db: AsyncSession,
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+) -> List[Dict[str, Any]]:
+    """Get sales by user (cashier performance)"""
+    
+    # Build conditions
+    conditions = [Order.status != OrderStatus.CANCELLED]
+    
+    if start_date:
+        conditions.append(Order.created_at >= start_date)
+    
+    if end_date:
+        conditions.append(Order.created_at < datetime.combine(end_date, datetime.max.time()))
+    
+    # User sales query
+    stmt = (
+        select(
+            User.id,
+            User.full_name,
+            func.count(Order.id).label('orders'),
+            func.sum(Order.total).label('sales')
+        )
+        .select_from(Order)
+        .join(User, Order.user_id == User.id)
+        .where(and_(*conditions))
+        .group_by(User.id, User.full_name)
+        .order_by(func.sum(Order.total).desc())
+    )
+    
+    result = await db.execute(stmt)
+    rows = result.all()
+    
+    return [
+        {
+            'user_id': row.id,
+            'user_name': row.full_name,
+            'orders': int(row.orders),
+            'sales': float(row.sales or 0)
+        }
+        for row in rows
+    ]

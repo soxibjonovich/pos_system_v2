@@ -1,10 +1,11 @@
 from typing import Sequence
-from sqlalchemy import select, func
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from fastapi import HTTPException, status
 from models import User, UserRole, UserStatus
-from schemas import users as schema
 from rabbitmq_client import rabbitmq_client
+from schemas import users as schema
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def get_users(db: AsyncSession) -> Sequence[User]:
@@ -22,12 +23,11 @@ async def get_usernames(db: AsyncSession, status: str) -> Sequence[str]:
     query = select(User.username).where(
         func.upper(func.trim(User.status)) == target_status
     )
-    
+
     result = await db.execute(query)
     usernames = result.scalars().all()
 
     return usernames
-
 
 
 async def get_user_by_id(db: AsyncSession, id: int) -> User | None:
@@ -40,7 +40,19 @@ async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     return result.scalar_one_or_none()
 
 
+async def get_user_by_pin(db: AsyncSession, pin: int) -> User | None:
+    result = await db.execute(select(User).where(User.pin == pin))
+    return result.scalar_one_or_none()
+
+
 async def create_user(db: AsyncSession, user: schema.UserCreate) -> User:
+    existing_user_by_pin = await get_user_by_pin(db, user.pin)
+    if existing_user_by_pin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="PIN already exists. Use a unique PIN.",
+        )
+
     new_user = User(**user.model_dump())
     db.add(new_user)
 
@@ -80,6 +92,16 @@ async def update_user(
     if not existing_user:
         return None
 
+    update_payload = user.model_dump(exclude_unset=True)
+    new_pin = update_payload.get("pin")
+    if new_pin is not None and new_pin != existing_user.pin:
+        user_with_same_pin = await get_user_by_pin(db, new_pin)
+        if user_with_same_pin and user_with_same_pin.id != id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="PIN already exists. Use a unique PIN.",
+            )
+
     # Store old values for event BEFORE updating
     old_role = (
         existing_user.role.value
@@ -92,7 +114,7 @@ async def update_user(
         else existing_user.status
     )
 
-    for key, value in user.model_dump(exclude_unset=True).items():
+    for key, value in update_payload.items():
         setattr(existing_user, key, value)
 
     try:

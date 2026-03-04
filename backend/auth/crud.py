@@ -1,10 +1,9 @@
 from datetime import datetime, timedelta
 
 import httpx
-from fastapi import HTTPException, status
-
-from schemas import UserCreate, UserLoginOption, UserResponse
 from config import auth, settings
+from fastapi import HTTPException, status
+from schemas import UserCreate, UserLoginOption, UserResponse
 
 
 class DatabaseClient:
@@ -81,13 +80,29 @@ async def get_user_by_id(user_id: int) -> UserResponse | None:
             return None
 
 
-async def get_user_by_credentials(user_id: int, pin: int) -> UserResponse | None:
-    user = await get_user_by_id(user_id)
+async def get_user_by_pin(pin: int) -> UserResponse | None:
+    async with db_client.get_client() as client:
+        try:
+            response = await client.get(f"/users/pin/{pin}")
 
-    if not user or user.pin != pin:
-        return None
+            if response.status_code == 404:
+                return None
 
-    return user
+            if response.status_code != 200:
+                return None
+
+            user = UserResponse.model_validate(response.json())
+            if user.status != "active":
+                return None
+            return user
+
+        except httpx.ConnectError:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Database service unavailable",
+            )
+        except Exception:
+            return None
 
 
 async def create_user_in_db(user_in: UserCreate) -> UserResponse | None:

@@ -62,6 +62,8 @@ class Product(Base):
     category_id=Column(Integer,ForeignKey("categories.id",ondelete="SET NULL"),nullable=True,index=True)
     quantity=Column(Integer,nullable=False,default=-1)
     price=Column(Numeric(10,2),nullable=False)
+    image_url = Column(String(500), nullable=True)
+    image_filename = Column(String(255), nullable=True)
     is_active=Column(Boolean,default=True,nullable=False)
     created_at=Column(DateTime(timezone=True),server_default=func.now(),nullable=False)
     updated_at=Column(DateTime(timezone=True),onupdate=func.now())

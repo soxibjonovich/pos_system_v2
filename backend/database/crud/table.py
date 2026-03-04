@@ -58,7 +58,9 @@ async def update_table(db: AsyncSession, table_id: int, table: TableUpdate):
     return db_table
 
 
-async def update_table_status(db: AsyncSession, table_id: int, status: TableStatus):
+async def update_table_status(
+    db: AsyncSession, table_id: int, status: TableStatus, auto_commit: bool = True
+):
     stmt = select(Table).where(Table.id == table_id)
     result = await db.execute(stmt)
     db_table = result.scalar_one_or_none()
@@ -67,8 +69,9 @@ async def update_table_status(db: AsyncSession, table_id: int, status: TableStat
         return None
     
     db_table.status = status
-    await db.commit()
-    await db.refresh(db_table)
+    if auto_commit:
+        await db.commit()
+        await db.refresh(db_table)
     return db_table
 
 

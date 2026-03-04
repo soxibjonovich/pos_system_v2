@@ -1,10 +1,8 @@
 import httpx
+from config import settings
 from fastapi import HTTPException, status
-
 from schemas import users as schema
 from schemas.users import User, Users
-
-from config import settings
 
 
 class ServiceClient:
@@ -136,15 +134,14 @@ async def get_user_by_id(user_id: int) -> User | None:
         return None
 
 
-async def create_user(user_in: schema.UserCreate, role: str = "cashier") -> User | None:
-    """Create a new user with specified role (default: cashier)"""
+async def create_user(user_in: schema.UserCreate, role: str = "staff") -> User | None:
+    """Create a new user with specified role (default: staff)"""
     if await is_user_exists(user_in.username):
         return None
 
     try:
-        # Add role to the user data
         user_data = user_in.model_dump()
-        user_data["role"] = role
+        user_data["role"] = user_in.role if user_in.role else role
 
         response = await service_client.db_client.post("/users", json=user_data)
 
