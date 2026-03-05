@@ -75,6 +75,14 @@ app = APIRouter(prefix="/orders", tags=["Orders"])
 get_order_viewer = require_roles(UserRole.ADMIN, UserRole.STAFF, UserRole.CHEF)
 
 
+def normalize_business_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if value == "retail":
+        return "market"
+    return value
+
+
 @app.get("/config", response_model=schemas.SystemConfigResponse)
 async def get_config():
     config = await crud.get_business_type()
@@ -121,7 +129,10 @@ async def get_orders_by_user(user_id: int):
 
 @app.post("", response_model=schemas.OrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_order(order: schemas.OrderCreate):
-    business_type = await crud.get_business_type()
+    business_type = normalize_business_type(order.business_type)
+    if business_type is None:
+        business_type = normalize_business_type(await crud.get_business_type())
+
     if business_type == "restaurant" and order.table_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -1,34 +1,34 @@
 import { Button } from "@/components/ui/button";
 import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
-    Table,
-    TableBody,
-    TableCaption,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from "@/components/ui/table";
 import { api, API_URL } from "@/config";
 import { AuthGuard } from "@/middlewares/AuthGuard";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-    ArrowLeft,
-    Check,
-    Minus,
-    Package,
-    Plus,
-    Receipt,
-    RefreshCw,
-    Search,
-    X,
+  ArrowLeft,
+  Check,
+  Minus,
+  Package,
+  Plus,
+  Receipt,
+  RefreshCw,
+  Search,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -182,9 +182,12 @@ function OrdersPage() {
   // GET /orders/{order_id} -> OrderResponse
   const fetchOrderDetail = async (orderId: number): Promise<Order | null> => {
     try {
-      const res = await fetch(`${API_URL}${api.orders.base}/orders/${orderId}`, {
-        headers: { Authorization: `Bearer ${TOKEN}` },
-      });
+      const res = await fetch(
+        `${API_URL}${api.orders.base}/orders/${orderId}`,
+        {
+          headers: { Authorization: `Bearer ${TOKEN}` },
+        },
+      );
       if (!res.ok) return null;
       return await res.json();
     } catch {
@@ -216,24 +219,41 @@ function OrdersPage() {
   // PATCH /orders/{order_id}/status -> body: { status: enum }
   const updateStatus = async (orderId: number, newStatus: string) => {
     const currentOrder = orders.find((o) => o.id === orderId);
-    if (newStatus !== "completed") {
-      alert("Faqat 'completed' holatiga o'tkazish mumkin");
+    if (newStatus !== "completed" && newStatus !== "cancelled") {
+      alert("Faqat 'completed' yoki 'cancelled' holatiga o'tkazish mumkin");
       return;
     }
-    if (currentOrder?.status !== "ready") {
+
+    if (newStatus === "completed" && currentOrder?.status !== "ready") {
       alert("Faqat 'ready' holatidagi buyurtmani yakunlash mumkin");
+      return;
+    }
+    if (!currentOrder) {
+      alert("Buyurtma topilmadi");
+      return;
+    }
+    if (
+      currentOrder.status === "completed" ||
+      currentOrder.status === "cancelled"
+    ) {
+      alert(
+        "Yakunlangan yoki bekor qilingan buyurtma holatini o'zgartirib bo'lmaydi",
+      );
       return;
     }
 
     try {
-      const res = await fetch(`${API_URL}${api.orders.base}/orders/${orderId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${TOKEN}`,
+      const res = await fetch(
+        `${API_URL}${api.orders.base}/orders/${orderId}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${TOKEN}`,
+          },
+          body: JSON.stringify({ status: newStatus }),
         },
-        body: JSON.stringify({ status: newStatus }),
-      });
+      );
       if (!res.ok) throw new Error("Failed");
       await fetchOrders();
       setDetailModal(false);
@@ -535,6 +555,14 @@ function OrdersPage() {
                       >
                         Ko'rish
                       </Button>
+                      {o.status === "ready" && (
+                        <Button
+                          className="h-10 px-5 text-base font-bold bg-green-600 hover:bg-green-700"
+                          onClick={() => updateStatus(o.id, "completed")}
+                        >
+                          To'landi
+                        </Button>
+                      )}
                       {o.status !== "completed" && o.status !== "cancelled" && (
                         <Button size="sm" onClick={() => openEdit(o)}>
                           Tahrirlash
@@ -649,6 +677,14 @@ function OrdersPage() {
                             Buyurtma faqat `ready` holatida yakunlanadi.
                           </p>
                         )}
+                        <Button
+                          variant="destructive"
+                          onClick={() =>
+                            updateStatus(selectedOrder.id, "cancelled")
+                          }
+                        >
+                          Bekor qilish
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -747,6 +783,17 @@ function OrdersPage() {
                         kerak.
                       </p>
                     )}
+                    <Button
+                      variant="destructive"
+                      onClick={() =>
+                        setEditingOrder({
+                          ...editingOrder,
+                          status: "cancelled",
+                        })
+                      }
+                    >
+                      Bekor qilish
+                    </Button>
                   </div>
                 </div>
 

@@ -224,7 +224,7 @@ async def update_order(db: AsyncSession, order_id: int, order: OrderUpdate):
     for field, value in update_data.items():
         setattr(db_order, field, value)
 
-    if order.status == OrderStatus.COMPLETED:
+    if order.status in [OrderStatus.COMPLETED, OrderStatus.CANCELLED]:
         db_order.completed_at = datetime.utcnow()
         if db_order.table_id:
             await update_table_status(
@@ -271,6 +271,145 @@ async def update_order(db: AsyncSession, order_id: int, order: OrderUpdate):
             print(f"⚠️  Failed to publish order.status_updated event: {e}")
 
     return loaded_order
+
+
+async def add_order_item(db: AsyncSession, order_id: int, item):
+    stmt = (
+        select(Order)
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.product),
+            selectinload(Order.user),
+            selectinload(Order.table),
+        )
+        .where(Order.id == order_id)
+    )
+    result = await db.execute(stmt)
+    db_order = result.unique().scalar_one_or_none()
+    if not db_order:
+        return None
+
+    if db_order.status in [OrderStatus.COMPLETED, OrderStatus.CANCELLED]:
+        raise ValueError("Cannot modify completed or cancelled orders")
+
+    product_stmt = select(Product).where(Product.id == item.product_id)
+    product_result = await db.execute(product_stmt)
+    product = product_result.scalar_one_or_none()
+    if not product:
+        raise ValueError(f"Product with id {item.product_id} not found")
+    if not product.is_active:
+        raise ValueError(f"Product {product.title} is not active")
+    if product.quantity != -1 and product.quantity < item.quantity:
+        raise ValueError(f"Insufficient quantity for {product.title}")
+
+    db_item = OrderItem(
+        order_id=order_id,
+        product_id=item.product_id,
+        quantity=item.quantity,
+        price=float(item.price),
+        subtotal=float(item.price) * item.quantity,
+    )
+    db.add(db_item)
+
+    if product.quantity != -1:
+        product.quantity -= item.quantity
+
+    db_order.total = float(db_order.total) + db_item.subtotal
+    await db.commit()
+
+    result = await db.execute(stmt)
+    return result.unique().scalar_one()
+
+
+async def update_order_item(db: AsyncSession, order_id: int, item_id: int, item):
+    order_stmt = (
+        select(Order)
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.product),
+            selectinload(Order.user),
+            selectinload(Order.table),
+        )
+        .where(Order.id == order_id)
+    )
+    order_result = await db.execute(order_stmt)
+    db_order = order_result.unique().scalar_one_or_none()
+    if not db_order:
+        return None
+
+    if db_order.status in [OrderStatus.COMPLETED, OrderStatus.CANCELLED]:
+        raise ValueError("Cannot modify completed or cancelled orders")
+
+    item_stmt = select(OrderItem).where(
+        and_(OrderItem.id == item_id, OrderItem.order_id == order_id)
+    )
+    item_result = await db.execute(item_stmt)
+    db_item = item_result.scalar_one_or_none()
+    if not db_item:
+        return None
+
+    product_stmt = select(Product).where(Product.id == db_item.product_id)
+    product_result = await db.execute(product_stmt)
+    product = product_result.scalar_one_or_none()
+
+    new_quantity = item.quantity if item.quantity is not None else db_item.quantity
+    new_price = float(item.price) if item.price is not None else float(db_item.price)
+
+    qty_diff = new_quantity - db_item.quantity
+    if qty_diff > 0 and product and product.quantity != -1:
+        if product.quantity < qty_diff:
+            raise ValueError(f"Insufficient quantity for {product.title}")
+        product.quantity -= qty_diff
+    elif qty_diff < 0 and product and product.quantity != -1:
+        product.quantity += abs(qty_diff)
+
+    db_item.quantity = new_quantity
+    db_item.price = new_price
+    db_item.subtotal = new_quantity * new_price
+
+    db_order.total = sum(i.subtotal for i in db_order.items)
+    await db.commit()
+
+    order_result = await db.execute(order_stmt)
+    return order_result.unique().scalar_one()
+
+
+async def remove_order_item(db: AsyncSession, order_id: int, item_id: int):
+    order_stmt = (
+        select(Order)
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.product),
+            selectinload(Order.user),
+            selectinload(Order.table),
+        )
+        .where(Order.id == order_id)
+    )
+    order_result = await db.execute(order_stmt)
+    db_order = order_result.unique().scalar_one_or_none()
+    if not db_order:
+        return None
+
+    if db_order.status in [OrderStatus.COMPLETED, OrderStatus.CANCELLED]:
+        raise ValueError("Cannot modify completed or cancelled orders")
+
+    item_stmt = select(OrderItem).where(
+        and_(OrderItem.id == item_id, OrderItem.order_id == order_id)
+    )
+    item_result = await db.execute(item_stmt)
+    db_item = item_result.scalar_one_or_none()
+    if not db_item:
+        return None
+
+    product_stmt = select(Product).where(Product.id == db_item.product_id)
+    product_result = await db.execute(product_stmt)
+    product = product_result.scalar_one_or_none()
+    if product and product.quantity != -1:
+        product.quantity += db_item.quantity
+
+    await db.delete(db_item)
+    db_order.total = sum(i.subtotal for i in db_order.items if i.id != item_id)
+    await db.commit()
+
+    order_result = await db.execute(order_stmt)
+    return order_result.unique().scalar_one()
 
 
 async def delete_order(db: AsyncSession, order_id: int):

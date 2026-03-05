@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   redis:
@@ -28,7 +28,11 @@ services:
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping && rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_port_connectivity"]
+      test:
+        [
+          "CMD-SHELL",
+          "rabbitmq-diagnostics -q ping && rabbitmq-diagnostics -q check_running && rabbitmq-diagnostics -q check_port_connectivity",
+        ]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -44,6 +48,7 @@ services:
       - ./backend/database/data:/app/data
       - ./uploads:/uploads
     environment:
+      DATABASE_URL: sqlite+aiosqlite:////app/data/pos_system.db
       RABBITMQ_URL: amqp://admin:admin123@rabbitmq:5672/
       REDIS_HOST: redis
       REDIS_PORT: 6379
@@ -53,7 +58,13 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8002/health', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 8
@@ -77,7 +88,13 @@ services:
       database_api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8003/health', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 8
@@ -100,7 +117,13 @@ services:
       auth_api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8001/health', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 8
@@ -123,7 +146,13 @@ services:
       auth_api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8005/health', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 8
@@ -147,7 +176,13 @@ services:
       rabbitmq:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health', timeout=3)"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8004/health', timeout=3)",
+        ]
       interval: 10s
       timeout: 5s
       retries: 8

@@ -216,6 +216,12 @@ async def update_order_item(
     )
     if response.status_code == 404:
         return None
+    if response.status_code in (400, 422):
+        error_data = response.json() if response.content else {}
+        error_detail = error_data.get("detail", "Invalid item data")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail
+        )
     if response.status_code == 200:
         return schemas.OrderResponse.model_validate(response.json())
     return None
@@ -230,6 +236,12 @@ async def remove_order_item(
     )
     if response.status_code == 404:
         return None
+    if response.status_code in (400, 422):
+        error_data = response.json() if response.content else {}
+        error_detail = error_data.get("detail", "Invalid item data")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=error_detail
+        )
     if response.status_code == 200:
         return schemas.OrderResponse.model_validate(response.json())
     return None

@@ -60,7 +60,9 @@ async def get_order(order_id: int, db: AsyncSession = Depends(get_db)):
     return order
 
 
-@router.post("", response_model=schema.OrderResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "", response_model=schema.OrderResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_order(
     order: schema.OrderCreate,
     user_id: int,
@@ -157,6 +159,64 @@ async def update_order_status(
             detail=f"Order with id {order_id} not found",
         )
 
+    return updated
+
+
+@router.post("/{order_id}/items", response_model=schema.OrderResponse)
+async def add_order_item(
+    order_id: int,
+    item: schema.OrderItemCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        updated = await crud.add_order_item(db, order_id, item)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found",
+        )
+    return updated
+
+
+@router.put("/{order_id}/items/{item_id}", response_model=schema.OrderResponse)
+async def update_order_item(
+    order_id: int,
+    item_id: int,
+    item: schema.OrderItemUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        updated = await crud.update_order_item(db, order_id, item_id, item)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order or item not found",
+        )
+    return updated
+
+
+@router.delete("/{order_id}/items/{item_id}", response_model=schema.OrderResponse)
+async def remove_order_item(
+    order_id: int,
+    item_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    try:
+        updated = await crud.remove_order_item(db, order_id, item_id)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order or item not found",
+        )
     return updated
 
 

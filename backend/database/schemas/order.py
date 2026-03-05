@@ -1,5 +1,6 @@
 from datetime import datetime
-from typing import Optional, Any
+from typing import Any, Optional
+
 from models import BusinessType, OrderStatus
 from pydantic import BaseModel, Field, field_serializer
 
@@ -13,6 +14,11 @@ class OrderItemCreate(OrderItemBase):
     price: float = Field(..., gt=0)
 
 
+class OrderItemUpdate(BaseModel):
+    quantity: Optional[int] = Field(default=None, gt=0)
+    price: Optional[float] = Field(default=None, gt=0)
+
+
 class OrderItemResponse(OrderItemBase):
     id: int
     order_id: int  # ADD THIS LINE (it was missing!)
@@ -20,16 +26,16 @@ class OrderItemResponse(OrderItemBase):
     subtotal: float
     product: Optional[Any] = None
 
-    @field_serializer('product')
+    @field_serializer("product")
     def serialize_product(self, product: Any, _info):
         if product is None:
             return None
-        if hasattr(product, '__dict__'):
+        if hasattr(product, "__dict__"):
             return {
-                'id': product.id,
-                'title': product.title,
-                'price': float(product.price),
-                'is_active': product.is_active
+                "id": product.id,
+                "title": product.title,
+                "price": float(product.price),
+                "is_active": product.is_active,
             }
         return product
 
@@ -62,29 +68,29 @@ class OrderResponse(OrderBase):
     user: Optional[Any] = None
     table: Optional[Any] = None
 
-    @field_serializer('user')
+    @field_serializer("user")
     def serialize_user(self, user: Any, _info):
         if user is None:
             return None
-        if hasattr(user, '__dict__'):
+        if hasattr(user, "__dict__"):
             return {
-                'id': user.id,
-                'username': user.username,
-                'full_name': user.full_name,
-                'role': user.role
+                "id": user.id,
+                "username": user.username,
+                "full_name": user.full_name,
+                "role": user.role,
             }
         return user
 
-    @field_serializer('table')
+    @field_serializer("table")
     def serialize_table(self, table: Any, _info):
         if table is None:
             return None
-        if hasattr(table, '__dict__'):
+        if hasattr(table, "__dict__"):
             return {
-                'id': table.id,
-                'number': table.number,
-                'capacity': table.capacity,
-                'status': table.status
+                "id": table.id,
+                "number": table.number,
+                "capacity": table.capacity,
+                "status": table.status,
             }
         return table
 

@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict, field_validator
 from datetime import datetime
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class OrderItemBase(BaseModel):
@@ -33,6 +34,7 @@ class OrderBase(BaseModel):
 
 
 class OrderCreate(OrderBase):
+    business_type: Literal["restaurant", "market", "retail"] | None = None
     items: list[OrderItemCreate] = Field(default_factory=list)
 
     @field_validator("items")
