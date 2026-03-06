@@ -21,6 +21,7 @@ import { Route as AdminTablesIndexRouteImport } from './routes/admin/tables/inde
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
 import { Route as AdminReportsIndexRouteImport } from './routes/admin/reports/index'
 import { Route as AdminProductsIndexRouteImport } from './routes/admin/products/index'
+import { Route as AdminPrintersIndexRouteImport } from './routes/admin/printers/index'
 import { Route as AdminOrdersIndexRouteImport } from './routes/admin/orders/index'
 import { Route as AdminCategoriesIndexRouteImport } from './routes/admin/categories/index'
 import { Route as AdminAdminsIndexRouteImport } from './routes/admin/admins/index'
@@ -86,6 +87,11 @@ const AdminProductsIndexRoute = AdminProductsIndexRouteImport.update({
   path: '/products/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminPrintersIndexRoute = AdminPrintersIndexRouteImport.update({
+  id: '/printers/',
+  path: '/printers/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminOrdersIndexRoute = AdminOrdersIndexRouteImport.update({
   id: '/orders/',
   path: '/orders/',
@@ -119,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/admin/admins': typeof AdminAdminsIndexRoute
   '/admin/categories': typeof AdminCategoriesIndexRoute
   '/admin/orders': typeof AdminOrdersIndexRoute
+  '/admin/printers': typeof AdminPrintersIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
   '/admin/reports': typeof AdminReportsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
@@ -136,6 +143,7 @@ export interface FileRoutesByTo {
   '/admin/admins': typeof AdminAdminsIndexRoute
   '/admin/categories': typeof AdminCategoriesIndexRoute
   '/admin/orders': typeof AdminOrdersIndexRoute
+  '/admin/printers': typeof AdminPrintersIndexRoute
   '/admin/products': typeof AdminProductsIndexRoute
   '/admin/reports': typeof AdminReportsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
@@ -155,6 +163,7 @@ export interface FileRoutesById {
   '/admin/admins/': typeof AdminAdminsIndexRoute
   '/admin/categories/': typeof AdminCategoriesIndexRoute
   '/admin/orders/': typeof AdminOrdersIndexRoute
+  '/admin/printers/': typeof AdminPrintersIndexRoute
   '/admin/products/': typeof AdminProductsIndexRoute
   '/admin/reports/': typeof AdminReportsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
@@ -175,6 +184,7 @@ export interface FileRouteTypes {
     | '/admin/admins'
     | '/admin/categories'
     | '/admin/orders'
+    | '/admin/printers'
     | '/admin/products'
     | '/admin/reports'
     | '/admin/settings'
@@ -192,6 +202,7 @@ export interface FileRouteTypes {
     | '/admin/admins'
     | '/admin/categories'
     | '/admin/orders'
+    | '/admin/printers'
     | '/admin/products'
     | '/admin/reports'
     | '/admin/settings'
@@ -210,6 +221,7 @@ export interface FileRouteTypes {
     | '/admin/admins/'
     | '/admin/categories/'
     | '/admin/orders/'
+    | '/admin/printers/'
     | '/admin/products/'
     | '/admin/reports/'
     | '/admin/settings/'
@@ -313,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProductsIndexRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/printers/': {
+      id: '/admin/printers/'
+      path: '/printers'
+      fullPath: '/admin/printers'
+      preLoaderRoute: typeof AdminPrintersIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/orders/': {
       id: '/admin/orders/'
       path: '/orders'
@@ -350,6 +369,7 @@ interface AdminRouteRouteChildren {
   AdminAdminsIndexRoute: typeof AdminAdminsIndexRoute
   AdminCategoriesIndexRoute: typeof AdminCategoriesIndexRoute
   AdminOrdersIndexRoute: typeof AdminOrdersIndexRoute
+  AdminPrintersIndexRoute: typeof AdminPrintersIndexRoute
   AdminProductsIndexRoute: typeof AdminProductsIndexRoute
   AdminReportsIndexRoute: typeof AdminReportsIndexRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
@@ -363,6 +383,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminAdminsIndexRoute: AdminAdminsIndexRoute,
   AdminCategoriesIndexRoute: AdminCategoriesIndexRoute,
   AdminOrdersIndexRoute: AdminOrdersIndexRoute,
+  AdminPrintersIndexRoute: AdminPrintersIndexRoute,
   AdminProductsIndexRoute: AdminProductsIndexRoute,
   AdminReportsIndexRoute: AdminReportsIndexRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,

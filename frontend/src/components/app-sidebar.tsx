@@ -1,9 +1,9 @@
-import { SearchForm } from "@/components/search-form"
+import { SearchForm } from "@/components/search-form";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@/components/ui/collapsible"
+} from "@/components/ui/collapsible";
 import {
   Sidebar,
   SidebarContent,
@@ -16,10 +16,10 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarRail,
-} from "@/components/ui/sidebar"
-import { Link } from "@tanstack/react-router"
-import { GalleryVerticalEnd, Minus, Plus } from "lucide-react"
-import * as React from "react"
+} from "@/components/ui/sidebar";
+import { Link } from "@tanstack/react-router";
+import { GalleryVerticalEnd, Minus, Plus } from "lucide-react";
+import * as React from "react";
 
 const data = {
   navMain: [
@@ -48,7 +48,7 @@ const data = {
         {
           title: "Administrators",
           url: "/admin/admins",
-        }
+        },
       ],
     },
     {
@@ -57,14 +57,18 @@ const data = {
     },
     {
       title: "Tables",
-      url: "/admin/tables"
+      url: "/admin/tables",
+    },
+    {
+      title: "Printers",
+      url: "/admin/printers",
     },
     {
       title: "Reports",
       url: "/admin/reports",
     },
   ],
-}
+};
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   return (
@@ -73,7 +77,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="/">
+              <a href="/admin">
                 <div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <GalleryVerticalEnd className="size-4" />
                 </div>
@@ -89,12 +93,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            {data.navMain.map((item) => (
+            {data.navMain.map((item) =>
               item.items && item.items.length > 0 ? (
-                <Collapsible
-                  key={item.title}
-                  className="group/collapsible"
-                >
+                <Collapsible key={item.title} className="group/collapsible">
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton>
@@ -107,9 +108,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       <SidebarMenuSub>
                         {item.items.map((subItem) => (
                           <SidebarMenuSubItem key={subItem.title}>
-                            <SidebarMenuSubButton
-                              asChild
-                            >
+                            <SidebarMenuSubButton asChild>
                               <Link to={subItem.url}>{subItem.title}</Link>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>
@@ -121,17 +120,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               ) : (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <Link to={item.url || "#"}>
-                      {item.title}
-                    </Link>
+                    <Link to={item.url || "#"}>{item.title}</Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              )
-            ))}
+              ),
+            )}
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
       <SidebarRail />
     </Sidebar>
-  )
+  );
 }

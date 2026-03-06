@@ -525,7 +525,7 @@ function OrdersPage() {
                       Buyurtmalar yo'q
                     </p>
                     <p className="text-gray-400 text-sm mt-1">
-                      Hali hichiday buyurtma berilmagan
+                      Hali hech qanday buyurtma berilmagan
                     </p>
                   </TableCell>
                 </TableRow>
@@ -557,7 +557,8 @@ function OrdersPage() {
                       </Button>
                       {o.status === "ready" && (
                         <Button
-                          className="h-10 px-5 text-base font-bold bg-green-600 hover:bg-green-700"
+                          variant="destructive"
+                          size="sm"
                           onClick={() => updateStatus(o.id, "completed")}
                         >
                           To'landi

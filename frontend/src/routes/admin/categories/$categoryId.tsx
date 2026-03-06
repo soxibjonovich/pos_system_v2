@@ -1,13 +1,13 @@
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+    Table,
+    TableBody,
+    TableCaption,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from "@/components/ui/table"
 import { api, API_URL } from '@/config'
 import { useAuth } from "@/contexts/auth-context"
@@ -258,7 +258,7 @@ function RouteComponent() {
                     {p.quantity === -1 ? t('admin.categoryProducts.unlimited') : p.quantity === 0 ? t('admin.categoryProducts.outOfStockLabel') : t('admin.categoryProducts.units', {quantity: p.quantity})}
                   </span>
                 </TableCell>
-                <TableCell className="font-bold text-green-600">{formatPrice(p.price, i18n.language)}</TableCell>
+                <TableCell className="font-bold text-green-600">{formatPrice(p.price, 'uz')}</TableCell>
                 <TableCell>
                   <span style={{
                     backgroundColor: p.is_active ? '#dcfce7' : '#f3f4f6',

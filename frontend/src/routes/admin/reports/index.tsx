@@ -8,31 +8,31 @@ import { useAuth } from '@/contexts/auth-context'
 import { AuthGuard } from '@/middlewares/AuthGuard'
 import { createFileRoute } from '@tanstack/react-router'
 import {
-  AlertTriangle,
-  BarChart3,
-  Calendar,
-  DollarSign,
-  Download,
-  Package,
-  RefreshCw,
-  ShoppingCart,
-  TrendingUp
+    AlertTriangle,
+    BarChart3,
+    Calendar,
+    DollarSign,
+    Download,
+    Package,
+    RefreshCw,
+    ShoppingCart,
+    TrendingUp
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Cell,
+    Legend,
+    Line,
+    LineChart,
+    Pie,
+    PieChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis
 } from 'recharts'
 
 interface SalesSummary{

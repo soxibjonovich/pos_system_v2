@@ -22,10 +22,11 @@ FROM nginx:alpine
 
 # Remove default Nginx files
 RUN rm -rf /usr/share/nginx/html/*
+RUN rm -f /etc/nginx/conf.d/default.conf
 
 # Copy frontend build output
 COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.local.conf /etc/nginx/conf.d/deafult.conf
+COPY nginx.local.conf /etc/nginx/conf.d/default.conf
 
 # Expose HTTP port
 EXPOSE 80

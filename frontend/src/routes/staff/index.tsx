@@ -39,9 +39,18 @@ interface Category {
   is_active: boolean;
 }
 
+interface NetworkPrinter {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  categories?: string[];
+}
+
 interface TableItem {
   id: number;
   number: string;
+  location?: string | null;
   capacity: number | null;
   is_active: boolean;
   status: "available" | "occupied" | "reserved" | string;
@@ -73,6 +82,40 @@ interface ExistingOrderItemRef {
 const formatPrice = (price: number) =>
   `${Math.floor(price).toLocaleString("uz-UZ")} so'm`;
 
+const TABLES_PER_PAGE = 10;
+
+const normalize = (value: string) => value.trim().toLowerCase();
+
+const normalizePrinterBaseUrl = (host: string, port: number) => {
+  const raw = host.trim();
+  if (!raw) return "";
+  if (raw.startsWith("http://") || raw.startsWith("https://")) {
+    return raw;
+  }
+  return `http://${raw}:${port}`;
+};
+
+const resolveProductImageUrl = (imageUrl?: string) => {
+  if (!imageUrl) return "";
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    return imageUrl;
+  }
+  return `${API_URL}${imageUrl}`;
+};
+
+const getPrinterRoutingKeys = (printer: NetworkPrinter) => {
+  const fromName = printer.name
+    .split(/[;,|]/g)
+    .map((v) => normalize(v))
+    .filter(Boolean);
+
+  const fromCategories = Array.isArray(printer.categories)
+    ? printer.categories.map((v) => normalize(String(v))).filter(Boolean)
+    : [];
+
+  return Array.from(new Set([...fromName, ...fromCategories]));
+};
+
 export const Route = createFileRoute("/staff/")({
   component: () => (
     <AuthGuard allowedRoles={["staff"]}>
@@ -99,6 +142,8 @@ export default function POSTerminal() {
   const [tableOrderLoading, setTableOrderLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [locationFilter, setLocationFilter] = useState<string | null>(null);
+  const [tablesPage, setTablesPage] = useState(1);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [selectedTable, setSelectedTable] = useState<TableItem | null>(null);
   const [showTableSelect, setShowTableSelect] = useState(false);
@@ -257,7 +302,7 @@ export default function POSTerminal() {
       .toLowerCase()
       .includes(searchQuery.toLowerCase());
     const matchesCategory =
-      !selectedCategory || p.category_id === selectedCategory;
+      selectedCategory !== null && p.category_id === selectedCategory;
     const isActive = p.is_active;
     return matchesSearch && matchesCategory && isActive;
   });
@@ -325,6 +370,13 @@ export default function POSTerminal() {
 
   const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const baseQtyByProduct = baseOrderItems.reduce<Record<number, number>>(
+    (acc, item) => {
+      acc[item.product_id] = (acc[item.product_id] || 0) + item.quantity;
+      return acc;
+    },
+    {},
+  );
 
   const handleCheckout = () => {
     if (!cart.length) return;
@@ -450,6 +502,142 @@ export default function POSTerminal() {
       const orderIdToUpdate =
         activeOrderId || existingTableOrder?.order_id || null;
 
+      const sendToNetworkPrinters = async (
+        orderId: number,
+        createdAt?: string | null,
+      ) => {
+        try {
+          const printersRes = await fetch(
+            `${api.staff.base}/${api.staff.printers}`,
+          );
+          const printersData = await printersRes.json().catch(() => ({}));
+          const printers: NetworkPrinter[] = Array.isArray(
+            printersData?.printers,
+          )
+            ? printersData.printers
+            : [];
+          const categoryNameById = new Map(
+            categories.map((c) => [c.id, normalize(c.name)]),
+          );
+
+          const payloadByPrinter = new Map<
+            string,
+            {
+              printer: NetworkPrinter;
+              items: Array<{
+                product_id: number;
+                title: string;
+                quantity: number;
+                unit_price: number;
+                subtotal: number;
+                category: string | null;
+              }>;
+            }
+          >();
+
+          for (const item of cart) {
+            const product = products.find((p) => p.id === item.product_id);
+            const categoryName =
+              product?.category_id != null
+                ? categoryNameById.get(product.category_id) || null
+                : null;
+
+            const matchedPrinters = printers.filter((printer) => {
+              const routingKeys = getPrinterRoutingKeys(printer);
+              if (!routingKeys.length) return false;
+
+              const isDefaultRoute =
+                routingKeys.includes("all") || routingKeys.includes("default");
+
+              if (!categoryName) {
+                return isDefaultRoute;
+              }
+
+              return routingKeys.includes(categoryName) || isDefaultRoute;
+            });
+
+            if (!matchedPrinters.length) continue;
+
+            for (const matchedPrinter of matchedPrinters) {
+              const current = payloadByPrinter.get(
+                String(matchedPrinter.id),
+              ) || {
+                printer: matchedPrinter,
+                items: [],
+              };
+              current.items.push({
+                product_id: item.product_id,
+                title: item.title,
+                quantity: item.quantity,
+                unit_price: item.price,
+                subtotal: item.quantity * item.price,
+                category: categoryName,
+              });
+              payloadByPrinter.set(String(matchedPrinter.id), current);
+            }
+          }
+
+          if (payloadByPrinter.size > 0) {
+            await Promise.all(
+              Array.from(payloadByPrinter.values()).map(
+                async ({ printer, items }) => {
+                  const baseUrl = normalizePrinterBaseUrl(
+                    printer.host,
+                    printer.port,
+                  );
+                  if (!baseUrl) return;
+
+                  const payload = {
+                    order_id: Number(orderId),
+                    printer_name: printer.name,
+                    staff_name: CURRENT_USER_NAME,
+                    staff_id: CURRENT_USER_ID,
+                    table_id: selectedTable?.id ?? null,
+                    table_number: selectedTable?.number ?? null,
+                    created_at: createdAt || new Date().toISOString(),
+                    items,
+                  };
+
+                  let sent = false;
+                  for (const endpoint of ["/print", "/orders", ""]) {
+                    const target = endpoint ? `${baseUrl}${endpoint}` : baseUrl;
+                    try {
+                      const networkRes = await fetch(target, {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify(payload),
+                      });
+                      if (networkRes.ok) {
+                        sent = true;
+                        break;
+                      }
+                    } catch {
+                      // Try next endpoint
+                    }
+                  }
+
+                  if (!sent) {
+                    console.warn(
+                      `Printer endpoint unreachable: ${printer.name}`,
+                    );
+                  }
+                },
+              ),
+            );
+          } else {
+            console.warn("No network printer matched order items", {
+              order_id: orderId,
+              printer_names: printers.map((p) => p.name),
+              cart_product_ids: cart.map((i) => i.product_id),
+            });
+          }
+        } catch (networkPrintError) {
+          console.error("Network printer dispatch failed:", networkPrintError);
+        }
+      };
+
       if (orderIdToUpdate) {
         const baseByProduct = new Map<number, ExistingOrderItemRef[]>();
         for (const item of baseOrderItems) {
@@ -556,6 +744,7 @@ export default function POSTerminal() {
         await fetchData();
         await fetchRestaurantTableActivity();
         await loadExistingOrderForTable(orderIdToUpdate);
+        await sendToNetworkPrinters(orderIdToUpdate, new Date().toISOString());
         setTimeout(() => setOrderSuccess(false), 3000);
         return;
       }
@@ -596,7 +785,13 @@ export default function POSTerminal() {
 
       const createdOrder = await response.json();
 
-      // 2. Print to LOCAL printer via PrintAgent
+      // 2. Send order parts to configured network printers.
+      await sendToNetworkPrinters(
+        Number(createdOrder?.id),
+        createdOrder?.created_at || null,
+      );
+
+      // 3. Print to LOCAL printer via PrintAgent
       try {
         const printReceipt = {
           order_id: createdOrder.id,
@@ -634,7 +829,7 @@ export default function POSTerminal() {
         setTimeout(() => setPrintNotification(null), 3000);
       }
 
-      // 3. Show success and clear cart
+      // 4. Show success and clear cart
       setOrderSuccess(true);
       clearCart();
       setShowTableSelect(false);
@@ -730,18 +925,36 @@ export default function POSTerminal() {
 
   const filteredTables = tables
     .filter((table) => table.is_active)
+    .filter((table) =>
+      locationFilter ? (table.location || "") === locationFilter : false,
+    )
     .filter((table) => {
       if (!searchQuery.trim()) return true;
       const q = searchQuery.toLowerCase();
       const tableOrder = tableOrdersByTable[table.id];
       return (
         table.number.toLowerCase().includes(q) ||
+        (table.location || "").toLowerCase().includes(q) ||
         (tableOrder?.user_name || "").toLowerCase().includes(q)
       );
     })
     .sort((a, b) =>
       a.number.localeCompare(b.number, undefined, { numeric: true }),
     );
+  const totalTablePages = Math.max(
+    1,
+    Math.ceil(filteredTables.length / TABLES_PER_PAGE),
+  );
+  const currentTablePage = Math.min(tablesPage, totalTablePages);
+  const paginatedTables = filteredTables.slice(
+    (currentTablePage - 1) * TABLES_PER_PAGE,
+    currentTablePage * TABLES_PER_PAGE,
+  );
+  const locationOptions = Array.from(
+    new Set(
+      tables.map((t) => t.location).filter((v): v is string => Boolean(v)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
   const selectedTableOrder = selectedTable
     ? tableOrdersByTable[selectedTable.id]
     : undefined;
@@ -757,17 +970,20 @@ export default function POSTerminal() {
     ).length;
 
     return (
-      <div className="h-screen bg-slate-900 p-5">
-        <div className="max-w-[1800px] mx-auto h-full bg-white rounded-3xl shadow-2xl p-6 flex flex-col">
-          <div className="mb-5 flex gap-3 items-center">
+      <div className="h-screen bg-slate-900 p-3 sm:p-5">
+        <div className="max-w-[1800px] mx-auto h-full bg-white rounded-3xl shadow-2xl p-4 sm:p-6 flex flex-col">
+          <div className="mb-5 flex gap-3 items-center flex-wrap">
             <div className="relative flex-1">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-slate-400" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-6 text-slate-400" />
               <input
                 type="text"
                 placeholder="Stol yoki xodim qidirish..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 h-12 rounded-xl border border-slate-300 text-slate-900"
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setTablesPage(1);
+                }}
+                className="w-full pl-12 pr-4 h-14 sm:h-16 rounded-2xl border-2 border-slate-300 text-slate-900 text-lg"
               />
             </div>
             <button
@@ -775,22 +991,22 @@ export default function POSTerminal() {
                 fetchData();
                 fetchRestaurantTableActivity();
               }}
-              className="h-12 px-5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold"
+              className="h-14 sm:h-16 px-6 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-lg"
             >
               Yangilash
             </button>
             <Link
               to="/staff/orders"
-              className="h-12 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold inline-flex items-center gap-2"
+              className="h-14 sm:h-16 px-6 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-lg inline-flex items-center gap-2"
             >
-              <Receipt className="size-4" />
+              <Receipt className="size-5" />
               Buyurtmalar
             </Link>
             <button
               onClick={handleLogout}
-              className="h-12 px-5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold inline-flex items-center gap-2"
+              className="h-14 sm:h-16 px-6 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-lg inline-flex items-center gap-2"
             >
-              <LogOut className="size-4" />
+              <LogOut className="size-5" />
               Chiqish
             </button>
           </div>
@@ -806,15 +1022,42 @@ export default function POSTerminal() {
               Jami stol: {tables.filter((table) => table.is_active).length}
             </span>
           </div>
+          {locationOptions.length > 0 && (
+            <div className="mb-4 flex items-center gap-2 flex-wrap">
+              {locationOptions.map((loc) => (
+                <button
+                  key={loc}
+                  onClick={() => {
+                    setLocationFilter(loc);
+                    setTablesPage(1);
+                  }}
+                  className={`px-5 py-3 rounded-full text-base font-bold border-2 ${
+                    locationFilter === loc
+                      ? "bg-blue-600 text-white border-blue-600"
+                      : "bg-white text-slate-700 border-slate-300"
+                  }`}
+                >
+                  {loc}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto">
             {!filteredTables.length ? (
               <div className="h-full flex items-center justify-center text-slate-400">
-                Stol topilmadi
+                {locationFilter
+                  ? "Stol topilmadi"
+                  : "Avval joylashuv kategoriyasini tanlang"}
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
-                {filteredTables.map((table) => {
+              <div
+                className="grid gap-2 sm:gap-3 pb-4"
+                style={{
+                  gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
+                }}
+              >
+                {paginatedTables.map((table) => {
                   const meta = getTableCardMeta(table);
                   const canSelect =
                     table.status === "available" ||
@@ -826,21 +1069,21 @@ export default function POSTerminal() {
                         if (!canSelect) return;
                         handleSelectTable(table);
                       }}
-                      className={`rounded-2xl border p-4 text-left min-h-[170px] transition-all ${canSelect ? "hover:shadow-lg cursor-pointer" : "cursor-not-allowed opacity-90"} ${meta.className}`}
+                      className={`rounded-xl border-2 p-2 text-left aspect-square transition-all active:scale-[0.99] ${canSelect ? "hover:shadow-lg cursor-pointer" : "cursor-not-allowed opacity-90"} ${meta.className}`}
                     >
-                      <div className="text-4xl font-black leading-none">
+                      <div className="text-xl sm:text-2xl font-black leading-none">
                         {table.number}
                       </div>
-                      <div className="mt-4 text-sm font-semibold">
+                      <div className="mt-2 text-[11px] sm:text-xs font-semibold">
                         <span className="opacity-70">Xodim: </span>
                         <span className="font-bold">{meta.title}</span>
                       </div>
-                      <div className="text-sm opacity-90 mt-2">
-                        <span className="opacity-70">Davomiyligi: </span>
+                      <div className="text-[11px] sm:text-xs opacity-90 mt-1">
+                        <span className="opacity-70">Vaqt: </span>
                         <span className="font-semibold">{meta.sub || "-"}</span>
                       </div>
-                      <div className="text-sm opacity-90 mt-2">
-                        <span className="opacity-70">Joriy summa: </span>
+                      <div className="text-[11px] sm:text-xs opacity-90 mt-1">
+                        <span className="opacity-70">Summa: </span>
                         <span className="font-semibold">{meta.price}</span>
                       </div>
                     </button>
@@ -849,7 +1092,77 @@ export default function POSTerminal() {
               </div>
             )}
           </div>
+          {filteredTables.length > 0 && (
+            <div className="pt-3 flex items-center justify-between gap-3 flex-wrap border-t border-slate-200">
+              <div className="text-base text-slate-600 font-semibold">
+                Sahifa {currentTablePage} / {totalTablePages} (
+                {filteredTables.length} ta stol)
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setTablesPage(1)}
+                  disabled={currentTablePage === 1}
+                  className="h-12 px-4 rounded-xl border-2 border-slate-300 bg-white text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Boshiga
+                </button>
+                <button
+                  onClick={() => setTablesPage((p) => Math.max(1, p - 1))}
+                  disabled={currentTablePage === 1}
+                  className="h-12 px-5 rounded-xl border-2 border-slate-300 bg-white text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Oldingi
+                </button>
+                <button
+                  onClick={() =>
+                    setTablesPage((p) => Math.min(totalTablePages, p + 1))
+                  }
+                  disabled={currentTablePage === totalTablePages}
+                  className="h-12 px-5 rounded-xl border-2 border-slate-300 bg-white text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Keyingi
+                </button>
+                <button
+                  onClick={() => setTablesPage(totalTablePages)}
+                  disabled={currentTablePage === totalTablePages}
+                  className="h-12 px-4 rounded-xl border-2 border-slate-300 bg-white text-slate-700 font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Oxiriga
+                </button>
+              </div>
+            </div>
+          )}
         </div>
+        {showLogoutConfirm && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <LogOut className="size-7 text-red-600" />
+                <h2 className="text-2xl text-black font-black">
+                  Chiqishni tasdiqlang
+                </h2>
+              </div>
+              <p className="text-gray-600 mb-6">
+                Savatda mahsulotlar bor. Chiqsangiz, barcha ma'lumotlar
+                yo'qoladi. Davom etmoqchimisiz?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 py-3 rounded-xl text-black border-2 border-gray-300 hover:bg-gray-100 font-bold transition-all"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  onClick={confirmLogout}
+                  className="flex-1 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold transition-all"
+                >
+                  Ha, chiqish
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -864,17 +1177,17 @@ export default function POSTerminal() {
         }}
       >
         <div className="flex-1 max-w-[2000px] mx-auto p-4 lg:p-6 w-full overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6 h-full">
+          <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 lg:gap-6 h-full">
             <div
-              className="rounded-2xl shadow-2xl p-6 flex flex-col text-white overflow-hidden"
+              className="lg:col-span-4 rounded-2xl shadow-2xl p-3 sm:p-4 flex flex-col text-white overflow-hidden"
               style={{
                 background:
                   "linear-gradient(to bottom right, rgb(30, 41, 59), rgb(15, 23, 42))",
               }}
             >
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-black flex items-center gap-3">
-                  <ShoppingCart className="size-7" />
+                <h2 className="text-xl font-black flex items-center gap-2">
+                  <ShoppingCart className="size-5" />
                   Tanlangan mahsulotlar ({itemCount})
                 </h2>
                 {cart.length > 0 && (
@@ -898,98 +1211,137 @@ export default function POSTerminal() {
                     <p className="text-lg">Mahsulot tanlanmagan</p>
                   </div>
                 ) : (
-                  cart.map((item) => (
-                    <div
-                      key={item.product_id}
-                      className="bg-slate-700/50 rounded-xl p-4"
-                    >
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="flex-1 font-bold text-base pr-3">
-                          {item.title}
-                        </div>
-                        <button
-                          onClick={() => removeFromCart(item.product_id)}
-                          className="text-red-400 hover:text-red-300 p-2 hover:bg-red-500/20 rounded-lg"
+                  cart.map((item) =>
+                    (() => {
+                      const baseQty = baseQtyByProduct[item.product_id] || 0;
+                      const isRecentlyAdded =
+                        baseQty === 0 || item.quantity > baseQty;
+
+                      return (
+                        <div
+                          key={item.product_id}
+                          className={`rounded-xl p-2.5 sm:p-3 border ${
+                            isRecentlyAdded
+                              ? "bg-orange-100 border-orange-300 text-orange-900"
+                              : "bg-white border-slate-200 text-slate-900"
+                          }`}
                         >
-                          <X className="size-5" />
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => updateQuantity(item.product_id, -1)}
-                            className="p-3 rounded-xl bg-slate-600 hover:bg-slate-500 active:scale-95"
-                          >
-                            <Minus className="size-5" />
-                          </button>
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) =>
-                              setQuantity(
-                                item.product_id,
-                                parseInt(e.target.value) || 1,
-                              )
-                            }
-                            className="w-16 text-center font-black text-xl border-2 border-slate-500 rounded-xl px-2 py-2 bg-slate-600 text-white"
-                          />
-                          <button
-                            onClick={() => updateQuantity(item.product_id, 1)}
-                            className="p-3 rounded-xl bg-slate-600 hover:bg-slate-500 active:scale-95"
-                          >
-                            <Plus className="size-5" />
-                          </button>
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1 font-bold text-base pr-3">
+                              {item.title}
+                              {isRecentlyAdded && (
+                                <span className="ml-2 text-xs font-bold text-orange-700">
+                                  Yangi
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => removeFromCart(item.product_id)}
+                              className="text-red-500 hover:text-red-600 p-2 hover:bg-red-500/10 rounded-lg"
+                            >
+                              <X className="size-4" />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() =>
+                                  updateQuantity(item.product_id, -1)
+                                }
+                                className={`h-10 w-10 rounded-lg active:scale-95 flex items-center justify-center ${
+                                  isRecentlyAdded
+                                    ? "bg-orange-200 hover:bg-orange-300 text-orange-900"
+                                    : "bg-slate-200 hover:bg-slate-300 text-slate-900"
+                                }`}
+                              >
+                                <Minus className="size-4" />
+                              </button>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  setQuantity(
+                                    item.product_id,
+                                    parseInt(e.target.value) || 1,
+                                  )
+                                }
+                                className={`w-14 h-10 text-center font-black text-lg border-2 rounded-lg px-2 py-1 ${
+                                  isRecentlyAdded
+                                    ? "border-orange-300 bg-orange-50 text-orange-900"
+                                    : "border-slate-300 bg-slate-50 text-slate-900"
+                                }`}
+                              />
+                              <button
+                                onClick={() =>
+                                  updateQuantity(item.product_id, 1)
+                                }
+                                className={`h-10 w-10 rounded-lg active:scale-95 flex items-center justify-center ${
+                                  isRecentlyAdded
+                                    ? "bg-orange-200 hover:bg-orange-300 text-orange-900"
+                                    : "bg-slate-200 hover:bg-slate-300 text-slate-900"
+                                }`}
+                              >
+                                <Plus className="size-4" />
+                              </button>
+                            </div>
+                            <div
+                              className={`font-black text-xl ${
+                                isRecentlyAdded
+                                  ? "text-orange-700"
+                                  : "text-slate-900"
+                              }`}
+                            >
+                              {formatPrice(item.price * item.quantity)}
+                            </div>
+                          </div>
                         </div>
-                        <div className="font-black text-xl text-green-400">
-                          {formatPrice(item.price * item.quantity)}
-                        </div>
-                      </div>
-                    </div>
-                  ))
+                      );
+                    })(),
+                  )
                 )}
               </div>
 
-              <div className="border-t-2 border-slate-600 pt-4 mb-4">
+              <div className="border-t-2 border-slate-600 pt-3 mb-3">
                 <div className="flex justify-between items-center mb-2 text-lg">
                   <span className="text-gray-300">Mahsulotlar:</span>
                   <span className="font-bold">{itemCount} ta</span>
                 </div>
-                <div className="flex justify-between items-center text-3xl font-black">
+                <div className="flex justify-between items-center text-2xl font-black">
                   <span>Jami:</span>
-                  <span className="text-green-400">{formatPrice(total)}</span>
+                  <span className="text-orange-400">{formatPrice(total)}</span>
                 </div>
               </div>
 
               <button
                 onClick={handleCheckout}
                 disabled={isSubmitting || cart.length === 0}
-                className="w-full py-5 rounded-2xl text-white font-black transition-all disabled:opacity-50 flex items-center justify-center gap-3 text-xl shadow-xl active:scale-95"
+                className="w-full py-4 rounded-2xl text-white font-black transition-all disabled:opacity-50 flex items-center justify-center gap-3 text-xl shadow-xl active:scale-95"
                 style={{
                   background:
                     "linear-gradient(to right, rgb(22, 163, 74), rgb(34, 197, 94))",
                 }}
               >
-                <Check className="size-7" />
+                <Check className="size-6" />
                 Buyurtmani tasdiqlash
               </button>
             </div>
 
-            <div className="bg-white rounded-2xl shadow-2xl p-4 lg:p-6 flex flex-col overflow-hidden">
-              <div className="mb-4 p-4 rounded-xl border bg-slate-50">
+            <div className="lg:col-span-6 bg-white rounded-2xl shadow-2xl p-4 lg:p-6 flex flex-col overflow-hidden">
+              <div className="mb-4 p-5 rounded-2xl border-2 bg-slate-50">
                 <p className="text-sm text-slate-500 font-semibold">
                   Stol ma'lumotlari
                 </p>
                 <p className="text-2xl font-black text-slate-900 mt-1">
                   Stol: {selectedTable.number}
                 </p>
-                <p className="text-sm text-slate-700 mt-1">
+                <p className="text-base text-slate-700 mt-2">
                   Xodim: {CURRENT_USER_NAME}
                 </p>
-                <p className="text-sm text-slate-700 mt-1">
+                <p className="text-base text-slate-700 mt-2">
                   Davomiyligi: {formatElapsed(selectedTableOrder?.created_at)}
                 </p>
-                <p className="text-sm text-slate-700 mt-1">
+                <p className="text-base text-slate-700 mt-2">
                   Joriy buyurtma:{" "}
                   {selectedTableOrder
                     ? formatPrice(selectedTableOrder.total)
@@ -997,23 +1349,23 @@ export default function POSTerminal() {
                 </p>
               </div>
 
-              <div className="mb-4 flex gap-2">
+              <div className="mb-4 flex gap-3">
                 <button
                   onClick={() => setSelectedTable(null)}
-                  className="px-4 py-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold"
+                  className="px-5 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-2xl font-bold text-lg"
                 >
                   Stollarga qaytish
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="px-4 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold"
+                  className="px-5 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold text-lg"
                 >
                   Chiqish
                 </button>
               </div>
 
               <div className="relative mb-3">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-6 text-gray-400" />
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -1021,28 +1373,18 @@ export default function POSTerminal() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => setShowKeyboard(true)}
-                  className="w-full pl-10 pr-4 py-3 text-base text-black border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full pl-10 pr-4 h-14 text-lg text-black border-2 border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
               <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1">
-                <button
-                  onClick={() => setSelectedCategory(null)}
-                  className={`px-4 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${
-                    selectedCategory === null
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  Hammasi
-                </button>
                 {categories
                   .filter((c) => c.is_active)
                   .map((cat) => (
                     <button
                       key={cat.id}
                       onClick={() => setSelectedCategory(cat.id)}
-                      className={`px-4 py-2 rounded-lg font-bold whitespace-nowrap transition-all ${
+                      className={`px-5 py-3 rounded-xl text-base font-bold whitespace-nowrap transition-all ${
                         selectedCategory === cat.id
                           ? "bg-blue-600 text-white"
                           : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -1054,27 +1396,36 @@ export default function POSTerminal() {
               </div>
 
               <div className="flex-1 overflow-y-auto">
-                {!filteredProducts.length ? (
+                {selectedCategory === null ? (
+                  <div className="text-center py-16 text-gray-400">
+                    Avval kategoriya tanlang
+                  </div>
+                ) : !filteredProducts.length ? (
                   <div className="text-center py-16 text-gray-400">
                     Mahsulot topilmadi
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 gap-2 pb-2">
+                  <div
+                    className="grid gap-2 pb-3"
+                    style={{
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(135px, 1fr))",
+                    }}
+                  >
                     {filteredProducts.map((p) => (
                       <button
                         key={p.id}
                         onClick={() => addToCart(p)}
-                        className="w-full p-3 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all text-left flex items-center justify-between"
+                        className="w-full p-3 border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-left active:scale-[0.99] min-h-[110px]"
                       >
-                        <div className="pr-2">
-                          <div className="font-bold text-sm text-gray-900 line-clamp-1">
+                        <div className="pr-1">
+                          <div className="font-bold text-sm text-gray-900 line-clamp-2">
                             {p.title}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-xs text-gray-500 mt-1">
                             {formatPrice(p.price)}
                           </div>
                         </div>
-                        <Plus className="size-5 text-blue-600" />
                       </button>
                     ))}
                   </div>
@@ -1202,16 +1553,6 @@ export default function POSTerminal() {
             </div>
 
             <div className="mb-4 flex items-center gap-3 overflow-x-auto pb-2">
-              <button
-                onClick={() => setSelectedCategory(null)}
-                className={`px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all ${
-                  selectedCategory === null
-                    ? "bg-blue-600 text-white shadow-lg"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Hammasi ({products.filter((p) => p.is_active).length})
-              </button>
               {categories
                 .filter((c) => c.is_active)
                 .map((cat) => (
@@ -1237,7 +1578,9 @@ export default function POSTerminal() {
 
             <div className="mb-4 flex items-center justify-between">
               <p className="text-base font-semibold text-gray-700">
-                {filteredProducts.length} ta mahsulot
+                {selectedCategory === null
+                  ? "Kategoriya tanlanmagan"
+                  : `${filteredProducts.length} ta mahsulot`}
               </p>
               <div className="flex gap-2 bg-gray-100 p-2 rounded-xl">
                 <button
@@ -1256,55 +1599,61 @@ export default function POSTerminal() {
             </div>
 
             <div className="flex-1 overflow-y-auto">
-              {!filteredProducts.length ? (
+              {selectedCategory === null ? (
+                <div className="text-center py-32 text-gray-400 text-xl">
+                  Avval kategoriya tanlang
+                </div>
+              ) : !filteredProducts.length ? (
                 <div className="text-center py-32 text-gray-400 text-xl">
                   Mahsulot topilmadi
                 </div>
               ) : viewMode === "grid" ? (
-                <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 pb-4">
+                <div
+                  className="grid gap-2 pb-4"
+                  style={{
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(150px, 1fr))",
+                  }}
+                >
                   {filteredProducts.map((p) => (
                     <button
                       key={p.id}
                       onClick={() => addToCart(p)}
-                      className="border-2 border-gray-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 hover:shadow-xl transition-all text-left group active:scale-95 overflow-hidden"
+                      className="border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left group active:scale-95 overflow-hidden"
                     >
                       {/* Product Image */}
                       {p.image_url ? (
-                        <div className="w-full h-32 overflow-hidden bg-gray-50">
+                        <div className="w-full h-24 overflow-hidden bg-gray-50">
                           <img
-                            src={`${api.staff.base.replace("/staff", "")}${p.image_url}`}
+                            src={resolveProductImageUrl(p.image_url)}
                             alt={p.title}
                             className="w-full h-full object-cover"
                           />
                         </div>
                       ) : (
-                        <div className="w-full h-32 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                          <span className="text-4xl opacity-20 font-bold">
+                        <div className="w-full h-24 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                          <span className="text-3xl opacity-20 font-bold">
                             {p.title.charAt(0)}
                           </span>
                         </div>
                       )}
 
-                      <div className="p-4">
-                        <div className="font-bold text-base mb-3 line-clamp-2 min-h-12 text-gray-800">
+                      <div className="p-3">
+                        <div className="font-bold text-sm mb-2 line-clamp-2 min-h-10 text-gray-800">
                           {p.title}
                         </div>
-                        <div className="text-2xl font-black text-green-600 mb-3">
+                        <div className="text-lg font-black text-green-600 mb-2">
                           {formatPrice(p.price)}
                         </div>
                         {p.quantity !== -1 && (
                           <div
-                            className={`text-sm font-medium ${p.quantity === 0 ? "text-red-600" : "text-gray-600"}`}
+                            className={`text-[11px] font-medium ${p.quantity === 0 ? "text-red-600" : "text-gray-600"}`}
                           >
                             {p.quantity === 0
                               ? "Tugagan"
                               : `Ombor: ${p.quantity}`}
                           </div>
                         )}
-                        <div className="mt-3 flex items-center justify-center gap-2 text-blue-600 opacity-0 group-hover:opacity-100 transition-all">
-                          <Plus className="size-5" />
-                          <span className="text-base font-bold">Qo'shish</span>
-                        </div>
                       </div>
                     </button>
                   ))}
@@ -1315,13 +1664,13 @@ export default function POSTerminal() {
                     <button
                       key={p.id}
                       onClick={() => addToCart(p)}
-                      className="w-full p-4 border-2 border-gray-200 rounded-2xl hover:border-blue-500 hover:bg-blue-50 hover:shadow-xl transition-all text-left flex items-center gap-4 group active:scale-[0.98]"
+                      className="w-full p-4 border-2 border-gray-200 rounded-2xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left flex items-center gap-4 group active:scale-[0.98]"
                     >
                       {/* Product Image - Compact */}
                       {p.image_url ? (
                         <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
                           <img
-                            src={`${api.staff.base.replace("/staff", "")}${p.image_url}`}
+                            src={resolveProductImageUrl(p.image_url)}
                             alt={p.title}
                             className="w-full h-full object-cover"
                           />
@@ -1357,7 +1706,6 @@ export default function POSTerminal() {
                         <span className="text-2xl font-black text-green-600 min-w-[140px] text-right">
                           {formatPrice(p.price)}
                         </span>
-                        <Plus className="size-7 text-blue-600 opacity-0 group-hover:opacity-100 transition-all" />
                       </div>
                     </button>
                   ))}
@@ -1608,7 +1956,7 @@ export default function POSTerminal() {
       )}
 
       {showKeyboard && (
-        <div className="bg-slate-800 border-t-4 border-slate-700 p-4 shadow-2xl">
+        <div className="fixed inset-x-0 bottom-0 z-[100] bg-slate-800/98 border-t-4 border-slate-700 p-4 shadow-2xl backdrop-blur">
           <div className="max-w-[2000px] mx-auto">
             <div className="flex justify-between items-center mb-2">
               <span className="text-white font-bold">Virtual Keyboard</span>

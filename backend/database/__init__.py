@@ -1,13 +1,49 @@
 from contextlib import asynccontextmanager
 
-from api import categories, order, products, reports, system_config, table, users
+from api import (
+    categories,
+    order,
+    printer,
+    products,
+    reports,
+    system_config,
+    table,
+    users,
+)
+from config import settings
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from rabbitmq_client import rabbitmq_client
+from sqlalchemy import text
 
 from database import Base, engine
+
+
+async def _ensure_table_location_column() -> None:
+    # Lightweight runtime migration for existing SQLite databases.
+    if "sqlite" not in settings.DATABASE_URL:
+        return
+    async with engine.begin() as conn:
+        cols = await conn.execute(text("PRAGMA table_info(tables)"))
+        col_names = [str(row[1]) for row in cols.fetchall()]
+        if "subcategory" not in col_names:
+            await conn.execute(
+                text("ALTER TABLE tables ADD COLUMN subcategory VARCHAR(100)")
+            )
+            col_names.append("subcategory")
+        if "location" not in col_names:
+            await conn.execute(
+                text("ALTER TABLE tables ADD COLUMN location VARCHAR(100)")
+            )
+        if "subcategory" in col_names and "location" in col_names:
+            await conn.execute(
+                text(
+                    "UPDATE tables SET location = subcategory "
+                    "WHERE location IS NULL AND subcategory IS NOT NULL"
+                )
+            )
 
 
 @asynccontextmanager
@@ -15,6 +51,7 @@ async def lifespan(_: FastAPI):
     # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _ensure_table_location_column()
 
     await rabbitmq_client.connect()
     print("✅ Database Service started on port 8003")
@@ -82,6 +119,7 @@ app.include_router(products.router, prefix="/products", tags=["Products"])
 app.include_router(order.router, prefix="/orders", tags=["Orders"])
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])
 app.include_router(table.router, prefix="/tables", tags=["Tables"])
+app.include_router(printer.router, prefix="/printers", tags=["Printers"])
 app.include_router(reports.router, prefix="/reports", tags=["Reports"])
 app.include_router(
     system_config.router, prefix="/system-config", tags=["System Config"]

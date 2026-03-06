@@ -1,9 +1,11 @@
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class TableBase(BaseModel):
     number: str = Field(..., min_length=1, max_length=20)
+    location: str | None = Field(None, min_length=1, max_length=100)
     capacity: int | None = Field(None, gt=0)
 
 
@@ -17,7 +19,7 @@ class Table(TableBase):
     is_active: bool
     created_at: datetime
     updated_at: datetime | None = None
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -27,10 +29,11 @@ class Tables(BaseModel):
 
 class TableUpdate(BaseModel):
     number: str | None = Field(None, min_length=1, max_length=20)
+    location: str | None = Field(None, min_length=1, max_length=100)
     capacity: int | None = Field(None, gt=0)
     status: str | None = None
     is_active: bool | None = None
-    
+
     @field_validator("status")
     @classmethod
     def validate_status(cls, v):
@@ -42,8 +45,10 @@ class TableUpdate(BaseModel):
 
 
 class TableStatusUpdate(BaseModel):
-    status: str = Field(..., description="Table status: available, occupied, or reserved")
-    
+    status: str = Field(
+        ..., description="Table status: available, occupied, or reserved"
+    )
+
     @field_validator("status")
     @classmethod
     def validate_status(cls, v):
