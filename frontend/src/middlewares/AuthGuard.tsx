@@ -1,6 +1,6 @@
 import { API_URL } from "@/config";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -19,50 +19,48 @@ export function AuthGuard({
   requireAuth = true,
 }: AuthGuardProps) {
   const navigate = useNavigate();
-  const [isChecking, setIsChecking] = useState(true);
-  const [isAuthorized, setIsAuthorized] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasCheckedRef = useRef(false);
   const hasSetupAutoLogoutRef = useRef(false);
-
-  useEffect(() => {
-    if (hasCheckedRef.current) return;
-    hasCheckedRef.current = true;
-
+  const [authState] = useState(() => {
     const token = localStorage.getItem(TOKEN_KEY);
     const role = localStorage.getItem(ROLE_KEY);
     const userId = localStorage.getItem(USER_ID_KEY);
 
     if (requireAuth && (!token || !userId || !role)) {
-      localStorage.clear();
-      navigate({ to: "/login", replace: true });
-      return;
+      return {
+        isAuthorized: false,
+        redirectTo: "/login" as const,
+        role: null as string | null,
+      };
     }
 
-    if (allowedRoles?.length && role) {
-      if (!allowedRoles.includes(role)) {
-        const dest =
-          role === "admin"
-            ? "/admin"
-            : role === "chef"
-              ? "/chef"
-              : ["staff", "cashier", "manager"].includes(role)
-                ? "/staff"
-                : "/login";
-        if (dest === "/login") localStorage.clear();
-        navigate({ to: dest, replace: true });
-        return;
-      }
+    if (allowedRoles?.length && role && !allowedRoles.includes(role)) {
+      const dest =
+        role === "admin"
+          ? "/admin"
+          : role === "chef"
+            ? "/chef"
+            : ["staff", "cashier", "manager"].includes(role)
+              ? "/staff"
+              : "/login";
+      return { isAuthorized: false, redirectTo: dest, role };
     }
 
-    setIsAuthorized(true);
-    setIsChecking(false);
-  }, []);
+    return { isAuthorized: true, redirectTo: null as string | null, role };
+  });
 
   useEffect(() => {
-    if (!isAuthorized || hasSetupAutoLogoutRef.current) return;
+    if (!authState.redirectTo) return;
+    if (authState.redirectTo === "/login") {
+      localStorage.clear();
+    }
+    navigate({ to: authState.redirectTo, replace: true });
+  }, [authState.redirectTo, navigate]);
 
-    const role = localStorage.getItem(ROLE_KEY);
+  useEffect(() => {
+    if (!authState.isAuthorized || hasSetupAutoLogoutRef.current) return;
+
+    const role = authState.role;
     if (!role || !["staff", "cashier", "manager"].includes(role)) return;
 
     hasSetupAutoLogoutRef.current = true;
@@ -111,9 +109,9 @@ export function AuthGuard({
       }
       events.forEach((e) => document.removeEventListener(e, resetTimer));
     };
-  }, [isAuthorized]);
+  }, [authState.isAuthorized, authState.role]);
 
-  if (isChecking) {
+  if (!authState.isAuthorized) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-900">
         <div className="text-center">

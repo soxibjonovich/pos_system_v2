@@ -1,25 +1,22 @@
-// frontend/src/routes/admin/products/index.tsx - COMPLETE WITH IMAGES
-
-import { useState, useEffect } from "react";
-import { createFileRoute } from "@tanstack/react-router";
-import {
-  Plus,
-  Edit,
-  Trash2,
-  Image as ImageIcon,
-  Search,
-  X,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { api, API_URL } from "@/config";
 import { AuthGuard } from "@/middlewares/AuthGuard";
+import { createFileRoute } from "@tanstack/react-router";
+import {
+    Edit,
+    Image as ImageIcon,
+    Plus,
+    Search,
+    Trash2
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/admin/products/")({
   component: () => (

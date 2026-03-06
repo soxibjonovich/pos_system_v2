@@ -102,7 +102,7 @@ function ChefOrdersPage() {
         ACTIVE_STATUSES.includes(o.status),
       );
       setOrders(filtered);
-    } catch (e) {
+    } catch {
       setError("Failed to load cooker orders");
     } finally {
       setLoading(false);

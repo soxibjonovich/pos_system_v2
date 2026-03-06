@@ -160,7 +160,9 @@ function OrdersPage() {
       if (!res.ok) return;
       const data = await res.json();
       setProducts(data.products || []);
-    } catch {}
+    } catch {
+      // Keep products list empty if request fails.
+    }
   }, []);
 
   useEffect(() => {

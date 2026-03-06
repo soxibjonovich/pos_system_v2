@@ -34,7 +34,10 @@ function LoginPage() {
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [isDark, setIsDark] = useState(true);
+  const [isDark, setIsDark] = useState(() => {
+    const hour = new Date().getHours();
+    return hour < 6 || hour >= 18;
+  });
 
   const isPinValid = pin.length >= PIN_MIN && pin.length <= PIN_MAX;
 
@@ -50,9 +53,6 @@ function LoginPage() {
   }, [login, navigate]);
 
   useEffect(() => {
-    const hour = new Date().getHours();
-    setIsDark(hour < 6 || hour >= 18);
-
     const timer = setInterval(() => {
       const h = new Date().getHours();
       setIsDark(h < 6 || h >= 18);

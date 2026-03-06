@@ -1,4 +1,3 @@
-import { API_URL, api } from "@/config";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { API_URL, api } from "@/config";
 import { AuthGuard } from "@/middlewares/AuthGuard";
 import { createFileRoute } from "@tanstack/react-router";
 import { Pencil, Plus, Printer, Trash2 } from "lucide-react";
@@ -116,7 +116,9 @@ function PrintersPage() {
           : Array.isArray(data)
             ? data
             : [];
-        setCategories(rawCategories.filter((c) => c?.is_active !== false));
+        setCategories(
+          rawCategories.filter((c: CategoryItem) => c?.is_active !== false),
+        );
       } catch {
         setCategories([]);
       }

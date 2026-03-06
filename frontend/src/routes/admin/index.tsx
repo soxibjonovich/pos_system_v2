@@ -36,13 +36,6 @@ import {
   YAxis,
 } from "recharts";
 
-interface DashboardStats {
-  sales: SalesStats;
-  inventory: InventoryStats;
-  orders: OrderStats;
-  users: UserStats;
-}
-
 interface SalesStats {
   today: number;
   yesterday: number;
@@ -85,6 +78,14 @@ interface TopProduct {
   product_name: string;
   quantity: number;
   revenue: number;
+}
+
+interface OrdersResponse {
+  orders: RecentOrder[];
+}
+
+interface UsersResponse {
+  users: Array<{ status: string; role: string }>;
 }
 
 const formatPrice = (n: number) =>
@@ -233,16 +234,17 @@ function DashboardPage() {
       });
 
       // Process order stats
+      const orderList = ((orders as OrdersResponse).orders ||
+        []) as RecentOrder[];
       const todayOrders =
-        orders.orders?.filter((o: any) => {
+        orderList.filter((o) => {
           const orderDate = new Date(o.created_at);
           return orderDate >= startOfToday && orderDate <= endOfToday;
         }) || [];
 
-      const pending =
-        orders.orders?.filter((o: any) => o.status === "pending") || [];
+      const pending = orderList.filter((o) => o.status === "pending");
       const completedToday = todayOrders.filter(
-        (o: any) => o.status === "completed",
+        (o) => o.status === "completed",
       );
 
       setOrderStats({
@@ -253,10 +255,10 @@ function DashboardPage() {
       });
 
       // Process user stats
-      const allUsers = users.users || [];
-      const active = allUsers.filter((u: any) => u.status === "active");
-      const staff = allUsers.filter((u: any) => u.role === "staff");
-      const admins = allUsers.filter((u: any) => u.role === "admin");
+      const allUsers = (users as UsersResponse).users || [];
+      const active = allUsers.filter((u) => u.status === "active");
+      const staff = allUsers.filter((u) => u.role === "staff");
+      const admins = allUsers.filter((u) => u.role === "admin");
 
       setUserStats({
         totalUsers: allUsers.length,
@@ -266,24 +268,28 @@ function DashboardPage() {
       });
 
       // Recent orders
-      const recent = (orders.orders || []).slice(0, 5);
+      const recent = orderList.slice(0, 5);
       setRecentOrders(recent);
 
       // Top products
       setTopProducts(
-        (topProds.top_products || []).slice(0, 5).map((p: any) => ({
-          product_name: p.product_name,
-          quantity: p.quantity ?? p.quantity_sold ?? 0,
-          revenue: p.revenue ?? 0,
-        })),
+        (topProds.top_products || [])
+          .slice(0, 5)
+          .map((p: TopProduct & { quantity_sold?: number }) => ({
+            product_name: p.product_name,
+            quantity: p.quantity ?? p.quantity_sold ?? 0,
+            revenue: p.revenue ?? 0,
+          })),
       );
 
       // Sales trend (last 7 days)
       setSalesTrend(
-        (topProds.sales_by_day || []).slice(-7).map((d: any) => ({
-          date: String(d.date || ""),
-          total: Number(d.total ?? d.sales ?? 0),
-        })),
+        (topProds.sales_by_day || [])
+          .slice(-7)
+          .map((d: { date?: string; total?: number; sales?: number }) => ({
+            date: String(d.date || ""),
+            total: Number(d.total ?? d.sales ?? 0),
+          })),
       );
 
       setLastUpdated(new Date());
@@ -314,7 +320,7 @@ function DashboardPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const badges = {
+    const badges: Record<string, string> = {
       pending:
         "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400",
       completed:
@@ -348,6 +354,12 @@ function DashboardPage() {
 
   return (
     <div className="p-6 space-y-6">
+      {error && (
+        <Card className="border-red-300 bg-red-50">
+          <CardContent className="pt-4 text-red-700">{error}</CardContent>
+        </Card>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
