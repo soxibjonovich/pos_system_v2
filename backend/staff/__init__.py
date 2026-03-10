@@ -68,6 +68,14 @@ async def get_printers(
     return await crud.get_printers(active_only=active_only)
 
 
+@router.post("/printers/dispatch")
+async def dispatch_printer(payload: schemas.PrinterDispatchRequest):
+    """
+    Send TSPL print job to network printer over raw TCP (host:port, usually 9100).
+    """
+    return await crud.dispatch_printer_job(payload)
+
+
 # ==================== Tables ====================
 @router.get("/tables")
 async def get_tables(

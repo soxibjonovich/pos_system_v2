@@ -1,3 +1,7 @@
+import asyncio
+import socket
+from datetime import datetime
+
 import httpx
 import schemas
 from config import settings
@@ -171,6 +175,86 @@ async def get_printers(active_only: bool = True):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Error fetching printers: {str(e)}",
+        )
+
+
+def _safe_tspl_text(value: str | None) -> str:
+    text = str(value or "").replace('"', "'").replace("\n", " ").strip()
+    return text[:42]
+
+
+def _build_tspl_commands(payload: schemas.PrinterDispatchRequest) -> str:
+    created_text = payload.created_at or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    table_text = payload.table_number or (
+        str(payload.table_id) if payload.table_id else "-"
+    )
+
+    lines: list[tuple[int, str]] = [
+        (30, f"Printer: {_safe_tspl_text(payload.printer_name)}"),
+        (70, f"Order: #{payload.order_id}"),
+        (110, f"Table: {_safe_tspl_text(table_text)}"),
+        (150, f"Staff: {_safe_tspl_text(payload.staff_name)}"),
+        (190, f"Time: {_safe_tspl_text(created_text)}"),
+    ]
+
+    y = 240
+    total_qty = 0
+    for idx, item in enumerate(payload.items, start=1):
+        qty = max(1, int(item.quantity))
+        total_qty += qty
+        title = _safe_tspl_text(item.title)
+        lines.append((y, f"{idx}. {title} x{qty}"))
+        y += 35
+
+    lines.append((y + 15, f"Total items: {total_qty}"))
+    final_height = max(30, min(180, int((y + 70) / 8)))
+
+    commands = [
+        f"SIZE 58 mm, {final_height} mm",
+        "GAP 3 mm, 0",
+        "DIRECTION 1",
+        "CLS",
+    ]
+    commands.extend([f'TEXT 20,{line_y},"3",0,1,1,"{text}"' for line_y, text in lines])
+    commands.append("PRINT 1,1")
+    return "\n".join(commands) + "\n"
+
+
+def _send_tspl_over_tcp(
+    host: str, port: int, commands: str, timeout_sec: int = 5
+) -> None:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(timeout_sec)
+        sock.connect((host, port))
+        sock.sendall(commands.encode("cp1251", errors="replace"))
+
+
+async def dispatch_printer_job(payload: schemas.PrinterDispatchRequest):
+    try:
+        commands = _build_tspl_commands(payload)
+        await asyncio.to_thread(
+            _send_tspl_over_tcp,
+            payload.host.strip(),
+            int(payload.port),
+            commands,
+        )
+        return {
+            "ok": True,
+            "printer_name": payload.printer_name,
+            "host": payload.host,
+            "port": payload.port,
+            "order_id": payload.order_id,
+            "sent_items": len(payload.items),
+        }
+    except (socket.timeout, TimeoutError):
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=f"Printer timeout: {payload.host}:{payload.port}",
+        )
+    except OSError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Printer connection failed: {exc}",
         )
 
 

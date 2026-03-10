@@ -86,15 +86,6 @@ const TABLES_PER_PAGE = 10;
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
-const normalizePrinterBaseUrl = (host: string, port: number) => {
-  const raw = host.trim();
-  if (!raw) return "";
-  if (raw.startsWith("http://") || raw.startsWith("https://")) {
-    return raw;
-  }
-  return `http://${raw}:${port}`;
-};
-
 const resolveProductImageUrl = (imageUrl?: string) => {
   if (!imageUrl) return "";
   if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
@@ -151,6 +142,7 @@ export default function POSTerminal() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState(false);
+  const [isCompletingOrder, setIsCompletingOrder] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showKeyboard, setShowKeyboard] = useState(false);
 
@@ -405,6 +397,52 @@ export default function POSTerminal() {
     navigate({ to: "/login" });
   };
 
+  const completeSelectedTableOrder = async () => {
+    const currentOrderId = selectedTableOrder?.order_id || activeOrderId;
+    if (!currentOrderId) {
+      alert("Yakunlash uchun faol buyurtma topilmadi");
+      return;
+    }
+
+    if (selectedTableOrder && selectedTableOrder.status !== "ready") {
+      alert("Buyurtmani yakunlash uchun holat `ready` bo'lishi kerak");
+      return;
+    }
+
+    setIsCompletingOrder(true);
+    try {
+      const token = localStorage.getItem("postoken") || "";
+      const res = await fetch(
+        `${API_URL}${api.orders.base}/${api.orders.orders}/${currentOrderId}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: "completed" }),
+        },
+      );
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(String(errorData?.detail || "Yakunlashda xatolik"));
+      }
+
+      setCart([]);
+      setBaseOrderItems([]);
+      setActiveOrderId(null);
+      await fetchRestaurantTableActivity();
+      await fetchData();
+    } catch (err) {
+      alert(
+        `Buyurtmani yakunlab bo'lmadi: ${err instanceof Error ? err.message : "Xatolik"}`,
+      );
+    } finally {
+      setIsCompletingOrder(false);
+    }
+  };
+
   const loadExistingOrderForTable = useCallback(
     async (orderId: number) => {
       setTableOrderLoading(true);
@@ -581,15 +619,12 @@ export default function POSTerminal() {
             await Promise.all(
               Array.from(payloadByPrinter.values()).map(
                 async ({ printer, items }) => {
-                  const baseUrl = normalizePrinterBaseUrl(
-                    printer.host,
-                    printer.port,
-                  );
-                  if (!baseUrl) return;
-
                   const payload = {
+                    printer_id: Number(printer.id),
                     order_id: Number(orderId),
                     printer_name: printer.name,
+                    host: printer.host,
+                    port: Number(printer.port) || 9100,
                     staff_name: CURRENT_USER_NAME,
                     staff_id: CURRENT_USER_ID,
                     table_id: selectedTable?.id ?? null,
@@ -598,29 +633,23 @@ export default function POSTerminal() {
                     items,
                   };
 
-                  let sent = false;
-                  for (const endpoint of ["/print", "/orders", ""]) {
-                    const target = endpoint ? `${baseUrl}${endpoint}` : baseUrl;
-                    try {
-                      const networkRes = await fetch(target, {
-                        method: "POST",
-                        headers: {
-                          "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(payload),
-                      });
-                      if (networkRes.ok) {
-                        sent = true;
-                        break;
-                      }
-                    } catch {
-                      // Try next endpoint
-                    }
-                  }
-
-                  if (!sent) {
+                  const dispatchRes = await fetch(
+                    `${api.staff.base}/${api.staff.printers}/dispatch`,
+                    {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify(payload),
+                    },
+                  );
+                  if (!dispatchRes.ok) {
+                    const errorData = await dispatchRes
+                      .json()
+                      .catch(() => ({}));
                     console.warn(
-                      `Printer endpoint unreachable: ${printer.name}`,
+                      `Printer dispatch failed: ${printer.name}`,
+                      errorData,
                     );
                   }
                 },
@@ -1350,6 +1379,17 @@ export default function POSTerminal() {
               </div>
 
               <div className="mb-4 flex gap-3">
+                <button
+                  onClick={completeSelectedTableOrder}
+                  disabled={
+                    isCompletingOrder ||
+                    !selectedTableOrder ||
+                    selectedTableOrder.status !== "ready"
+                  }
+                  className="px-5 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-lg"
+                >
+                  {isCompletingOrder ? "Yakunlanmoqda..." : "To'landi"}
+                </button>
                 <button
                   onClick={() => setSelectedTable(null)}
                   className="px-5 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-2xl font-bold text-lg"

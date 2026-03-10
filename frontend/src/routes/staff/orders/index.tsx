@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/table";
 import { api, API_URL } from "@/config";
 import { AuthGuard } from "@/middlewares/AuthGuard";
+import { printService } from "@/utils/printService";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -29,6 +30,7 @@ import {
   RefreshCw,
   Search,
   X,
+  Printer,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
@@ -44,11 +46,15 @@ interface OrderItem {
 interface Order {
   id: number;
   user_id: number;
+  table_id?: number | null;
   total: number;
   status: string;
   created_at: string;
   updated_at: string | null;
   items: OrderItem[];
+  table?: {
+    number?: string | number;
+  } | null;
 }
 
 interface Product {
@@ -60,28 +66,28 @@ interface Product {
 const STATUSES = {
   pending: {
     label: "Kutilmoqda",
-    bg: "#fef9c3",
-    text: "#854d0e",
-    border: "#eab308",
+    chip: "bg-amber-50 text-amber-700 border-amber-300",
+    activeFilter: "bg-amber-100 text-amber-800 border-amber-400",
   },
   preparing: {
     label: "Tayyorlanmoqda",
-    bg: "#dbeafe",
-    text: "#1e40af",
-    border: "#3b82f6",
+    chip: "bg-blue-50 text-blue-700 border-blue-300",
+    activeFilter: "bg-blue-100 text-blue-800 border-blue-400",
   },
-  ready: { label: "Tayyor", bg: "#f3e8ff", text: "#6b21a8", border: "#a855f7" },
+  ready: {
+    label: "Tayyor",
+    chip: "bg-violet-50 text-violet-700 border-violet-300",
+    activeFilter: "bg-violet-100 text-violet-800 border-violet-400",
+  },
   completed: {
     label: "Yakunlangan",
-    bg: "#dcfce7",
-    text: "#166534",
-    border: "#22c55e",
+    chip: "bg-emerald-50 text-emerald-700 border-emerald-300",
+    activeFilter: "bg-emerald-100 text-emerald-800 border-emerald-400",
   },
   cancelled: {
     label: "Bekor qilingan",
-    bg: "#fee2e2",
-    text: "#991b1b",
-    border: "#ef4444",
+    chip: "bg-red-50 text-red-700 border-red-300",
+    activeFilter: "bg-red-100 text-red-800 border-red-400",
   },
 } as const;
 
@@ -103,18 +109,12 @@ export const Route = createFileRoute("/staff/orders/")({
 function StatusBadge({ status }: { status: string }) {
   const s = STATUSES[status as StatusKey] || {
     label: status,
-    bg: "#f3f4f6",
-    text: "#374151",
-    border: "#9ca3af",
+    chip: "bg-slate-100 text-slate-700 border-slate-300",
+    activeFilter: "bg-slate-200 text-slate-800 border-slate-400",
   };
   return (
     <span
-      style={{
-        backgroundColor: s.bg,
-        color: s.text,
-        border: `1px solid ${s.border}`,
-      }}
-      className="inline-flex px-3 py-1 rounded-full text-xs font-bold"
+      className={`inline-flex px-3 py-1 rounded-full text-xs font-bold border ${s.chip}`}
     >
       {s.label}
     </span>
@@ -135,6 +135,7 @@ function OrdersPage() {
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [originalOrder, setOriginalOrder] = useState<Order | null>(null);
   const [saving, setSaving] = useState(false);
+  const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -374,6 +375,43 @@ function OrdersPage() {
       minute: "2-digit",
     });
 
+  const printOrderCheck = async (order: Order) => {
+    setPrintingOrderId(order.id);
+    try {
+      const detail = (await fetchOrderDetail(order.id)) || order;
+      const tableText =
+        detail.table?.number != null
+          ? String(detail.table.number)
+          : detail.table_id != null
+            ? String(detail.table_id)
+            : undefined;
+
+      const result = await printService.printReceipt({
+        order_id: detail.id,
+        business_name: "POS System",
+        business_address: "Restaurant",
+        business_phone: "+998",
+        cashier: localStorage.getItem("userName") || `Staff #${detail.user_id}`,
+        table: tableText,
+        items: (detail.items || []).map((item) => ({
+          name: getProductName(item.product_id),
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.subtotal,
+        })),
+        total: detail.total,
+      });
+
+      if (result.status !== "success") {
+        alert(result.message || "Chek chiqarib bo'lmadi");
+      }
+    } catch {
+      alert("Chek chiqarishda xatolik");
+    } finally {
+      setPrintingOrderId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -473,7 +511,11 @@ function OrdersPage() {
         <div className="flex gap-2 flex-wrap">
           <button
             onClick={() => setStatusFilter("")}
-            className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${!statusFilter ? "bg-gray-900 text-white" : "bg-white text-gray-700 border border-gray-300"}`}
+            className={`px-4 py-2 rounded-full text-sm font-bold border transition-all ${
+              !statusFilter
+                ? "bg-slate-800 text-white border-slate-800"
+                : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+            }`}
           >
             Hammasi ({orders.length})
           </button>
@@ -484,12 +526,11 @@ function OrdersPage() {
               <button
                 key={key}
                 onClick={() => setStatusFilter(key)}
-                style={{
-                  backgroundColor: statusFilter === key ? val.bg : "white",
-                  color: statusFilter === key ? val.text : "#374151",
-                  border: `2px solid ${statusFilter === key ? val.border : "#e5e7eb"}`,
-                }}
-                className="px-4 py-2 rounded-full text-sm font-bold transition-all"
+                className={`px-4 py-2 rounded-full text-sm font-bold border transition-all ${
+                  statusFilter === key
+                    ? val.activeFilter
+                    : "bg-white text-slate-700 border-slate-300 hover:bg-slate-50"
+                }`}
               >
                 {val.label} ({count})
               </button>
@@ -505,7 +546,7 @@ function OrdersPage() {
                 : `${filteredOrders.length} / ${orders.length} ta`}
             </TableCaption>
             <TableHeader>
-              <TableRow style={{ backgroundColor: "#f9fafb" }}>
+              <TableRow className="bg-slate-100/80">
                 <TableHead className="font-bold text-gray-900">#</TableHead>
                 <TableHead className="font-bold text-gray-900">Summa</TableHead>
                 <TableHead className="font-bold text-gray-900">Holat</TableHead>
@@ -549,28 +590,50 @@ function OrdersPage() {
                     <TableCell className="text-sm text-gray-500">
                       {formatDate(o.created_at)}
                     </TableCell>
-                    <TableCell className="text-right space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => viewOrder(o)}
-                      >
-                        Ko'rish
-                      </Button>
-                      {o.status === "ready" && (
+                    <TableCell className="text-right">
+                      <div className="inline-flex items-center justify-end gap-2 flex-wrap">
                         <Button
-                          variant="destructive"
+                          variant="outline"
                           size="sm"
-                          onClick={() => updateStatus(o.id, "completed")}
+                          onClick={() => printOrderCheck(o)}
+                          disabled={printingOrderId === o.id}
+                          className="border-slate-300 bg-white text-slate-800 hover:bg-slate-100 disabled:opacity-60"
                         >
-                          To'landi
+                          {printingOrderId === o.id ? (
+                            <RefreshCw className="size-4 animate-spin" />
+                          ) : (
+                            <Printer className="size-4 mr-1" />
+                          )}
+                          Chek
                         </Button>
-                      )}
-                      {o.status !== "completed" && o.status !== "cancelled" && (
-                        <Button size="sm" onClick={() => openEdit(o)}>
-                          Tahrirlash
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => viewOrder(o)}
+                          className="border-blue-300 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-60"
+                        >
+                          Ko'rish
                         </Button>
-                      )}
+                        {o.status === "ready" && (
+                          <Button
+                            size="sm"
+                            onClick={() => updateStatus(o.id, "completed")}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                          >
+                            To'landi
+                          </Button>
+                        )}
+                        {o.status !== "completed" &&
+                          o.status !== "cancelled" && (
+                            <Button
+                              size="sm"
+                              onClick={() => openEdit(o)}
+                              className="bg-slate-700 hover:bg-slate-800 text-white"
+                            >
+                              Tahrirlash
+                            </Button>
+                          )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -581,7 +644,7 @@ function OrdersPage() {
 
         {/* Detail Modal */}
         <Dialog open={detailModal} onOpenChange={setDetailModal}>
-          <DialogContent className="sm:max-w-[700px]">
+          <DialogContent className="sm:max-w-[700px] bg-white text-slate-900 border border-slate-200">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-2xl">
                 <Receipt className="size-6 text-blue-600" />
@@ -629,6 +692,21 @@ function OrdersPage() {
                 </div>
 
                 <div>
+                  <div className="flex justify-end mb-3">
+                    <Button
+                      variant="outline"
+                      onClick={() => printOrderCheck(selectedOrder)}
+                      disabled={printingOrderId === selectedOrder.id}
+                      className="border-slate-300 bg-white text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+                    >
+                      {printingOrderId === selectedOrder.id ? (
+                        <RefreshCw className="size-4 mr-2 animate-spin" />
+                      ) : (
+                        <Printer className="size-4 mr-2" />
+                      )}
+                      Chek chiqarish
+                    </Button>
+                  </div>
                   <p className="font-bold mb-3 text-gray-900">Mahsulotlar</p>
                   <Table>
                     <TableHeader>
@@ -669,6 +747,7 @@ function OrdersPage() {
                       <div className="flex gap-2 flex-wrap">
                         {selectedOrder.status === "ready" ? (
                           <Button
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
                             onClick={() =>
                               updateStatus(selectedOrder.id, "completed")
                             }
@@ -681,7 +760,7 @@ function OrdersPage() {
                           </p>
                         )}
                         <Button
-                          variant="destructive"
+                          className="bg-red-600 hover:bg-red-700 text-white"
                           onClick={() =>
                             updateStatus(selectedOrder.id, "cancelled")
                           }
@@ -698,7 +777,7 @@ function OrdersPage() {
 
         {/* Edit Modal */}
         <Dialog open={editModal} onOpenChange={setEditModal}>
-          <DialogContent className="sm:max-w-[800px]">
+          <DialogContent className="sm:max-w-[800px] bg-white text-slate-900 border border-slate-200">
             <DialogHeader>
               <DialogTitle className="text-2xl">
                 Tahrirlash #{editingOrder?.id}
@@ -771,6 +850,7 @@ function OrdersPage() {
                   <div className="flex gap-2 flex-wrap">
                     {editingOrder.status === "ready" ? (
                       <Button
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white"
                         onClick={() =>
                           setEditingOrder({
                             ...editingOrder,
@@ -787,7 +867,7 @@ function OrdersPage() {
                       </p>
                     )}
                     <Button
-                      variant="destructive"
+                      className="bg-red-600 hover:bg-red-700 text-white"
                       onClick={() =>
                         setEditingOrder({
                           ...editingOrder,
