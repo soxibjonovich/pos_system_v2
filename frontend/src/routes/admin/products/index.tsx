@@ -1,20 +1,21 @@
 import { Button } from "@/components/ui/button";
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { api, API_URL } from "@/config";
 import { AuthGuard } from "@/middlewares/AuthGuard";
 import { createFileRoute } from "@tanstack/react-router";
 import {
-    Edit,
-    Image as ImageIcon,
-    Plus,
-    Search,
-    Trash2
+  Edit,
+  UtensilsCrossed,
+  Image as ImageIcon,
+  Plus,
+  Search,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -57,6 +58,9 @@ const resolveImageUrl = (imageUrl?: string) => {
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [brokenImageIds, setBrokenImageIds] = useState<Record<number, boolean>>(
+    {},
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -304,15 +308,20 @@ export default function ProductsPage() {
             className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow bg-white dark:bg-black dark:border-gray-900"
           >
             {/* Product Image */}
-            {product.image_url ? (
+            {product.image_url &&
+            !brokenImageIds[product.id] &&
+            resolveImageUrl(product.image_url) ? (
               <img
                 src={resolveImageUrl(product.image_url) || undefined}
                 alt={product.title}
                 className="w-full h-48 object-cover bg-gray-100"
+                onError={() =>
+                  setBrokenImageIds((prev) => ({ ...prev, [product.id]: true }))
+                }
               />
             ) : (
               <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                <ImageIcon className="size-16 text-gray-300" />
+                <UtensilsCrossed className="size-14 text-amber-500/80" />
               </div>
             )}
 

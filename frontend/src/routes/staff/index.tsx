@@ -10,6 +10,7 @@ import {
   List,
   LogOut,
   Minus,
+  UtensilsCrossed,
   Plus,
   Receipt,
   Search,
@@ -121,6 +122,9 @@ export default function POSTerminal() {
   const { isRestaurant, isLoading: businessLoading } = useBusiness();
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [brokenImageIds, setBrokenImageIds] = useState<Record<number, boolean>>(
+    {},
+  );
   const [categories, setCategories] = useState<Category[]>([]);
   const [tables, setTables] = useState<TableItem[]>([]);
   const [tableOrdersByTable, setTableOrdersByTable] = useState<
@@ -1662,19 +1666,23 @@ export default function POSTerminal() {
                       className="border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left group active:scale-95 overflow-hidden"
                     >
                       {/* Product Image */}
-                      {p.image_url ? (
+                      {p.image_url && !brokenImageIds[p.id] ? (
                         <div className="w-full h-24 overflow-hidden bg-gray-50">
                           <img
                             src={resolveProductImageUrl(p.image_url)}
                             alt={p.title}
                             className="w-full h-full object-cover"
+                            onError={() =>
+                              setBrokenImageIds((prev) => ({
+                                ...prev,
+                                [p.id]: true,
+                              }))
+                            }
                           />
                         </div>
                       ) : (
                         <div className="w-full h-24 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                          <span className="text-3xl opacity-20 font-bold">
-                            {p.title.charAt(0)}
-                          </span>
+                          <UtensilsCrossed className="size-8 text-amber-500/80" />
                         </div>
                       )}
 
@@ -1707,19 +1715,23 @@ export default function POSTerminal() {
                       className="w-full p-4 border-2 border-gray-200 rounded-2xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left flex items-center gap-4 group active:scale-[0.98]"
                     >
                       {/* Product Image - Compact */}
-                      {p.image_url ? (
+                      {p.image_url && !brokenImageIds[p.id] ? (
                         <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
                           <img
                             src={resolveProductImageUrl(p.image_url)}
                             alt={p.title}
                             className="w-full h-full object-cover"
+                            onError={() =>
+                              setBrokenImageIds((prev) => ({
+                                ...prev,
+                                [p.id]: true,
+                              }))
+                            }
                           />
                         </div>
                       ) : (
                         <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0">
-                          <span className="text-2xl opacity-20 font-bold">
-                            {p.title.charAt(0)}
-                          </span>
+                          <UtensilsCrossed className="size-7 text-amber-500/80" />
                         </div>
                       )}
 
