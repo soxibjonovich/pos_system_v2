@@ -3,11 +3,14 @@ import socket
 from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import httpx
 import schemas
 from config import settings
 from fastapi import HTTPException, status
+
+UZBEKISTAN_TZ = ZoneInfo("Asia/Samarkand")
 
 
 class StaffServiceClient:
@@ -189,6 +192,23 @@ def _normalize_printer_key(value: str | None) -> str:
     return str(value or "").strip().lower()
 
 
+def _format_uzbekistan_time(value: str | None) -> str:
+    if not value:
+        return datetime.now(UZBEKISTAN_TZ).strftime("%H:%M %d.%m.%Y")
+
+    raw = str(value).strip()
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return raw
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UZBEKISTAN_TZ)
+    else:
+        parsed = parsed.astimezone(UZBEKISTAN_TZ)
+    return parsed.strftime("%H:%M %d.%m.%Y")
+
+
 def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
     names = [
         _normalize_printer_key(part)
@@ -204,8 +224,8 @@ def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
 
 
 def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
-    printer_name = getattr(payload, "printer_name", None) or "Kitchen Printer"
-    created_text = payload.created_at or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+    created_text = _format_uzbekistan_time(payload.created_at)
+    printed_text = datetime.now(UZBEKISTAN_TZ).strftime("%H:%M %d.%m.%Y")
     table_text = payload.table_number or (
         str(payload.table_id) if payload.table_id else "-"
     )
@@ -221,33 +241,31 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     feed = b"\x1b\x64\x03"
     cut = b"\x1d\x56\x41\x03"
 
-    total_qty = 0
     lines = [
-        f"Printer: {_safe_tspl_text(printer_name)}",
-        f"Order: #{payload.order_id}",
-        f"Table: {_safe_tspl_text(table_text)}",
-        f"Staff: {_safe_tspl_text(payload.staff_name)}",
-        f"Time: {_safe_tspl_text(created_text)}",
+        f"CHECK No: #{payload.order_id}",
+        f"WAITER: {_safe_tspl_text(payload.staff_name)}",
+        f"OPENED: {_safe_tspl_text(created_text)}",
+        f"PRINTED: {_safe_tspl_text(printed_text)}",
+        f"TABLE: {_safe_tspl_text(table_text)}",
         "--------------------------------",
     ]
 
-    for idx, item in enumerate(payload.items, start=1):
-        qty = max(1, int(item.quantity))
-        total_qty += qty
-        title = _safe_tspl_text(item.title)
-        lines.append(f"{idx}. {title}")
-        lines.append(f"   x{qty}")
+    def _item_title_line(title: str) -> str:
+        return f"- {title[:30]}"
 
-    lines.extend(
-        [
-            "--------------------------------",
-            f"Total items: {total_qty}",
-        ]
-    )
+    for item in payload.items:
+        qty = max(1, int(item.quantity))
+        title = _safe_tspl_text(item.title)
+        price = float(item.unit_price)
+        subtotal = float(item.subtotal)
+        lines.append(_item_title_line(title))
+        lines.append(f"  x{qty} x {price:,.0f} = {subtotal:,.0f}")
+
+    lines.append("--------------------------------")
 
     payload_bytes = init + charset
     payload_bytes += center + big + bold_on
-    payload_bytes += printer_name.encode("cp866", errors="ignore") + b"\n"
+    payload_bytes += b"KITCHEN\n"
     payload_bytes += normal + bold_off + left
     payload_bytes += "\n".join(lines).encode("cp866", errors="ignore")
     payload_bytes += b"\n\n" + feed + cut
