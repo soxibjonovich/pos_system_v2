@@ -49,16 +49,21 @@ class OrderBase(BaseModel):
 
 class OrderCreate(OrderBase):
     business_type: BusinessType = BusinessType.MARKET
+    fee_percent: float = Field(default=0, ge=0, le=100)
     items: list[OrderItemCreate] = Field(..., min_length=1)
 
 
 class OrderUpdate(BaseModel):
     table_id: Optional[int] = None
     status: Optional[OrderStatus] = None
+    fee_percent: Optional[float] = Field(default=None, ge=0, le=100)
 
 
 class OrderResponse(OrderBase):
     id: int
+    subtotal_amount: float = 0
+    fee_percent: float = 0
+    fee_amount: float = 0
     user_id: int
     total: float
     status: OrderStatus

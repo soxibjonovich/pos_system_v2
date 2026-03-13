@@ -8,6 +8,9 @@ interface PrintReceipt {
   business_phone: string;
   cashier: string;
   table?: string;
+  subtotal_amount?: number;
+  fee_percent?: number;
+  fee_amount?: number;
   items: Array<{
     name: string;
     quantity: number;

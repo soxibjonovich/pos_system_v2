@@ -47,6 +47,9 @@ interface Order {
   id: number;
   user_id: number;
   table_id?: number | null;
+  subtotal_amount?: number;
+  fee_percent?: number;
+  fee_amount?: number;
   total: number;
   status: string;
   created_at: string;
@@ -393,6 +396,9 @@ function OrdersPage() {
         business_phone: "+998",
         cashier: localStorage.getItem("userName") || `Staff #${detail.user_id}`,
         table: tableText,
+        subtotal_amount: detail.subtotal_amount,
+        fee_percent: detail.fee_percent,
+        fee_amount: detail.fee_amount,
         items: (detail.items || []).map((item) => ({
           name: getProductName(item.product_id),
           quantity: item.quantity,
@@ -614,7 +620,7 @@ function OrdersPage() {
                         >
                           Ko'rish
                         </Button>
-                        {o.status === "ready" && (
+                        {["pending", "ready"].includes(o.status) && (
                           <Button
                             size="sm"
                             onClick={() => updateStatus(o.id, "completed")}
@@ -666,6 +672,23 @@ function OrdersPage() {
                     <StatusBadge status={selectedOrder.status} />
                   </div>
                   <div className="col-span-2">
+                    <p className="text-sm font-medium text-gray-500">
+                      Mahsulot jami
+                    </p>
+                    <p className="text-xl font-bold text-gray-900">
+                      {formatPrice(selectedOrder.subtotal_amount || 0)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">
+                      Servis haqi
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      {(selectedOrder.fee_percent || 0).toFixed(1)}% /{" "}
+                      {formatPrice(selectedOrder.fee_amount || 0)}
+                    </p>
+                  </div>
+                  <div>
                     <p className="text-sm font-medium text-gray-500">Jami</p>
                     <p className="text-3xl font-black text-green-600">
                       {formatPrice(selectedOrder.total)}
@@ -745,7 +768,7 @@ function OrdersPage() {
                         Holatni o'zgartirish:
                       </p>
                       <div className="flex gap-2 flex-wrap">
-                        {selectedOrder.status === "ready" ? (
+                        {["pending", "ready"].includes(selectedOrder.status) ? (
                           <Button
                             className="bg-emerald-600 hover:bg-emerald-700 text-white"
                             onClick={() =>
@@ -756,7 +779,8 @@ function OrdersPage() {
                           </Button>
                         ) : (
                           <p className="text-sm text-gray-500">
-                            Buyurtma faqat `ready` holatida yakunlanadi.
+                            Buyurtma faqat `pending` yoki `ready` holatida
+                            yakunlanadi.
                           </p>
                         )}
                         <Button
@@ -839,7 +863,16 @@ function OrdersPage() {
                 </div>
 
                 <div className="flex justify-between items-center text-2xl font-black p-4 bg-green-50 rounded-lg border border-green-200">
-                  <span className="text-gray-900">Jami:</span>
+                  <div>
+                    <div className="text-sm font-semibold text-gray-600">
+                      Mahsulot: {formatPrice(editingOrder.subtotal_amount || 0)}
+                    </div>
+                    <div className="text-sm font-semibold text-gray-600">
+                      Servis haqi: {(editingOrder.fee_percent || 0).toFixed(1)}%
+                      / {formatPrice(editingOrder.fee_amount || 0)}
+                    </div>
+                    <span className="text-gray-900">Jami:</span>
+                  </div>
                   <span className="text-green-600">
                     {formatPrice(editingOrder.total)}
                   </span>
@@ -848,7 +881,7 @@ function OrdersPage() {
                 <div className="space-y-3">
                   <p className="font-bold text-gray-900">Holat:</p>
                   <div className="flex gap-2 flex-wrap">
-                    {editingOrder.status === "ready" ? (
+                    {["pending", "ready"].includes(editingOrder.status) ? (
                       <Button
                         className="bg-emerald-600 hover:bg-emerald-700 text-white"
                         onClick={() =>
@@ -862,8 +895,8 @@ function OrdersPage() {
                       </Button>
                     ) : (
                       <p className="text-sm text-gray-500">
-                        Holatni o'zgartirish uchun buyurtma `ready` bo'lishi
-                        kerak.
+                        Holatni o'zgartirish uchun buyurtma `pending` yoki
+                        `ready` bo'lishi kerak.
                       </p>
                     )}
                     <Button

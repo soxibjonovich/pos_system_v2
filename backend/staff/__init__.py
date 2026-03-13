@@ -178,6 +178,7 @@ async def create_order(info: schemas.StaffOrderCreate):
         table_id=info.table_id,
         business_type=info.business_type,
         customer_name=info.customer_name,
+        fee_percent=info.fee_percent,
         items=info.items,
     )
 
@@ -277,6 +278,7 @@ async def update_order(order_id: int, info: schemas.StaffOrderUpdate):
         order_id=order_id,
         user_id=info.user_id,
         table_id=info.table_id,
+        fee_percent=info.fee_percent,
         items=info.items,
     )
 
@@ -298,10 +300,13 @@ async def update_order_status(order_id: int, info: schemas.OrderStatusUpdate):
             status_code=status.HTTP_404_NOT_FOUND, detail=f"Order {order_id} not found"
         )
 
-    if info.status == "completed" and order.get("status") != "ready":
+    if info.status == "completed" and order.get("status") not in [
+        "pending",
+        "ready",
+    ]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only ready orders can be marked as completed",
+            detail="Only pending or ready orders can be marked as completed",
         )
 
     return await crud.update_order_status(order_id, info.status)

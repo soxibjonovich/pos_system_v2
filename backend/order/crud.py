@@ -62,6 +62,17 @@ async def get_business_type() -> str:
 
 
 @handle_service_errors
+async def get_service_fee_percent() -> float:
+    response = await service_client.db_client.get("/system-config/service_fee_percent")
+    if response.status_code == 200:
+        try:
+            return float(response.json().get("value", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    return 0.0
+
+
+@handle_service_errors
 async def get_active_tables() -> list[schemas.TableResponse]:
     response = await service_client.db_client.get("/tables")
     if response.status_code != 200:
@@ -116,6 +127,7 @@ async def create_order(
         json={
             "business_type": business_type,
             "table_id": order.table_id,
+            "fee_percent": order.fee_percent,
             "items": [
                 {
                     "product_id": item.product_id,

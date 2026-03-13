@@ -86,7 +86,11 @@ def normalize_business_type(value: str | None) -> str | None:
 @app.get("/config", response_model=schemas.SystemConfigResponse)
 async def get_config():
     config = await crud.get_business_type()
-    return schemas.SystemConfigResponse(business_type=config)
+    service_fee_percent = await crud.get_service_fee_percent()
+    return schemas.SystemConfigResponse(
+        business_type=config,
+        service_fee_percent=service_fee_percent,
+    )
 
 
 @app.get("/tables", response_model=schemas.TablesResponse)

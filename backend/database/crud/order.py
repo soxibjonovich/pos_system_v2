@@ -29,6 +29,9 @@ def _build_order_event_payload(order: Order) -> dict:
         "table_id": order.table_id,
         "table_number": order.table.number if order.table else None,
         "status": _order_status_value(order.status),
+        "subtotal_amount": float(order.subtotal_amount),
+        "fee_percent": float(order.fee_percent),
+        "fee_amount": float(order.fee_amount),
         "total": float(order.total),
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "items": [
@@ -123,7 +126,12 @@ async def create_order(db: AsyncSession, order: OrderCreate, user_id: int):
         if table.status != TableStatus.AVAILABLE:
             raise ValueError(f"Table {table.number} is not available")
 
-    db_order = Order(user_id=user_id, table_id=order.table_id, status=OrderStatus.READY)
+    db_order = Order(
+        user_id=user_id,
+        table_id=order.table_id,
+        status=OrderStatus.PENDING,
+    )
+    db_order.fee_percent = order.fee_percent
 
     total = 0.0
     for item in order.items:
@@ -154,7 +162,7 @@ async def create_order(db: AsyncSession, order: OrderCreate, user_id: int):
         if product.quantity != -1:
             product.quantity -= item.quantity
 
-    db_order.total = total
+    db_order.calculate_total()
 
     if order.table_id:
         await update_table_status(
@@ -217,12 +225,20 @@ async def update_order(db: AsyncSession, order_id: int, order: OrderUpdate):
             and order.status != OrderStatus.COMPLETED
         ):
             raise ValueError("Completed orders cannot be reopened")
-        if order.status == OrderStatus.COMPLETED and old_status != OrderStatus.READY:
-            raise ValueError("Only ready orders can be marked as completed")
+        if order.status == OrderStatus.COMPLETED and old_status not in [
+            OrderStatus.PENDING,
+            OrderStatus.READY,
+        ]:
+            raise ValueError("Only pending or ready orders can be marked as completed")
 
     update_data = order.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(db_order, field, value)
+
+    if "fee_percent" in update_data:
+        db_order.fee_percent = update_data["fee_percent"]
+
+    db_order.calculate_total()
 
     if order.status in [OrderStatus.COMPLETED, OrderStatus.CANCELLED]:
         db_order.completed_at = datetime.utcnow()
@@ -309,11 +325,12 @@ async def add_order_item(db: AsyncSession, order_id: int, item):
         subtotal=float(item.price) * item.quantity,
     )
     db.add(db_item)
+    db_order.items.append(db_item)
 
     if product.quantity != -1:
         product.quantity -= item.quantity
 
-    db_order.total = float(db_order.total) + db_item.subtotal
+    db_order.calculate_total()
     await db.commit()
 
     result = await db.execute(stmt)
@@ -365,7 +382,7 @@ async def update_order_item(db: AsyncSession, order_id: int, item_id: int, item)
     db_item.price = new_price
     db_item.subtotal = new_quantity * new_price
 
-    db_order.total = sum(i.subtotal for i in db_order.items)
+    db_order.calculate_total()
     await db.commit()
 
     order_result = await db.execute(order_stmt)
@@ -405,7 +422,8 @@ async def remove_order_item(db: AsyncSession, order_id: int, item_id: int):
         product.quantity += db_item.quantity
 
     await db.delete(db_item)
-    db_order.total = sum(i.subtotal for i in db_order.items if i.id != item_id)
+    await db.flush()
+    db_order.calculate_total()
     await db.commit()
 
     order_result = await db.execute(order_stmt)

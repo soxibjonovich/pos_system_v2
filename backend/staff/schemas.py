@@ -101,6 +101,7 @@ class StaffOrderCreate(BaseModel):
     business_type: Literal["restaurant", "retail"] = Field(
         ..., description="Business type"
     )
+    fee_percent: float = Field(0, description="Order fee percent", ge=0, le=100)
     customer_name: str | None = Field(None, description="Customer name", max_length=100)
     items: list[OrderItem] = Field(..., description="Order items", min_length=1)
 
@@ -110,6 +111,9 @@ class StaffOrderUpdate(BaseModel):
 
     user_id: int = Field(..., description="Staff user ID", gt=0)
     table_id: int | None = Field(None, description="New table ID", gt=0)
+    fee_percent: float | None = Field(
+        None, description="Order fee percent", ge=0, le=100
+    )
     items: list[OrderItem] = Field(..., description="Updated order items", min_length=1)
 
 
@@ -149,6 +153,9 @@ class StaffOrderResponse(BaseModel):
     table_id: int | None = None
     business_type: str
     customer_name: str | None = None
+    subtotal_amount: float = 0
+    fee_percent: float = 0
+    fee_amount: float = 0
     total: float
     status: Literal["pending", "preparing", "ready", "completed", "cancelled"]
     items: list[OrderItemResponse]
@@ -185,10 +192,6 @@ class PrinterDispatchItem(BaseModel):
 
 
 class PrinterDispatchRequest(BaseModel):
-    printer_id: int | None = None
-    printer_name: str = Field(..., min_length=1, max_length=100)
-    host: str = Field(..., min_length=1, max_length=255)
-    port: int = Field(9100, ge=1, le=65535)
     order_id: int = Field(..., gt=0)
     staff_name: str = Field(..., min_length=1, max_length=100)
     staff_id: int | None = None

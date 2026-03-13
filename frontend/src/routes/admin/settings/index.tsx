@@ -1,10 +1,11 @@
+import { Button } from "@/components/ui/button";
 import { api, API_URL } from "@/config";
 import { useBusiness } from "@/contexts/business-context";
 import { useI18n } from "@/i18n";
 import { AuthGuard } from "@/middlewares/AuthGuard";
 import { createFileRoute } from "@tanstack/react-router";
-import { Building2, Check, Store } from "lucide-react";
-import { useState } from "react";
+import { Building2, Check, Percent, Store } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/admin/settings/")({
   component: () => (
@@ -18,17 +19,38 @@ export default function AdminSettings() {
   const { businessType, setBusinessType } = useBusiness();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [serviceFeePercent, setServiceFeePercent] = useState(0);
 
   const { t } = useI18n();
+
+  useEffect(() => {
+    const loadServiceFee = async () => {
+      try {
+        const res = await fetch(
+          `${API_URL}${api.admin.base}/system-config/service-fee`,
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setServiceFeePercent(Number(data?.value || 0));
+      } catch (err) {
+        console.error("Failed to load service fee:", err);
+      }
+    };
+
+    loadServiceFee();
+  }, []);
 
   const handleUpdate = async (type: "restaurant" | "market") => {
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API_URL}${api.admin.base}/system-config/business-type`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ business_type: type }),
-      });
+      const res = await fetch(
+        `${API_URL}${api.admin.base}/system-config/business-type`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ business_type: type }),
+        },
+      );
 
       if (res.ok) {
         setBusinessType(type);
@@ -37,6 +59,32 @@ export default function AdminSettings() {
       }
     } catch (err) {
       console.error("Failed to update:", err);
+      alert(t("common.failed"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleFeeUpdate = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(
+        `${API_URL}${api.admin.base}/system-config/service-fee`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ service_fee_percent: serviceFeePercent }),
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to update fee");
+      }
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error("Failed to update service fee:", err);
       alert(t("common.failed"));
     } finally {
       setIsSubmitting(false);
@@ -169,6 +217,49 @@ export default function AdminSettings() {
                     </span>
                   </>
                 )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 rounded-xl p-5 mt-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-3">
+                <Percent className="size-5 text-orange-600" />
+                <h4 className="font-bold text-gray-900 dark:text-gray-100">
+                  Service Fee
+                </h4>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                This percentage is applied automatically to new staff orders.
+              </p>
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Service Fee Percent
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={serviceFeePercent}
+                      onChange={(e) =>
+                        setServiceFeePercent(
+                          Math.min(
+                            100,
+                            Math.max(0, Number(e.target.value) || 0),
+                          ),
+                        )
+                      }
+                      className="w-32 h-12 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 text-lg font-bold text-gray-900 dark:text-gray-100"
+                    />
+                    <span className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                      %
+                    </span>
+                  </div>
+                </div>
+                <Button onClick={handleFeeUpdate} disabled={isSubmitting}>
+                  Save Fee
+                </Button>
               </div>
             </div>
           </div>

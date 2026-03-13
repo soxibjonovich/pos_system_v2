@@ -1,4 +1,5 @@
 import enum
+import json
 
 from sqlalchemy import (
     Boolean,
@@ -176,8 +177,43 @@ class Order(Base):
     )
     __table_args__ = (CheckConstraint("total>=0", name="check_total_non_negative"),)
 
+    def _notes_meta(self) -> dict:
+        if not self.notes:
+            return {}
+        try:
+            data = json.loads(self.notes)
+            return data if isinstance(data, dict) else {}
+        except (TypeError, ValueError):
+            return {}
+
+    def _set_notes_meta(self, meta: dict) -> None:
+        cleaned = {k: v for k, v in meta.items() if v is not None}
+        self.notes = json.dumps(cleaned) if cleaned else None
+
+    @property
+    def subtotal_amount(self) -> float:
+        return float(sum(float(item.subtotal) for item in self.items))
+
+    @property
+    def fee_percent(self) -> float:
+        return float(self._notes_meta().get("fee_percent", 0.0) or 0.0)
+
+    @fee_percent.setter
+    def fee_percent(self, value) -> None:
+        fee_value = round(float(value or 0.0), 2)
+        meta = self._notes_meta()
+        if fee_value > 0:
+            meta["fee_percent"] = fee_value
+        else:
+            meta.pop("fee_percent", None)
+        self._set_notes_meta(meta)
+
+    @property
+    def fee_amount(self) -> float:
+        return round(self.subtotal_amount * self.fee_percent / 100, 2)
+
     def calculate_total(self):
-        self.total = sum(item.subtotal for item in self.items)
+        self.total = round(self.subtotal_amount + self.fee_amount, 2)
         return self.total
 
 

@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
 from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class OrderItemBase(BaseModel):
@@ -27,6 +28,9 @@ class OrderStatusUpdate(BaseModel):
 
 class OrderResponse(OrderBase):
     id: int
+    subtotal_amount: float = 0
+    fee_percent: float = 0
+    fee_amount: float = 0
     total: float
     status: str
     notes: str | None = None

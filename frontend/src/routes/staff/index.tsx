@@ -40,14 +40,6 @@ interface Category {
   is_active: boolean;
 }
 
-interface NetworkPrinter {
-  id: string;
-  name: string;
-  host: string;
-  port: number;
-  categories?: string[];
-}
-
 interface TableItem {
   id: number;
   number: string;
@@ -95,19 +87,6 @@ const resolveProductImageUrl = (imageUrl?: string) => {
   return `${API_URL}${imageUrl}`;
 };
 
-const getPrinterRoutingKeys = (printer: NetworkPrinter) => {
-  const fromName = printer.name
-    .split(/[;,|]/g)
-    .map((v) => normalize(v))
-    .filter(Boolean);
-
-  const fromCategories = Array.isArray(printer.categories)
-    ? printer.categories.map((v) => normalize(String(v))).filter(Boolean)
-    : [];
-
-  return Array.from(new Set([...fromName, ...fromCategories]));
-};
-
 export const Route = createFileRoute("/staff/")({
   component: () => (
     <AuthGuard allowedRoles={["staff"]}>
@@ -136,6 +115,9 @@ export default function POSTerminal() {
   );
   const [tableOrderLoading, setTableOrderLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [defaultFeePercent, setDefaultFeePercent] = useState(0);
+  const [feePercent, setFeePercent] = useState(0);
+  const [baseFeePercent, setBaseFeePercent] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState<string | null>(null);
   const [tablesPage, setTablesPage] = useState(1);
@@ -191,6 +173,23 @@ export default function POSTerminal() {
       const [productsData, categoriesData, tablesData] = await Promise.all(
         responses.map((r) => r.json()),
       );
+
+      try {
+        const configRes = await fetch(
+          `${API_URL}${api.orders.base}/${api.orders.config}`,
+        );
+        if (configRes.ok) {
+          const configData = await configRes.json();
+          const configuredFee = Number(configData?.service_fee_percent || 0);
+          setDefaultFeePercent(configuredFee);
+          if (!activeOrderId) {
+            setFeePercent(configuredFee);
+            setBaseFeePercent(configuredFee);
+          }
+        }
+      } catch (configErr) {
+        console.error("Failed to load order config:", configErr);
+      }
 
       setProducts(productsData.products || []);
       setCategories(categoriesData.categories || []);
@@ -362,9 +361,16 @@ export default function POSTerminal() {
     setSelectedTable(null);
     setActiveOrderId(null);
     setBaseOrderItems([]);
-  }, []);
+    setFeePercent(defaultFeePercent);
+    setBaseFeePercent(defaultFeePercent);
+  }, [defaultFeePercent]);
 
-  const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = cart.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0,
+  );
+  const feeAmount = Math.round(subtotal * feePercent) / 100;
+  const total = subtotal + feeAmount;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const baseQtyByProduct = baseOrderItems.reduce<Record<number, number>>(
     (acc, item) => {
@@ -408,8 +414,13 @@ export default function POSTerminal() {
       return;
     }
 
-    if (selectedTableOrder && selectedTableOrder.status !== "ready") {
-      alert("Buyurtmani yakunlash uchun holat `ready` bo'lishi kerak");
+    if (
+      selectedTableOrder &&
+      !["pending", "ready"].includes(selectedTableOrder.status)
+    ) {
+      alert(
+        "Buyurtmani yakunlash uchun holat `pending` yoki `ready` bo'lishi kerak",
+      );
       return;
     }
 
@@ -469,6 +480,7 @@ export default function POSTerminal() {
 
         const order = await res.json();
         const items = Array.isArray(order?.items) ? order.items : [];
+        const currentFeePercent = Number(order?.fee_percent || 0);
 
         setBaseOrderItems(
           items.map((item: any) => ({
@@ -503,16 +515,20 @@ export default function POSTerminal() {
           }
         }
         setCart(Array.from(merged.values()));
+        setFeePercent(currentFeePercent);
+        setBaseFeePercent(currentFeePercent);
         setActiveOrderId(orderId);
       } catch {
         setCart([]);
         setBaseOrderItems([]);
+        setFeePercent(defaultFeePercent);
+        setBaseFeePercent(defaultFeePercent);
         setActiveOrderId(orderId);
       } finally {
         setTableOrderLoading(false);
       }
     },
-    [products],
+    [products, defaultFeePercent],
   );
 
   const handleSelectTable = useCallback(
@@ -524,10 +540,12 @@ export default function POSTerminal() {
       } else {
         setCart([]);
         setBaseOrderItems([]);
+        setFeePercent(defaultFeePercent);
+        setBaseFeePercent(defaultFeePercent);
         setActiveOrderId(null);
       }
     },
-    [tableOrdersByTable, loadExistingOrderForTable],
+    [tableOrdersByTable, loadExistingOrderForTable, defaultFeePercent],
   );
 
   const submitOrder = async () => {
@@ -546,125 +564,51 @@ export default function POSTerminal() {
 
       const sendToNetworkPrinters = async (
         orderId: number,
+        itemsToPrint: CartItem[],
         createdAt?: string | null,
       ) => {
+        if (!itemsToPrint.length) return;
         try {
-          const printersRes = await fetch(
-            `${api.staff.base}/${api.staff.printers}`,
-          );
-          const printersData = await printersRes.json().catch(() => ({}));
-          const printers: NetworkPrinter[] = Array.isArray(
-            printersData?.printers,
-          )
-            ? printersData.printers
-            : [];
           const categoryNameById = new Map(
             categories.map((c) => [c.id, normalize(c.name)]),
           );
-
-          const payloadByPrinter = new Map<
-            string,
-            {
-              printer: NetworkPrinter;
-              items: Array<{
-                product_id: number;
-                title: string;
-                quantity: number;
-                unit_price: number;
-                subtotal: number;
-                category: string | null;
-              }>;
-            }
-          >();
-
-          for (const item of cart) {
-            const product = products.find((p) => p.id === item.product_id);
-            const categoryName =
-              product?.category_id != null
-                ? categoryNameById.get(product.category_id) || null
-                : null;
-
-            const matchedPrinters = printers.filter((printer) => {
-              const routingKeys = getPrinterRoutingKeys(printer);
-              if (!routingKeys.length) return false;
-
-              const isDefaultRoute =
-                routingKeys.includes("all") || routingKeys.includes("default");
-
-              if (!categoryName) {
-                return isDefaultRoute;
-              }
-
-              return routingKeys.includes(categoryName) || isDefaultRoute;
-            });
-
-            if (!matchedPrinters.length) continue;
-
-            for (const matchedPrinter of matchedPrinters) {
-              const current = payloadByPrinter.get(
-                String(matchedPrinter.id),
-              ) || {
-                printer: matchedPrinter,
-                items: [],
-              };
-              current.items.push({
+          const payload = {
+            order_id: Number(orderId),
+            staff_name: CURRENT_USER_NAME,
+            staff_id: CURRENT_USER_ID,
+            table_id: selectedTable?.id ?? null,
+            table_number: selectedTable?.number ?? null,
+            created_at: createdAt || new Date().toISOString(),
+            items: itemsToPrint.map((item) => {
+              const product = products.find((p) => p.id === item.product_id);
+              const categoryName =
+                product?.category_id != null
+                  ? categoryNameById.get(product.category_id) || null
+                  : null;
+              return {
                 product_id: item.product_id,
                 title: item.title,
                 quantity: item.quantity,
                 unit_price: item.price,
                 subtotal: item.quantity * item.price,
                 category: categoryName,
-              });
-              payloadByPrinter.set(String(matchedPrinter.id), current);
-            }
-          }
+              };
+            }),
+          };
 
-          if (payloadByPrinter.size > 0) {
-            await Promise.all(
-              Array.from(payloadByPrinter.values()).map(
-                async ({ printer, items }) => {
-                  const payload = {
-                    printer_id: Number(printer.id),
-                    order_id: Number(orderId),
-                    printer_name: printer.name,
-                    host: printer.host,
-                    port: Number(printer.port) || 9100,
-                    staff_name: CURRENT_USER_NAME,
-                    staff_id: CURRENT_USER_ID,
-                    table_id: selectedTable?.id ?? null,
-                    table_number: selectedTable?.number ?? null,
-                    created_at: createdAt || new Date().toISOString(),
-                    items,
-                  };
-
-                  const dispatchRes = await fetch(
-                    `${api.staff.base}/${api.staff.printers}/dispatch`,
-                    {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                      },
-                      body: JSON.stringify(payload),
-                    },
-                  );
-                  if (!dispatchRes.ok) {
-                    const errorData = await dispatchRes
-                      .json()
-                      .catch(() => ({}));
-                    console.warn(
-                      `Printer dispatch failed: ${printer.name}`,
-                      errorData,
-                    );
-                  }
-                },
-              ),
-            );
-          } else {
-            console.warn("No network printer matched order items", {
-              order_id: orderId,
-              printer_names: printers.map((p) => p.name),
-              cart_product_ids: cart.map((i) => i.product_id),
-            });
+          const dispatchRes = await fetch(
+            `${api.staff.base}/${api.staff.printers}/dispatch`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(payload),
+            },
+          );
+          if (!dispatchRes.ok) {
+            const errorData = await dispatchRes.json().catch(() => ({}));
+            console.warn("Printer dispatch failed", errorData);
           }
         } catch (networkPrintError) {
           console.error("Network printer dispatch failed:", networkPrintError);
@@ -673,6 +617,7 @@ export default function POSTerminal() {
 
       if (orderIdToUpdate) {
         const baseByProduct = new Map<number, ExistingOrderItemRef[]>();
+        const printerDeltaItems: CartItem[] = [];
         for (const item of baseOrderItems) {
           const list = baseByProduct.get(item.product_id) || [];
           list.push(item);
@@ -708,6 +653,14 @@ export default function POSTerminal() {
             changed.quantity !== currentQty ||
             Number(changed.price) !== Number(primary.price)
           ) {
+            if (changed.quantity > currentQty) {
+              printerDeltaItems.push({
+                product_id: changed.product_id,
+                title: changed.title,
+                price: changed.price,
+                quantity: changed.quantity - currentQty,
+              });
+            }
             const putRes = await fetch(
               `${API_URL}${api.orders.base}/${api.orders.orders}/${orderIdToUpdate}/items/${primary.item_id}`,
               {
@@ -751,6 +704,7 @@ export default function POSTerminal() {
 
         for (const item of cart) {
           if (baseByProduct.has(item.product_id)) continue;
+          printerDeltaItems.push({ ...item });
           const addRes = await fetch(
             `${API_URL}${api.orders.base}/${api.orders.orders}/${orderIdToUpdate}/items`,
             {
@@ -773,11 +727,37 @@ export default function POSTerminal() {
           }
         }
 
+        if (feePercent !== baseFeePercent) {
+          const feeRes = await fetch(
+            `${API_URL}${api.orders.base}/${api.orders.orders}/${orderIdToUpdate}`,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                fee_percent: feePercent,
+              }),
+            },
+          );
+          if (!feeRes.ok) {
+            const errorData = await feeRes.json().catch(() => ({}));
+            throw new Error(
+              String(errorData?.detail || "Servis haqini yangilab bo'lmadi"),
+            );
+          }
+        }
+
         setOrderSuccess(true);
         await fetchData();
         await fetchRestaurantTableActivity();
         await loadExistingOrderForTable(orderIdToUpdate);
-        await sendToNetworkPrinters(orderIdToUpdate, new Date().toISOString());
+        await sendToNetworkPrinters(
+          orderIdToUpdate,
+          printerDeltaItems,
+          new Date().toISOString(),
+        );
         setTimeout(() => setOrderSuccess(false), 3000);
         return;
       }
@@ -786,6 +766,7 @@ export default function POSTerminal() {
         user_id: CURRENT_USER_ID,
         business_type: isRestaurant ? "restaurant" : "market",
         table_id: isRestaurant && selectedTable ? selectedTable.id : null,
+        fee_percent: feePercent,
         items: cart.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity,
@@ -821,48 +802,11 @@ export default function POSTerminal() {
       // 2. Send order parts to configured network printers.
       await sendToNetworkPrinters(
         Number(createdOrder?.id),
+        cart,
         createdOrder?.created_at || null,
       );
 
-      // 3. Print to LOCAL printer via PrintAgent
-      try {
-        const printReceipt = {
-          order_id: createdOrder.id,
-          business_name: "POS System", // TODO: Get from settings
-          business_address: "123 Main Street", // TODO: Get from settings
-          business_phone: "+998 90 123 4567", // TODO: Get from settings
-          cashier: CURRENT_USER_NAME, // FIXED: Use localStorage instead of user?.full_name
-          table: selectedTable?.number,
-          items: cart.map((item) => ({
-            name: item.title,
-            quantity: item.quantity,
-            price: item.price,
-            subtotal: item.quantity * item.price,
-          })),
-          total: createdOrder.total || total,
-        };
-
-        // Print to local printer (non-blocking)
-        const printResult = await printService.printReceipt(printReceipt);
-
-        if (printResult.status === "success") {
-          setPrintNotification("✅ Chek chop etildi!");
-        } else if (printResult.status === "agent_unavailable") {
-          setPrintNotification("⚠️ Printer topilmadi");
-        } else if (printResult.status === "saved") {
-          setPrintNotification("💾 Chek faylga saqlandi");
-        } else {
-          setPrintNotification("❌ Chop etishda xatolik");
-        }
-
-        setTimeout(() => setPrintNotification(null), 3000);
-      } catch (printError) {
-        console.error("Print error:", printError);
-        setPrintNotification("⚠️ Chop etishda xatolik");
-        setTimeout(() => setPrintNotification(null), 3000);
-      }
-
-      // 4. Show success and clear cart
+      // 3. Show success and clear cart
       setOrderSuccess(true);
       clearCart();
       setShowTableSelect(false);
@@ -1340,6 +1284,16 @@ export default function POSTerminal() {
                   <span className="text-gray-300">Mahsulotlar:</span>
                   <span className="font-bold">{itemCount} ta</span>
                 </div>
+                <div className="flex justify-between items-center mb-2 text-base">
+                  <span className="text-gray-300">Mahsulot jami:</span>
+                  <span className="font-semibold">{formatPrice(subtotal)}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2 text-base">
+                  <span className="text-gray-300">Servis haqi:</span>
+                  <span className="font-semibold text-orange-300">
+                    {feePercent.toFixed(1)}% / {formatPrice(feeAmount)}
+                  </span>
+                </div>
                 <div className="flex justify-between items-center text-2xl font-black">
                   <span>Jami:</span>
                   <span className="text-orange-400">{formatPrice(total)}</span>
@@ -1380,6 +1334,10 @@ export default function POSTerminal() {
                     ? formatPrice(selectedTableOrder.total)
                     : "-"}
                 </p>
+                <p className="text-base text-slate-700 mt-2">
+                  Servis haqi: {feePercent.toFixed(1)}% /{" "}
+                  {formatPrice(feeAmount)}
+                </p>
               </div>
 
               <div className="mb-4 flex gap-3">
@@ -1388,7 +1346,7 @@ export default function POSTerminal() {
                   disabled={
                     isCompletingOrder ||
                     !selectedTableOrder ||
-                    selectedTableOrder.status !== "ready"
+                    !["pending", "ready"].includes(selectedTableOrder.status)
                   }
                   className="px-5 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-lg"
                 >
@@ -1877,6 +1835,18 @@ export default function POSTerminal() {
                   <div className="flex justify-between items-center mb-2 text-lg">
                     <span className="text-gray-300">Mahsulotlar:</span>
                     <span className="font-bold">{itemCount} ta</span>
+                  </div>
+                  <div className="flex justify-between items-center mb-2 text-base">
+                    <span className="text-gray-300">Mahsulot jami:</span>
+                    <span className="font-semibold">
+                      {formatPrice(subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mb-2 text-base">
+                    <span className="text-gray-300">Servis haqi:</span>
+                    <span className="font-semibold text-orange-300">
+                      {feePercent.toFixed(1)}% / {formatPrice(feeAmount)}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center text-3xl font-black">
                     <span>Jami:</span>

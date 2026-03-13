@@ -53,7 +53,13 @@ async def lifespan(_: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
     await _ensure_table_location_column()
 
-    await rabbitmq_client.connect()
+    rabbitmq_connected = await rabbitmq_client.connect(retries=5, delay_seconds=2)
+    if not rabbitmq_connected:
+        # Keep the API alive even if RabbitMQ is still booting.
+        await rabbitmq_client.connect_in_background(retries=60, delay_seconds=2)
+        print(
+            "⚠️ Database Service started without RabbitMQ, background reconnect enabled"
+        )
     print("✅ Database Service started on port 8003")
 
     yield

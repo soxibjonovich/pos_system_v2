@@ -1,6 +1,8 @@
 import asyncio
 import socket
 from datetime import datetime
+from types import SimpleNamespace
+from typing import Any
 
 import httpx
 import schemas
@@ -183,14 +185,33 @@ def _safe_tspl_text(value: str | None) -> str:
     return text[:42]
 
 
+def _normalize_printer_key(value: str | None) -> str:
+    return str(value or "").strip().lower()
+
+
+def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
+    names = [
+        _normalize_printer_key(part)
+        for part in str(printer.get("name", "")).split(";")
+        if _normalize_printer_key(part)
+    ]
+    categories = [
+        _normalize_printer_key(category)
+        for category in (printer.get("categories") or [])
+        if _normalize_printer_key(category)
+    ]
+    return list(dict.fromkeys([*names, *categories]))
+
+
 def _build_tspl_commands(payload: schemas.PrinterDispatchRequest) -> str:
+    printer_name = getattr(payload, "printer_name", None) or "Kitchen Printer"
     created_text = payload.created_at or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     table_text = payload.table_number or (
         str(payload.table_id) if payload.table_id else "-"
     )
 
     lines: list[tuple[int, str]] = [
-        (30, f"Printer: {_safe_tspl_text(payload.printer_name)}"),
+        (30, f"Printer: {_safe_tspl_text(printer_name)}"),
         (70, f"Order: #{payload.order_id}"),
         (110, f"Table: {_safe_tspl_text(table_text)}"),
         (150, f"Staff: {_safe_tspl_text(payload.staff_name)}"),
@@ -231,25 +252,115 @@ def _send_tspl_over_tcp(
 
 async def dispatch_printer_job(payload: schemas.PrinterDispatchRequest):
     try:
-        commands = _build_tspl_commands(payload)
-        await asyncio.to_thread(
-            _send_tspl_over_tcp,
-            payload.host.strip(),
-            int(payload.port),
-            commands,
+        printers_data = await get_printers(active_only=True)
+        printers = (
+            printers_data.get("printers", []) if isinstance(printers_data, dict) else []
         )
+
+        if not printers:
+            return {
+                "ok": False,
+                "order_id": payload.order_id,
+                "sent_printers": 0,
+                "sent_items": 0,
+                "errors": [{"detail": "No active printers configured"}],
+            }
+
+        payload_by_printer: dict[str, dict[str, Any]] = {}
+        for item in payload.items:
+            category_name = _normalize_printer_key(item.category)
+            for printer in printers:
+                routing_keys = _get_printer_routing_keys(printer)
+                if not routing_keys:
+                    continue
+
+                is_default_route = "all" in routing_keys or "default" in routing_keys
+                if category_name:
+                    matches = category_name in routing_keys or is_default_route
+                else:
+                    matches = is_default_route
+                if not matches:
+                    continue
+
+                printer_key = str(printer.get("id"))
+                current = payload_by_printer.get(printer_key)
+                if not current:
+                    current = {"printer": printer, "items": []}
+                    payload_by_printer[printer_key] = current
+                current["items"].append(item)
+
+        if not payload_by_printer:
+            return {
+                "ok": False,
+                "order_id": payload.order_id,
+                "sent_printers": 0,
+                "sent_items": 0,
+                "errors": [{"detail": "No printer matched order items"}],
+            }
+
+        results = []
+        errors = []
+        for current in payload_by_printer.values():
+            printer = current["printer"]
+            printer_payload = SimpleNamespace(
+                order_id=payload.order_id,
+                staff_name=payload.staff_name,
+                staff_id=payload.staff_id,
+                table_id=payload.table_id,
+                table_number=payload.table_number,
+                created_at=payload.created_at,
+                items=current["items"],
+                printer_name=printer.get("name", "Kitchen Printer"),
+                host=str(printer.get("host", "")).strip(),
+                port=int(printer.get("port") or 9100),
+            )
+
+            commands = _build_tspl_commands(printer_payload)
+            try:
+                await asyncio.to_thread(
+                    _send_tspl_over_tcp,
+                    printer_payload.host,
+                    printer_payload.port,
+                    commands,
+                )
+                results.append(
+                    {
+                        "printer_id": printer.get("id"),
+                        "printer_name": printer.get("name"),
+                        "host": printer.get("host"),
+                        "port": printer.get("port"),
+                        "sent_items": len(current["items"]),
+                    }
+                )
+            except (socket.timeout, TimeoutError):
+                errors.append(
+                    {
+                        "printer_id": printer.get("id"),
+                        "printer_name": printer.get("name"),
+                        "detail": f"Printer timeout: {printer.get('host')}:{printer.get('port')}",
+                    }
+                )
+            except OSError as exc:
+                errors.append(
+                    {
+                        "printer_id": printer.get("id"),
+                        "printer_name": printer.get("name"),
+                        "detail": f"Printer connection failed: {exc}",
+                    }
+                )
+
         return {
-            "ok": True,
-            "printer_name": payload.printer_name,
-            "host": payload.host,
-            "port": payload.port,
+            "ok": len(results) > 0,
             "order_id": payload.order_id,
-            "sent_items": len(payload.items),
+            "sent_printers": len(results),
+            "sent_items": sum(result["sent_items"] for result in results),
+            "results": results,
+            "errors": errors,
         }
     except (socket.timeout, TimeoutError):
         raise HTTPException(
             status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail=f"Printer timeout: {payload.host}:{payload.port}",
+            detail="Printer timeout",
         )
     except OSError as exc:
         raise HTTPException(
@@ -380,6 +491,7 @@ async def create_staff_order(
     table_id: int | None = None,
     business_type: str = "restaurant",
     customer_name: str | None = None,
+    fee_percent: float = 0,
 ):
     """Create a new order from staff POS"""
     try:
@@ -387,6 +499,7 @@ async def create_staff_order(
             "user_id": user_id,
             "items": items,
             "business_type": business_type,
+            "fee_percent": fee_percent,
         }
 
         if table_id:
@@ -519,7 +632,11 @@ async def get_today_orders(user_id: int):
 
 
 async def update_staff_order(
-    order_id: int, user_id: int, items: list[dict], table_id: int | None = None
+    order_id: int,
+    user_id: int,
+    items: list[dict],
+    table_id: int | None = None,
+    fee_percent: float | None = None,
 ):
     """Update an existing order"""
     try:
@@ -545,6 +662,8 @@ async def update_staff_order(
         update_data = {"items": items}
         if table_id is not None:
             update_data["table_id"] = table_id
+        if fee_percent is not None:
+            update_data["fee_percent"] = fee_percent
 
         response = await staff_client.order_client.put(
             f"/orders/{order_id}", json=update_data
