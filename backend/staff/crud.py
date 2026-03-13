@@ -226,8 +226,13 @@ def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
 def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     created_text = _format_uzbekistan_time(payload.created_at)
     printed_text = datetime.now(UZBEKISTAN_TZ).strftime("%H:%M %d.%m.%Y")
-    table_text = payload.table_number or (
+    raw_table_text = payload.table_number or (
         str(payload.table_id) if payload.table_id else "-"
+    )
+    table_text = (
+        f"{_safe_tspl_text(payload.table_location)}/{_safe_tspl_text(raw_table_text)}"
+        if payload.table_location
+        else _safe_tspl_text(raw_table_text)
     )
 
     init = b"\x1b\x40"
@@ -238,15 +243,16 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     left = b"\x1b\x61\x00"
     big = b"\x1d\x21\x11"
     normal = b"\x1d\x21\x00"
+    medium = b"\x1d\x21\x01"
     feed = b"\x1b\x64\x03"
     cut = b"\x1d\x56\x41\x03"
 
     lines = [
         f"CHECK No: #{payload.order_id}",
         f"WAITER: {_safe_tspl_text(payload.staff_name)}",
-        f"OPENED: {_safe_tspl_text(created_text)}",
+        # f"OPENED: {_safe_tspl_text(created_text)}",
         f"PRINTED: {_safe_tspl_text(printed_text)}",
-        f"TABLE: {_safe_tspl_text(table_text)}",
+        f"TABLE: {table_text}",
         "--------------------------------",
     ]
 
@@ -256,17 +262,15 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     for item in payload.items:
         qty = max(1, int(item.quantity))
         title = _safe_tspl_text(item.title)
-        price = float(item.unit_price)
-        subtotal = float(item.subtotal)
         lines.append(_item_title_line(title))
-        lines.append(f"  x{qty} x {price:,.0f} = {subtotal:,.0f}")
+        lines.append(f"  x{qty}")
 
     lines.append("--------------------------------")
 
     payload_bytes = init + charset
     payload_bytes += center + big + bold_on
     payload_bytes += b"KITCHEN\n"
-    payload_bytes += normal + bold_off + left
+    payload_bytes += medium + bold_off + left
     payload_bytes += "\n".join(lines).encode("cp866", errors="ignore")
     payload_bytes += b"\n\n" + feed + cut
     return payload_bytes
@@ -339,6 +343,7 @@ async def dispatch_printer_job(payload: schemas.PrinterDispatchRequest):
                 staff_id=payload.staff_id,
                 table_id=payload.table_id,
                 table_number=payload.table_number,
+                table_location=payload.table_location,
                 created_at=payload.created_at,
                 items=current["items"],
                 printer_name=printer.get("name", "Kitchen Printer"),

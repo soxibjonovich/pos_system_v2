@@ -329,6 +329,8 @@ class PrinterManager:
     def _print_to_thermal(self, data: dict):
         """Print to thermal printer with ESC/POS commands"""
         p = self.printer
+        strong_sep = "=" * 32
+        thin_sep = "-" * 32
 
         # Initialize printer
         p._raw(b"\x1b\x40")  # ESC @ - Initialize
@@ -340,7 +342,7 @@ class PrinterManager:
         p.set(align="center", text_type="normal", width=1, height=1)
         p.text(f"{data.get('business_address', '')}\n")
         p.text(f"Tel: {data.get('business_phone', '')}\n")
-        p.text("================================\n")
+        p.text(f"{strong_sep}\n")
 
         # Order info
         p.set(align="left")
@@ -349,19 +351,20 @@ class PrinterManager:
         p.text(f"Cashier: {data.get('cashier', 'Staff')}\n")
         if data.get("table"):
             p.text(f"Table: {data['table']}\n")
-        p.text("--------------------------------\n")
+        p.text(f"{thin_sep}\n")
 
         # Items
         for item in data.get("items", []):
-            name = item.get("name", "Item")[:20]
+            name = item.get("name", "Item")[:14]
             qty = item.get("quantity", 1)
             price = item.get("price", 0)
             subtotal = item.get("subtotal", qty * price)
+            formula = f"{qty} x {price:,.0f} = {subtotal:,.0f}"
+            width = 32
+            spaces = max(1, width - len(name) - len(formula))
+            p.text(f"{name}{' ' * spaces}{formula}\n")
 
-            p.text(f"{name}\n")
-            p.text(f"  {qty} x {price:,.0f} = {subtotal:,.0f}\n")
-
-        p.text("================================\n")
+        p.text(f"{strong_sep}\n")
 
         # Total
         subtotal_amount = data.get("subtotal_amount")
@@ -375,6 +378,8 @@ class PrinterManager:
         p.set(text_type="b", width=2, height=2)
         total = data.get("total", 0)
         p.text(f"TOTAL: {total:,.0f} so'm\n")
+        p.set(text_type="normal", width=1, height=1)
+        p.text(f"{strong_sep}\n")
 
         # Footer
         p.set(align="center", text_type="normal", width=1, height=1)
@@ -396,35 +401,39 @@ class PrinterManager:
     def _save_fallback(self, receipt_data: dict) -> dict:
         """Save receipt as text file when printer unavailable"""
         try:
+            strong_sep = "=" * 32
+            thin_sep = "-" * 32
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             order_id = receipt_data.get("order_id", "unknown")
             filename = self.fallback_dir / f"receipt_{order_id}_{timestamp}.txt"
 
             with open(filename, "w", encoding="utf-8") as f:
-                f.write("=" * 40 + "\n")
+                f.write(strong_sep + "\n")
                 f.write(
                     f"{receipt_data.get('business_name', 'POS System')}\n".center(40)
                 )
                 f.write(f"{receipt_data.get('business_address', '')}\n".center(40))
                 f.write(f"Tel: {receipt_data.get('business_phone', '')}\n".center(40))
-                f.write("=" * 40 + "\n\n")
+                f.write(strong_sep + "\n\n")
 
                 f.write(f"Order #{order_id}\n")
                 f.write(f"Date: {datetime.now().strftime('%d.%m.%Y %H:%M')}\n")
                 f.write(f"Cashier: {receipt_data.get('cashier', 'Staff')}\n")
                 if receipt_data.get("table"):
                     f.write(f"Table: {receipt_data['table']}\n")
-                f.write("-" * 40 + "\n\n")
+                f.write(thin_sep + "\n")
 
                 for item in receipt_data.get("items", []):
-                    name = item.get("name", "Item")
+                    name = item.get("name", "Item")[:14]
                     qty = item.get("quantity", 1)
                     price = item.get("price", 0)
                     subtotal = item.get("subtotal", qty * price)
-                    f.write(f"{name}\n")
-                    f.write(f"  {qty} x {price:,.0f} = {subtotal:,.0f}\n")
+                    formula = f"{qty} x {price:,.0f} = {subtotal:,.0f}"
+                    width = 32
+                    spaces = max(1, width - len(name) - len(formula))
+                    f.write(f"{name}{' ' * spaces}{formula}\n")
 
-                f.write("\n" + "=" * 40 + "\n")
+                f.write("\n" + strong_sep + "\n")
                 subtotal_amount = receipt_data.get("subtotal_amount")
                 fee_percent = receipt_data.get("fee_percent", 0)
                 fee_amount = receipt_data.get("fee_amount", 0)
@@ -433,7 +442,7 @@ class PrinterManager:
                     if fee_amount:
                         f.write(f"Fee ({fee_percent:g}%): {fee_amount:,.0f} so'm\n")
                 f.write(f"TOTAL: {receipt_data.get('total', 0):,.0f} so'm\n")
-                f.write("=" * 40 + "\n\n")
+                f.write(strong_sep + "\n\n")
                 f.write("Thank you! / Rahmat!\n".center(40))
 
             logger.info(f"Receipt saved to {filename}")

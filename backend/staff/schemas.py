@@ -197,5 +197,6 @@ class PrinterDispatchRequest(BaseModel):
     staff_id: int | None = None
     table_id: int | None = None
     table_number: str | None = None
+    table_location: str | None = None
     created_at: str | None = None
     items: list[PrinterDispatchItem] = Field(..., min_length=1)
