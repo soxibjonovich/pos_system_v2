@@ -246,6 +246,8 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     medium = b"\x1d\x21\x01"
     feed = b"\x1b\x64\x03"
     cut = b"\x1d\x56\x41\x03"
+    line_width = 24
+    separator = "-" * line_width
 
     lines = [
         f"CHECK No: #{payload.order_id}",
@@ -253,11 +255,11 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
         # f"OPENED: {_safe_tspl_text(created_text)}",
         f"PRINTED: {_safe_tspl_text(printed_text)}",
         f"TABLE: {table_text}",
-        "--------------------------------",
+        separator,
     ]
 
     def _item_title_line(title: str) -> str:
-        return f"- {title[:30]}"
+        return f"- {title[:20]}"
 
     for item in payload.items:
         qty = max(1, int(item.quantity))
@@ -265,7 +267,7 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
         lines.append(_item_title_line(title))
         lines.append(f"  x{qty}")
 
-    lines.append("--------------------------------")
+    lines.append(separator)
 
     payload_bytes = init + charset
     payload_bytes += center + big + bold_on

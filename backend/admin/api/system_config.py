@@ -40,3 +40,29 @@ async def update_service_fee(data: schemas.ServiceFeeUpdate):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update"
         )
     return {"key": "service_fee_percent", "value": value}
+
+
+@router.get("/restaurant-profile")
+async def get_restaurant_profile():
+    business_name = await crud.get_system_config("business_name")
+    business_phone = await crud.get_system_config("business_phone")
+    return {
+        "business_name": (business_name or {}).get("value", "POS System"),
+        "business_phone": (business_phone or {}).get("value", "+998"),
+    }
+
+
+@router.put("/restaurant-profile")
+async def update_restaurant_profile(data: schemas.RestaurantProfileUpdate):
+    name = data.business_name.strip()
+    phone = data.business_phone.strip()
+    updated_name = await crud.update_system_config("business_name", name)
+    updated_phone = await crud.update_system_config("business_phone", phone)
+    if not updated_name or not updated_phone:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update"
+        )
+    return {
+        "business_name": name,
+        "business_phone": phone,
+    }

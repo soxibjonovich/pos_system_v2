@@ -4,7 +4,7 @@ import { useBusiness } from "@/contexts/business-context";
 import { useI18n } from "@/i18n";
 import { AuthGuard } from "@/middlewares/AuthGuard";
 import { createFileRoute } from "@tanstack/react-router";
-import { Building2, Check, Percent, Store } from "lucide-react";
+import { Building2, Check, Percent, Phone, Store } from "lucide-react";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/admin/settings/")({
@@ -20,24 +20,33 @@ export default function AdminSettings() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [serviceFeePercent, setServiceFeePercent] = useState(0);
+  const [businessName, setBusinessName] = useState("POS System");
+  const [businessPhone, setBusinessPhone] = useState("+998");
 
   const { t } = useI18n();
 
   useEffect(() => {
-    const loadServiceFee = async () => {
+    const loadSettings = async () => {
       try {
-        const res = await fetch(
-          `${API_URL}${api.admin.base}/system-config/service-fee`,
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        setServiceFeePercent(Number(data?.value || 0));
+        const [feeRes, profileRes] = await Promise.all([
+          fetch(`${API_URL}${api.admin.base}/system-config/service-fee`),
+          fetch(`${API_URL}${api.admin.base}/system-config/restaurant-profile`),
+        ]);
+        if (feeRes.ok) {
+          const feeData = await feeRes.json();
+          setServiceFeePercent(Number(feeData?.value || 0));
+        }
+        if (profileRes.ok) {
+          const profileData = await profileRes.json();
+          setBusinessName(profileData?.business_name || "POS System");
+          setBusinessPhone(profileData?.business_phone || "+998");
+        }
       } catch (err) {
-        console.error("Failed to load service fee:", err);
+        console.error("Failed to load settings:", err);
       }
     };
 
-    loadServiceFee();
+    loadSettings();
   }, []);
 
   const handleUpdate = async (type: "restaurant" | "market") => {
@@ -85,6 +94,35 @@ export default function AdminSettings() {
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       console.error("Failed to update service fee:", err);
+      alert(t("common.failed"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleProfileUpdate = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(
+        `${API_URL}${api.admin.base}/system-config/restaurant-profile`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            business_name: businessName.trim(),
+            business_phone: businessPhone.trim(),
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        throw new Error("Failed to update profile");
+      }
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error("Failed to update restaurant profile:", err);
       alert(t("common.failed"));
     } finally {
       setIsSubmitting(false);
@@ -217,6 +255,54 @@ export default function AdminSettings() {
                     </span>
                   </>
                 )}
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 rounded-xl p-5 mt-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-3">
+                <Phone className="size-5 text-blue-600" />
+                <h4 className="font-bold text-gray-900 dark:text-gray-100">
+                  Receipt Header
+                </h4>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                These values are printed on customer receipts.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Restaurant Title
+                  </label>
+                  <input
+                    type="text"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    className="w-full h-12 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 text-base font-semibold text-gray-900 dark:text-gray-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Phone Number
+                  </label>
+                  <input
+                    type="text"
+                    value={businessPhone}
+                    onChange={(e) => setBusinessPhone(e.target.value)}
+                    className="w-full h-12 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 text-base font-semibold text-gray-900 dark:text-gray-100"
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <Button
+                  onClick={handleProfileUpdate}
+                  disabled={
+                    isSubmitting ||
+                    !businessName.trim() ||
+                    !businessPhone.trim()
+                  }
+                >
+                  Save Receipt Header
+                </Button>
               </div>
             </div>
 

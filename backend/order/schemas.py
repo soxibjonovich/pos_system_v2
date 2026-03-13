@@ -115,3 +115,5 @@ class TablesResponse(BaseModel):
 class SystemConfigResponse(BaseModel):
     business_type: Literal["restaurant", "market"]
     service_fee_percent: float = 0
+    business_name: str = "POS System"
+    business_phone: str = "+998"

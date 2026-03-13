@@ -5,20 +5,20 @@ import { AuthGuard } from "@/middlewares/AuthGuard";
 import { printService } from "@/utils/printService";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
-  Check,
-  Grid3x3,
-  List,
-  LogOut,
-  Minus,
-  UtensilsCrossed,
-  Plus,
-  Receipt,
-  Search,
-  ShoppingCart,
-  Trash2,
-  Users,
-  X,
-  Printer,
+    Check,
+    Grid3x3,
+    List,
+    LogOut,
+    Minus,
+    Plus,
+    Printer,
+    Receipt,
+    Search,
+    ShoppingCart,
+    Trash2,
+    Users,
+    UtensilsCrossed,
+    X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -578,6 +578,7 @@ export default function POSTerminal() {
             staff_id: CURRENT_USER_ID,
             table_id: selectedTable?.id ?? null,
             table_number: selectedTable?.number ?? null,
+            table_location: selectedTable?.location ?? null,
             created_at: createdAt || new Date().toISOString(),
             items: itemsToPrint.map((item) => {
               const product = products.find((p) => p.id === item.product_id);

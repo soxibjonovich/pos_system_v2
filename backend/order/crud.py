@@ -73,6 +73,22 @@ async def get_service_fee_percent() -> float:
 
 
 @handle_service_errors
+async def get_business_name() -> str:
+    response = await service_client.db_client.get("/system-config/business_name")
+    if response.status_code == 200:
+        return str(response.json().get("value", "POS System") or "POS System")
+    return "POS System"
+
+
+@handle_service_errors
+async def get_business_phone() -> str:
+    response = await service_client.db_client.get("/system-config/business_phone")
+    if response.status_code == 200:
+        return str(response.json().get("value", "+998") or "+998")
+    return "+998"
+
+
+@handle_service_errors
 async def get_active_tables() -> list[schemas.TableResponse]:
     response = await service_client.db_client.get("/tables")
     if response.status_code != 200:

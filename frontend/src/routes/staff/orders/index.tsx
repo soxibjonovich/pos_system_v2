@@ -139,6 +139,10 @@ function OrdersPage() {
   const [originalOrder, setOriginalOrder] = useState<Order | null>(null);
   const [saving, setSaving] = useState(false);
   const [printingOrderId, setPrintingOrderId] = useState<number | null>(null);
+  const [receiptConfig, setReceiptConfig] = useState({
+    business_name: "POS System",
+    business_phone: "+998",
+  });
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -169,10 +173,25 @@ function OrdersPage() {
     }
   }, []);
 
+  const fetchReceiptConfig = useCallback(async () => {
+    try {
+      const res = await fetch(`${ORDERS_URL}/config`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setReceiptConfig({
+        business_name: data?.business_name || "POS System",
+        business_phone: data?.business_phone || "+998",
+      });
+    } catch {
+      // Keep defaults when config is unavailable.
+    }
+  }, []);
+
   useEffect(() => {
     fetchOrders();
     fetchProducts();
-  }, [fetchOrders, fetchProducts]);
+    fetchReceiptConfig();
+  }, [fetchOrders, fetchProducts, fetchReceiptConfig]);
 
   useEffect(() => {
     let filtered = [...orders];
@@ -230,8 +249,14 @@ function OrdersPage() {
       return;
     }
 
-    if (newStatus === "completed" && currentOrder?.status !== "ready") {
-      alert("Faqat 'ready' holatidagi buyurtmani yakunlash mumkin");
+    if (
+      newStatus === "completed" &&
+      currentOrder &&
+      !["pending", "ready"].includes(currentOrder.status)
+    ) {
+      alert(
+        "Faqat 'pending' yoki 'ready' holatidagi buyurtmani yakunlash mumkin",
+      );
       return;
     }
     if (!currentOrder) {
@@ -391,9 +416,9 @@ function OrdersPage() {
 
       const result = await printService.printReceipt({
         order_id: detail.id,
-        business_name: "POS System",
-        business_address: "Restaurant",
-        business_phone: "+998",
+        business_name: receiptConfig.business_name,
+        business_address: "",
+        business_phone: receiptConfig.business_phone,
         cashier: localStorage.getItem("userName") || `Staff #${detail.user_id}`,
         table: tableText,
         subtotal_amount: detail.subtotal_amount,
