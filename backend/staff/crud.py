@@ -224,8 +224,8 @@ def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
 
 
 def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
-    created_text = _format_uzbekistan_time(payload.created_at)
-    printed_text = datetime.now(UZBEKISTAN_TZ).strftime("%H:%M %d.%m.%Y")
+    printed_text = datetime.now(UZBEKISTAN_TZ).strftime("%H:%M  %d.%m.%Y")
+
     raw_table_text = payload.table_number or (
         str(payload.table_id) if payload.table_id else "-"
     )
@@ -235,48 +235,67 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
         else _safe_tspl_text(raw_table_text)
     )
 
-    init = b"\x1b\x40"
-    charset = b"\x1b\x74\x11"  # PC866
-    bold_on = b"\x1b\x45\x01"
-    bold_off = b"\x1b\x45\x00"
-    center = b"\x1b\x61\x01"
-    left = b"\x1b\x61\x00"
-    big = b"\x1d\x21\x11"
-    normal = b"\x1d\x21\x00"
-    medium = b"\x1d\x21\x01"
-    feed = b"\x1b\x64\x03"
-    cut = b"\x1d\x56\x41\x03"
-    line_width = 24
-    separator = "-" * line_width
+    # --- ESC/POS command bytes ---
+    init        = b"\x1b\x40"           # Initialize printer
+    charset     = b"\x1b\x74\x11"       # Code page PC866 (Cyrillic)
 
-    lines = [
-        f"CHECK No: #{payload.order_id}",
-        f"WAITER: {_safe_tspl_text(payload.staff_name)}",
-        # f"OPENED: {_safe_tspl_text(created_text)}",
-        f"PRINTED: {_safe_tspl_text(printed_text)}",
-        f"TABLE: {table_text}",
-        separator,
-    ]
+    bold_on     = b"\x1b\x45\x01"
+    bold_off    = b"\x1b\x45\x00"
 
-    def _item_title_line(title: str) -> str:
-        return f"- {title[:20]}"
+    center      = b"\x1b\x61\x01"
+    left        = b"\x1b\x61\x00"
 
+    dbl_height  = b"\x1d\x21\x01"       # Double-height text
+    normal      = b"\x1d\x21\x00"       # Normal size
+
+    feed        = b"\x1b\x64\x04"       # Feed 4 lines
+    cut         = b"\x1d\x56\x41\x05"   # Partial cut with 5-dot feed
+
+    LINE_WIDTH  = 48                     # Standard 80mm thermal roll ≈ 48 chars
+    SEP         = "-" * LINE_WIDTH
+
+    # --- Header block ---
+    out = init + charset
+
+    # "KITCHEN" centered, double-height + bold
+    out += center + dbl_height + bold_on
+    out += "KITCHEN\n".encode("cp866", errors="ignore")
+    out += normal + bold_off
+
+    out += left
+
+    # Meta lines — bold labels, normal values on same line
+    def meta_line(label: str, value: str) -> bytes:
+        line = f"{label}: {value}\n"
+        return bold_on + label.encode("cp866", errors="ignore") + bold_off + \
+               f": {value}\n".encode("cp866", errors="ignore")
+
+    out += (SEP + "\n").encode("cp866")
+    out += meta_line("CHECK No", f"#{payload.order_id}")
+    out += meta_line("WAITER",   _safe_tspl_text(payload.staff_name))
+    out += meta_line("PRINTED",  printed_text)
+    out += meta_line("TABLE",    table_text)
+    out += (SEP + "\n").encode("cp866")
+
+    # --- Items block ---
+    # Format:  "- Item name .............. x3"
+    # Title gets up to LINE_WIDTH - 6 chars (for " xNN" suffix + 2 dots min)
     for item in payload.items:
-        qty = max(1, int(item.quantity))
-        title = _safe_tspl_text(item.title)
-        lines.append(_item_title_line(title))
-        lines.append(f"  x{qty}")
+        qty   = max(1, int(item.quantity))
+        title = _safe_tspl_text(item.title)[:32]   # max 32 chars for title
+        suffix = f" x{qty}"
+        # Pad with dots so the line fills LINE_WIDTH exactly
+        dots_needed = LINE_WIDTH - len(title) - len(suffix) - 2  # 2 for "- "
+        dots = "." * max(1, dots_needed)
+        line = f"- {title}{dots}{suffix}\n"
+        out += bold_on + line.encode("cp866", errors="ignore") + bold_off
 
-    lines.append(separator)
+    out += (SEP + "\n").encode("cp866")
 
-    payload_bytes = init + charset
-    payload_bytes += center + big + bold_on
-    payload_bytes += b"KITCHEN\n"
-    payload_bytes += medium + bold_off + left
-    payload_bytes += "\n".join(lines).encode("cp866", errors="ignore")
-    payload_bytes += b"\n\n" + feed + cut
-    return payload_bytes
+    # Footer feed & cut
+    out += feed + cut
 
+    return out
 
 def _send_escpos_over_tcp(
     host: str, port: int, payload: bytes, timeout_sec: int = 5
