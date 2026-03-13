@@ -203,51 +203,64 @@ def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys([*names, *categories]))
 
 
-def _build_tspl_commands(payload: schemas.PrinterDispatchRequest) -> str:
+def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     printer_name = getattr(payload, "printer_name", None) or "Kitchen Printer"
     created_text = payload.created_at or datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
     table_text = payload.table_number or (
         str(payload.table_id) if payload.table_id else "-"
     )
 
-    lines: list[tuple[int, str]] = [
-        (30, f"Printer: {_safe_tspl_text(printer_name)}"),
-        (70, f"Order: #{payload.order_id}"),
-        (110, f"Table: {_safe_tspl_text(table_text)}"),
-        (150, f"Staff: {_safe_tspl_text(payload.staff_name)}"),
-        (190, f"Time: {_safe_tspl_text(created_text)}"),
+    init = b"\x1b\x40"
+    charset = b"\x1b\x74\x11"  # PC866
+    bold_on = b"\x1b\x45\x01"
+    bold_off = b"\x1b\x45\x00"
+    center = b"\x1b\x61\x01"
+    left = b"\x1b\x61\x00"
+    big = b"\x1d\x21\x11"
+    normal = b"\x1d\x21\x00"
+    feed = b"\x1b\x64\x03"
+    cut = b"\x1d\x56\x41\x03"
+
+    total_qty = 0
+    lines = [
+        f"Printer: {_safe_tspl_text(printer_name)}",
+        f"Order: #{payload.order_id}",
+        f"Table: {_safe_tspl_text(table_text)}",
+        f"Staff: {_safe_tspl_text(payload.staff_name)}",
+        f"Time: {_safe_tspl_text(created_text)}",
+        "--------------------------------",
     ]
 
-    y = 240
-    total_qty = 0
     for idx, item in enumerate(payload.items, start=1):
         qty = max(1, int(item.quantity))
         total_qty += qty
         title = _safe_tspl_text(item.title)
-        lines.append((y, f"{idx}. {title} x{qty}"))
-        y += 35
+        lines.append(f"{idx}. {title}")
+        lines.append(f"   x{qty}")
 
-    lines.append((y + 15, f"Total items: {total_qty}"))
-    final_height = max(30, min(180, int((y + 70) / 8)))
+    lines.extend(
+        [
+            "--------------------------------",
+            f"Total items: {total_qty}",
+        ]
+    )
 
-    commands = [
-        f"SIZE 58 mm, {final_height} mm",
-        "GAP 3 mm, 0",
-        "DIRECTION 1",
-        "CLS",
-    ]
-    commands.extend([f'TEXT 20,{line_y},"3",0,1,1,"{text}"' for line_y, text in lines])
-    commands.append("PRINT 1,1")
-    return "\n".join(commands) + "\n"
+    payload_bytes = init + charset
+    payload_bytes += center + big + bold_on
+    payload_bytes += printer_name.encode("cp866", errors="ignore") + b"\n"
+    payload_bytes += normal + bold_off + left
+    payload_bytes += "\n".join(lines).encode("cp866", errors="ignore")
+    payload_bytes += b"\n\n" + feed + cut
+    return payload_bytes
 
 
-def _send_tspl_over_tcp(
-    host: str, port: int, commands: str, timeout_sec: int = 5
+def _send_escpos_over_tcp(
+    host: str, port: int, payload: bytes, timeout_sec: int = 5
 ) -> None:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.settimeout(timeout_sec)
         sock.connect((host, port))
-        sock.sendall(commands.encode("cp1251", errors="replace"))
+        sock.sendall(payload)
 
 
 async def dispatch_printer_job(payload: schemas.PrinterDispatchRequest):
@@ -315,13 +328,13 @@ async def dispatch_printer_job(payload: schemas.PrinterDispatchRequest):
                 port=int(printer.get("port") or 9100),
             )
 
-            commands = _build_tspl_commands(printer_payload)
+            ticket = _build_escpos_ticket(printer_payload)
             try:
                 await asyncio.to_thread(
-                    _send_tspl_over_tcp,
+                    _send_escpos_over_tcp,
                     printer_payload.host,
                     printer_payload.port,
-                    commands,
+                    ticket,
                 )
                 results.append(
                     {
