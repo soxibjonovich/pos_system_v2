@@ -286,7 +286,7 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
         suffix = f" x{qty}"
         # Pad with dots so the line fills LINE_WIDTH exactly
         dots_needed = LINE_WIDTH - len(title) - len(suffix) - 2  # 2 for "- "
-        dots = "." * max(1, dots_needed)
+        dots = " " * max(1, dots_needed)
         line = f"- {title}{dots}{suffix}\n"
         out += bold_on + line.encode("cp866", errors="ignore") + bold_off
 
