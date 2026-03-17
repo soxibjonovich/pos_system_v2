@@ -257,7 +257,9 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     # --- Header block ---
     out = init + charset
 
-    out += left
+    out += center + dbl_height + bold_on
+    out += "Kitchen\n".encode("cp866", errors="ignore")
+    out += normal + bold_off + left
 
     # Meta lines — bold labels, normal values on same line
     def meta_line(label: str, value: str) -> bytes:
@@ -269,8 +271,9 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
             + f": {value}\n".encode("cp866", errors="ignore")
         )
 
-    out += meta_line("TIME", printed_text)
-    out += meta_line("TABLE", table_text)
+    out += bold_on + _enc(f"#{payload.order_id}\n") + bold_off
+    out += _enc(f"{printed_text}\n")
+    out += _enc(f"{table_text}\n")
     out += (SEP + "\n").encode("cp866")
 
     # --- Items block ---
