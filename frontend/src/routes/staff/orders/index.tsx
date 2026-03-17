@@ -57,6 +57,7 @@ interface Order {
   items: OrderItem[];
   table?: {
     number?: string | number;
+    location?: string | null;
   } | null;
 }
 
@@ -64,6 +65,12 @@ interface Product {
   id: number;
   title: string;
   price: number;
+}
+
+interface TableMeta {
+  id: number;
+  number: string | number;
+  location?: string | null;
 }
 
 const STATUSES = {
@@ -100,6 +107,7 @@ const ORDERS_URL = `${api.staff.base}/${api.staff.orders}`;
 const PRODUCTS_URL = `${api.staff.base}/${api.staff.products}`;
 const TOKEN = localStorage.getItem("postoken");
 const UID = Number(localStorage.getItem("userId"));
+const ORDERS_PER_PAGE = 10;
 
 export const Route = createFileRoute("/staff/orders/")({
   component: () => (
@@ -128,10 +136,12 @@ function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [tablesById, setTablesById] = useState<Record<number, TableMeta>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [detailModal, setDetailModal] = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -173,6 +183,23 @@ function OrdersPage() {
     }
   }, []);
 
+  const fetchTables = useCallback(async () => {
+    try {
+      const res = await fetch(`${api.staff.base}/${api.staff.tables}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const nextMap: Record<number, TableMeta> = {};
+      for (const table of data.tables || []) {
+        if (table?.id != null) {
+          nextMap[Number(table.id)] = table;
+        }
+      }
+      setTablesById(nextMap);
+    } catch {
+      // Keep fallback map empty if request fails.
+    }
+  }, []);
+
   const fetchReceiptConfig = useCallback(async () => {
     try {
       const res = await fetch(`${ORDERS_URL}/config`);
@@ -190,8 +217,9 @@ function OrdersPage() {
   useEffect(() => {
     fetchOrders();
     fetchProducts();
+    fetchTables();
     fetchReceiptConfig();
-  }, [fetchOrders, fetchProducts, fetchReceiptConfig]);
+  }, [fetchOrders, fetchProducts, fetchTables, fetchReceiptConfig]);
 
   useEffect(() => {
     let filtered = [...orders];
@@ -202,6 +230,7 @@ function OrdersPage() {
       filtered = filtered.filter((o) => o.status === statusFilter);
     }
     setFilteredOrders(filtered);
+    setCurrentPage(1);
   }, [searchQuery, statusFilter, orders]);
 
   // GET /orders/{order_id} -> OrderResponse
@@ -403,16 +432,38 @@ function OrdersPage() {
       minute: "2-digit",
     });
 
+  const getTableLabel = (order: Order | null | undefined) => {
+    if (!order) return "-";
+    const fallbackTable =
+      order.table_id != null ? tablesById[Number(order.table_id)] : undefined;
+    const tableNumber =
+      order.table?.number != null
+        ? String(order.table.number)
+        : fallbackTable?.number != null
+          ? String(fallbackTable.number)
+          : order.table_id != null
+            ? String(order.table_id)
+            : "";
+    const tableLocation =
+      order.table?.location?.trim() || fallbackTable?.location?.trim();
+    if (tableLocation && tableNumber) return `${tableLocation}/${tableNumber}`;
+    return tableNumber || "-";
+  };
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredOrders.length / ORDERS_PER_PAGE),
+  );
+  const paginatedOrders = filteredOrders.slice(
+    (currentPage - 1) * ORDERS_PER_PAGE,
+    currentPage * ORDERS_PER_PAGE,
+  );
+
   const printOrderCheck = async (order: Order) => {
     setPrintingOrderId(order.id);
     try {
       const detail = (await fetchOrderDetail(order.id)) || order;
-      const tableText =
-        detail.table?.number != null
-          ? String(detail.table.number)
-          : detail.table_id != null
-            ? String(detail.table_id)
-            : undefined;
+      const tableText = getTableLabel(detail);
 
       const result = await printService.printReceipt({
         order_id: detail.id,
@@ -581,6 +632,7 @@ function OrdersPage() {
                 <TableHead className="font-bold text-gray-900">#</TableHead>
                 <TableHead className="font-bold text-gray-900">Summa</TableHead>
                 <TableHead className="font-bold text-gray-900">Holat</TableHead>
+                <TableHead className="font-bold text-gray-900">Stol</TableHead>
                 <TableHead className="font-bold text-gray-900">
                   Mahsulotlar
                 </TableHead>
@@ -593,7 +645,7 @@ function OrdersPage() {
             <TableBody>
               {!filteredOrders.length ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-16">
+                  <TableCell colSpan={7} className="text-center py-16">
                     <Package className="size-16 mx-auto mb-4 text-gray-300" />
                     <p className="text-gray-500 text-lg font-semibold">
                       Buyurtmalar yo'q
@@ -604,7 +656,7 @@ function OrdersPage() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredOrders.map((o) => (
+                paginatedOrders.map((o) => (
                   <TableRow key={o.id} className="hover:bg-gray-50">
                     <TableCell className="font-bold text-lg text-gray-900">
                       #{o.id}
@@ -614,6 +666,9 @@ function OrdersPage() {
                     </TableCell>
                     <TableCell>
                       <StatusBadge status={o.status} />
+                    </TableCell>
+                    <TableCell className="font-semibold text-gray-700">
+                      {getTableLabel(o)}
                     </TableCell>
                     <TableCell className="font-semibold text-gray-700">
                       {o.items?.length || 0} ta
@@ -671,6 +726,52 @@ function OrdersPage() {
               )}
             </TableBody>
           </Table>
+          {filteredOrders.length > ORDERS_PER_PAGE && (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 px-4 py-4 border-t bg-slate-50">
+              <p className="text-sm font-medium text-slate-600">
+                Sahifa {currentPage} / {totalPages}
+              </p>
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="min-w-24 border-slate-300 bg-white text-slate-800 hover:bg-slate-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:opacity-100"
+                >
+                  Oldingi
+                </Button>
+                {Array.from({ length: totalPages }, (_, idx) => idx + 1).map(
+                  (page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(page)}
+                      className={
+                        currentPage === page
+                          ? "min-w-10 bg-slate-800 text-white hover:bg-slate-900"
+                          : "min-w-10 border-slate-300 bg-white text-slate-800 hover:bg-slate-100"
+                      }
+                    >
+                      {page}
+                    </Button>
+                  ),
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setCurrentPage((p) => Math.min(totalPages, p + 1))
+                  }
+                  disabled={currentPage === totalPages}
+                  className="min-w-24 border-slate-300 bg-white text-slate-800 hover:bg-slate-100 disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 disabled:opacity-100"
+                >
+                  Keyingi
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Detail Modal */}
@@ -695,6 +796,12 @@ function OrdersPage() {
                   <div>
                     <p className="text-sm font-medium text-gray-500">Holat</p>
                     <StatusBadge status={selectedOrder.status} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Stol</p>
+                    <p className="text-lg font-bold text-gray-900">
+                      {getTableLabel(selectedOrder)}
+                    </p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-sm font-medium text-gray-500">
