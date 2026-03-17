@@ -202,7 +202,9 @@ function OrdersPage() {
 
   const fetchReceiptConfig = useCallback(async () => {
     try {
-      const res = await fetch(`${ORDERS_URL}/config`);
+      const res = await fetch(
+        `${API_URL}${api.orders.base}/${api.orders.config}`,
+      );
       if (!res.ok) return;
       const data = await res.json();
       setReceiptConfig({
