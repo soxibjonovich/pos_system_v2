@@ -94,6 +94,7 @@ class OrderResponse(OrderBase):
             return {
                 "id": table.id,
                 "number": table.number,
+                "location": getattr(table, "location", None),
                 "capacity": table.capacity,
                 "status": table.status,
             }

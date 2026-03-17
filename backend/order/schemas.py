@@ -100,6 +100,7 @@ class OrderTotalResponse(BaseModel):
 class TableResponse(BaseModel):
     id: int
     number: str
+    location: str | None = None
     capacity: int = 4
     is_active: bool
     created_at: datetime
