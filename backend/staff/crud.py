@@ -245,22 +245,22 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     """
 
     # ── ESC/POS control bytes ─────────────────────────────────────────────────
-    INIT     = b"\x1b\x40"        # initialize / reset
-    CHARSET  = b"\x1b\x74\x11"   # cp866 Cyrillic
-    ALIGN_L  = b"\x1b\x61\x00"
-    ALIGN_C  = b"\x1b\x61\x01"
-    BOLD_ON  = b"\x1b\x45\x01"
+    INIT = b"\x1b\x40"  # initialize / reset
+    CHARSET = b"\x1b\x74\x11"  # cp866 Cyrillic
+    ALIGN_L = b"\x1b\x61\x00"
+    ALIGN_C = b"\x1b\x61\x01"
+    BOLD_ON = b"\x1b\x45\x01"
     BOLD_OFF = b"\x1b\x45\x00"
-    FEED     = b"\x1b\x64\x04"   # feed 4 lines
-    CUT      = b"\x1d\x56\x41\x05"  # partial cut
+    FEED = b"\x1b\x64\x04"  # feed 4 lines
+    CUT = b"\x1d\x56\x41\x05"  # partial cut
 
-    LINE_WIDTH = 48               # 80 mm roll ≈ 48 chars Font-A
+    LINE_WIDTH = 48  # 80 mm roll ≈ 48 chars Font-A
 
     def enc(text: str) -> bytes:
         return text.encode("cp866", errors="replace")
 
     def row(text: str) -> bytes:
-        return enc(text) + b"\n"
+        return enc(text.rstrip()) + b"\n"
 
     def sep() -> bytes:
         return ALIGN_L + row("-" * LINE_WIDTH)
@@ -279,16 +279,37 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
 
     # Department / printer name — first segment before ";" is the dept label
     department = (
-        str(payload.printer_name or "").split(";")[0].strip().upper()
-        or "KITCHEN"
+        str(payload.printer_name or "").split(";")[0].strip().upper() or "KITCHEN"
     )
 
     # ── Build ticket ──────────────────────────────────────────────────────────
     out = bytearray(INIT + CHARSET)
 
+    def wrap_text(text: str, width: int) -> list[str]:
+        text = text.strip()
+        if not text:
+            return [""]
+        words = text.split()
+        lines: list[str] = []
+        current = ""
+        for word in words:
+            candidate = word if not current else f"{current} {word}"
+            if len(candidate) <= width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                while len(word) > width:
+                    lines.append(word[:width])
+                    word = word[width:]
+                current = word
+        if current:
+            lines.append(current)
+        return lines or [""]
+
     # Row 1: "SHASHLYK                          Zakaz"
-    right    = "Zakaz"
-    padding  = LINE_WIDTH - len(department) - len(right)
+    right = "Zakaz"
+    padding = LINE_WIDTH - len(department) - len(right)
     out += ALIGN_L + BOLD_ON
     out += row(department + " " * max(1, padding) + right)
     out += BOLD_OFF
@@ -307,8 +328,8 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
 
     # ── Item table ────────────────────────────────────────────────────────────
     # Columns:  | NUM | name+comment | QTY |
-    NUM_W  = 4          # "| 1  "
-    QTY_W  = 7          # " 1.5 kg|"
+    NUM_W = 4  # "| 1  "
+    QTY_W = 7  # " 1.5 kg|"
     NAME_W = LINE_WIDTH - NUM_W - QTY_W - 4  # 4 pipe chars
 
     def border() -> bytes:
@@ -319,9 +340,9 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     out += border()
 
     for item in payload.items:
-        qty      = item.quantity
-        title    = _safe_tspl_text(item.title)
-        comment  = _safe_tspl_text(getattr(item, "comment", "") or "")
+        qty = item.quantity
+        title = _safe_tspl_text(item.title)
+        comment = _safe_tspl_text(getattr(item, "comment", "") or "")
         category = _safe_tspl_text(item.category or "")
 
         # Format quantity string: "1.5 kg." or "2"
@@ -331,12 +352,8 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
         if len(qty_display) > QTY_W:
             qty_display = qty_display[:QTY_W]
 
-        # Wrap title across multiple name-column lines if needed
-        title_lines: list[str] = []
-        while len(title) > NAME_W:
-            title_lines.append(title[:NAME_W])
-            title = title[NAME_W:]
-        title_lines.append(title)
+        # Wrap title on word boundaries to keep column placement stable
+        title_lines = wrap_text(title, NAME_W)
 
         # First line: number + first title chunk + qty
         out += ALIGN_L + BOLD_ON
@@ -349,19 +366,17 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
 
         # Continuation lines for long titles
         for extra in title_lines[1:]:
-            out += ALIGN_L + row(
-                f"|{' ' * NUM_W}| {extra:<{NAME_W}}|{' ' * QTY_W}|"
-            )
+            out += ALIGN_L + row(f"|{' ' * NUM_W}| {extra:<{NAME_W}}|{' ' * QTY_W}|")
 
-        # Comment line: "> comment text"
+        # Comment line(s): "> comment text"
         if comment:
             prefix = "> "
-            max_c  = NAME_W - len(prefix)
-            if len(comment) > max_c:
-                comment = comment[:max_c - 1] + "…"
-            out += ALIGN_L + row(
-                f"|{' ' * NUM_W}| {prefix}{comment:<{NAME_W - len(prefix)}}|{' ' * QTY_W}|"
-            )
+            comment_lines = wrap_text(comment, NAME_W - len(prefix))
+            for idx, comment_line in enumerate(comment_lines):
+                prefix_text = prefix if idx == 0 else "  "
+                out += ALIGN_L + row(
+                    f"|{' ' * NUM_W}| {prefix_text}{comment_line:<{NAME_W - len(prefix_text)}}|{' ' * QTY_W}|"
+                )
 
         out += border()
 
@@ -369,8 +384,10 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     out += b"\n"
     out += ALIGN_C + BOLD_ON + row("***") + BOLD_OFF
 
-    out += FEED + CUT
+    out += FEED
+    out += CUT
     return bytes(out)
+
 
 def _send_escpos_over_tcp(
     host: str, port: int, payload: bytes, timeout_sec: int = 5
