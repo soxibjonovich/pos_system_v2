@@ -224,78 +224,153 @@ def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
 
 
 def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
-    printed_text = datetime.now(UZBEKISTAN_TZ).strftime("%H:%M")
+    """
+    Kitchen ticket — ESC/POS bytes.
 
-    raw_table_text = payload.table_number or (
+    Design matches Image 2:
+
+      SHASHLYK                          Zakaz   ← bold, dept left / "Zakaz" right
+      ──────────────────────────────────────────
+           No 8215   18.03.2026 18:23           ← centered
+           Stol No K-202 - 2-ETAZH
+           Ofitsiant: Mukhammad                 ← bold centered
+      ──────────────────────────────────────────
+      +----+------------------------------+-------+
+      | 1  | Barbeky Korejka kg           | 1.5   |
+      |    | (Baranina)                   | kg.   |
+      |    | > 1.5 - iftorlikka tayor...  |       |
+      +----+------------------------------+-------+
+
+                        ***
+    """
+
+    # ── ESC/POS control bytes ─────────────────────────────────────────────────
+    INIT     = b"\x1b\x40"        # initialize / reset
+    CHARSET  = b"\x1b\x74\x11"   # cp866 Cyrillic
+    ALIGN_L  = b"\x1b\x61\x00"
+    ALIGN_C  = b"\x1b\x61\x01"
+    BOLD_ON  = b"\x1b\x45\x01"
+    BOLD_OFF = b"\x1b\x45\x00"
+    FEED     = b"\x1b\x64\x04"   # feed 4 lines
+    CUT      = b"\x1d\x56\x41\x05"  # partial cut
+
+    LINE_WIDTH = 48               # 80 mm roll ≈ 48 chars Font-A
+
+    def enc(text: str) -> bytes:
+        return text.encode("cp866", errors="replace")
+
+    def row(text: str) -> bytes:
+        return enc(text) + b"\n"
+
+    def sep() -> bytes:
+        return ALIGN_L + row("-" * LINE_WIDTH)
+
+    # ── Header fields ─────────────────────────────────────────────────────────
+    printed_time = datetime.now(UZBEKISTAN_TZ).strftime("%d.%m.%Y %H:%M")
+
+    raw_table = payload.table_number or (
         str(payload.table_id) if payload.table_id else "-"
     )
     table_text = (
-        f"{_safe_tspl_text(payload.table_location)}/{_safe_tspl_text(raw_table_text)}"
+        f"{_safe_tspl_text(payload.table_location)}/{_safe_tspl_text(raw_table)}"
         if payload.table_location
-        else _safe_tspl_text(raw_table_text)
+        else _safe_tspl_text(raw_table)
     )
 
-    # --- ESC/POS command bytes ---
-    init = b"\x1b\x40"  # Initialize printer
-    charset = b"\x1b\x74\x11"  # Code page PC866 (Cyrillic)
+    # Department / printer name — first segment before ";" is the dept label
+    department = (
+        str(payload.printer_name or "").split(";")[0].strip().upper()
+        or "KITCHEN"
+    )
 
-    bold_on = b"\x1b\x45\x01"
-    bold_off = b"\x1b\x45\x00"
+    # ── Build ticket ──────────────────────────────────────────────────────────
+    out = bytearray(INIT + CHARSET)
 
-    center = b"\x1b\x61\x01"
-    left = b"\x1b\x61\x00"
+    # Row 1: "SHASHLYK                          Zakaz"
+    right    = "Zakaz"
+    padding  = LINE_WIDTH - len(department) - len(right)
+    out += ALIGN_L + BOLD_ON
+    out += row(department + " " * max(1, padding) + right)
+    out += BOLD_OFF
 
-    dbl_height = b"\x1d\x21\x01"  # Double-height text
-    normal = b"\x1d\x21\x00"  # Normal size
+    out += sep()
 
-    feed = b"\x1b\x64\x04"  # Feed 4 lines
-    cut = b"\x1d\x56\x41\x05"  # Partial cut with 5-dot feed
+    # Row 2-4: order №, datetime / table / waiter — all centered
+    out += ALIGN_C
+    out += row(f"No {_safe_tspl_text(str(payload.order_id))}   {printed_time}")
+    out += row(f"Stol No {table_text}")
 
-    LINE_WIDTH = 48  # Standard 80mm thermal roll ≈ 48 chars
-    SEP = "-" * LINE_WIDTH
+    staff_name = _safe_tspl_text(payload.staff_name or "Staff")
+    out += BOLD_ON + row(f"Ofitsiant: {staff_name}") + BOLD_OFF
 
-    # --- Header block ---
-    out = init + charset
+    out += sep()
 
-    out += center + dbl_height + bold_on
-    out += "Kitchen\n".encode("cp866", errors="ignore")
-    out += normal + bold_off + left
+    # ── Item table ────────────────────────────────────────────────────────────
+    # Columns:  | NUM | name+comment | QTY |
+    NUM_W  = 4          # "| 1  "
+    QTY_W  = 7          # " 1.5 kg|"
+    NAME_W = LINE_WIDTH - NUM_W - QTY_W - 4  # 4 pipe chars
 
-    # Meta lines — bold labels, normal values on same line
-    def meta_line(label: str, value: str) -> bytes:
-        line = f"{label}: {value}\n"
-        return (
-            bold_on
-            + label.encode("cp866", errors="ignore")
-            + bold_off
-            + f": {value}\n".encode("cp866", errors="ignore")
+    def border() -> bytes:
+        return ALIGN_L + row(
+            "+" + "-" * NUM_W + "+" + "-" * (NAME_W + 1) + "+" + "-" * QTY_W + "+"
         )
 
-    out += bold_on + _enc(f"#{payload.order_id}\n") + bold_off
-    out += _enc(f"{printed_text}\n")
-    out += _enc(f"{table_text}\n")
-    out += (SEP + "\n").encode("cp866")
+    out += border()
 
-    # --- Items block ---
-    # Format:  "- Item name .............. x3"
-    # Title gets up to LINE_WIDTH - 6 chars (for " xNN" suffix + 2 dots min)
     for item in payload.items:
-        qty = max(1, int(item.quantity))
-        title = _safe_tspl_text(item.title)[:32]  # max 32 chars for title
-        suffix = f" x{qty}"
-        # Pad with dots so the line fills LINE_WIDTH exactly
-        dots_needed = LINE_WIDTH - len(title) - len(suffix) - 2  # 2 for "- "
-        dots = " " * max(1, dots_needed)
-        line = f"- {title}{dots}{suffix}\n"
-        out += bold_on + line.encode("cp866", errors="ignore") + bold_off
+        qty      = item.quantity
+        title    = _safe_tspl_text(item.title)
+        comment  = _safe_tspl_text(getattr(item, "comment", "") or "")
+        category = _safe_tspl_text(item.category or "")
 
-    out += (SEP + "\n").encode("cp866")
+        # Format quantity string: "1.5 kg." or "2"
+        qty_display = (
+            f"{qty:g} {item.unit}" if getattr(item, "unit", None) else f"{qty:g}"
+        )
+        if len(qty_display) > QTY_W:
+            qty_display = qty_display[:QTY_W]
 
-    # Footer feed & cut
-    out += feed + cut
+        # Wrap title across multiple name-column lines if needed
+        title_lines: list[str] = []
+        while len(title) > NAME_W:
+            title_lines.append(title[:NAME_W])
+            title = title[NAME_W:]
+        title_lines.append(title)
 
-    return out
+        # First line: number + first title chunk + qty
+        out += ALIGN_L + BOLD_ON
+        out += row(
+            f"| {int(qty) if qty == int(qty) else qty:<{NUM_W - 1}}"
+            f"| {title_lines[0]:<{NAME_W}}"
+            f"| {qty_display:>{QTY_W - 1}} |"
+        )
+        out += BOLD_OFF
 
+        # Continuation lines for long titles
+        for extra in title_lines[1:]:
+            out += ALIGN_L + row(
+                f"|{' ' * NUM_W}| {extra:<{NAME_W}}|{' ' * QTY_W}|"
+            )
+
+        # Comment line: "> comment text"
+        if comment:
+            prefix = "> "
+            max_c  = NAME_W - len(prefix)
+            if len(comment) > max_c:
+                comment = comment[:max_c - 1] + "…"
+            out += ALIGN_L + row(
+                f"|{' ' * NUM_W}| {prefix}{comment:<{NAME_W - len(prefix)}}|{' ' * QTY_W}|"
+            )
+
+        out += border()
+
+    # ── Footer ────────────────────────────────────────────────────────────────
+    out += b"\n"
+    out += ALIGN_C + BOLD_ON + row("***") + BOLD_OFF
+
+    out += FEED + CUT
+    return bytes(out)
 
 def _send_escpos_over_tcp(
     host: str, port: int, payload: bytes, timeout_sec: int = 5
