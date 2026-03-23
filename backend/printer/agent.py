@@ -101,35 +101,114 @@ def _item_line(title: str, qty: int, price: float, subtotal: float) -> bytes:
 # ---------------------------------------------------------------------------
 class UniversalPrinter:
     def __init__(self, device):
-        self.device = device
-        self.ep_out = None
+        self.device   = device
+        self.ep_out   = None
+        self.intf_num = None
 
-        try:
-            if self.device.is_kernel_driver_active(0):
-                self.device.detach_kernel_driver(0)
-        except Exception:
-            pass
-        try:
-            self.device.set_configuration()
-        except Exception:
-            pass
+        # 1. Detach kernel driver from ALL interfaces
+        for intf_idx in range(3):
+            try:
+                if device.is_kernel_driver_active(intf_idx):
+                    device.detach_kernel_driver(intf_idx)
+                    logger.info(f"Kernel driver detached from interface {intf_idx}")
+            except NotImplementedError:
+                logger.debug(
+                    f"Kernel driver inspection unsupported for interface {intf_idx}"
+                )
+            except usb.core.USBError as e:
+                if e.errno not in (2, 5):   # ENOENT / EIO — interface doesn't exist
+                    if "not supported" in str(e).lower() or "unimplemented" in str(e).lower():
+                        logger.debug(
+                            f"Kernel driver inspection unsupported for interface {intf_idx}: {e}"
+                        )
+                    else:
+                        logger.debug(f"detach intf {intf_idx}: {e}")
+            except Exception:
+                pass
 
-        cfg = self.device.get_active_configuration()
-        for intf in cfg:
-            self.ep_out = usb.util.find_descriptor(
+        # 2. Set configuration
+        logger.info(
+            f"Configuring printer {device.idVendor:#06x}:{device.idProduct:#06x}"
+        )
+        try:
+            device.set_configuration()
+            logger.info("USB set_configuration succeeded")
+        except NotImplementedError as e:
+            logger.info(f"USB set_configuration unsupported on this platform: {e}")
+        except usb.core.USBError as e:
+            if e.errno not in (16, 114):    # EBUSY / EALREADY — already configured
+                raise
+            logger.info(f"USB set_configuration skipped: {e}")
+
+        # 3. Find bulk-OUT endpoint, scanning ALL interfaces
+        logger.info("Resolving USB printer endpoint")
+        try:
+            cfg = device.get_active_configuration()
+            logger.info("Using active USB configuration")
+            interfaces = list(cfg)
+        except (NotImplementedError, usb.core.USBError) as e:
+            logger.info(f"Active configuration unavailable, scanning descriptors directly: {e}")
+            interfaces = []
+            for cfg in device:
+                interfaces.extend(list(cfg))
+
+        for intf in interfaces:
+            ep = usb.util.find_descriptor(
                 intf,
-                custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress)
-                == usb.util.ENDPOINT_OUT,
+                custom_match=lambda e: (
+                    usb.util.endpoint_direction(e.bEndpointAddress)
+                    == usb.util.ENDPOINT_OUT
+                    and (e.bmAttributes & 0x03) == 0x02   # bulk only
+                ),
             )
-            if self.ep_out:
+            if ep:
+                self.ep_out   = ep
+                self.intf_num = intf.bInterfaceNumber
+                logger.info(
+                    f"Selected USB endpoint {self.ep_out.bEndpointAddress:#04x} "
+                    f"on interface {self.intf_num}"
+                )
                 break
 
         if self.ep_out is None:
-            raise ValueError("No OUT endpoint found on printer")
-        logger.info(f"Printer ready — endpoint {self.ep_out.bEndpointAddress:#04x}")
+            raise ValueError("No bulk-OUT endpoint found on printer")
+
+        # 4. Claim interface — required on Windows and for XP-58
+        logger.info(f"Claiming USB interface {self.intf_num}")
+        try:
+            usb.util.claim_interface(device, self.intf_num)
+            logger.info(
+                f"Printer ready — intf={self.intf_num} "
+                f"endpoint={self.ep_out.bEndpointAddress:#04x}"
+            )
+        except NotImplementedError as e:
+            logger.info(
+                f"USB claim_interface unsupported on this platform, continuing without claim: {e}"
+            )
+            logger.info(
+                f"Printer ready — intf={self.intf_num} "
+                f"endpoint={self.ep_out.bEndpointAddress:#04x}"
+            )
+        except usb.core.USBError as e:
+            if e.errno in (16, 114):        # already claimed — fine
+                logger.info(
+                    f"Printer ready (already claimed) — intf={self.intf_num} "
+                    f"endpoint={self.ep_out.bEndpointAddress:#04x}"
+                )
+            else:
+                raise ValueError(f"claim_interface failed: {e}") from e
 
     def write(self, data: bytes):
-        self.ep_out.write(data, timeout=5000)
+        """Write with one auto-reclaim retry — XP-58 drops claim after USB suspend."""
+        try:
+            self.ep_out.write(data, timeout=5000)
+        except usb.core.USBError as e:
+            logger.warning(f"Write failed ({e}), reclaiming and retrying…")
+            try:
+                usb.util.claim_interface(self.device, self.intf_num)
+            except Exception:
+                pass
+            self.ep_out.write(data, timeout=5000)
 
     def cut(self):
         for cmd in (b"\x1d\x56\x00", b"\x1d\x56\x01", b"\x1b\x64\x05"):
@@ -139,6 +218,12 @@ class UniversalPrinter:
             except Exception:
                 continue
 
+    def __del__(self):
+        try:
+            if self.intf_num is not None:
+                usb.util.release_interface(self.device, self.intf_num)
+        except Exception:
+            pass
 # ---------------------------------------------------------------------------
 # Printer manager
 # ---------------------------------------------------------------------------
@@ -149,26 +234,86 @@ class PrinterManager:
         self.fallback_dir = Path.home() / "PrintAgent" / "receipts"
         self.fallback_dir.mkdir(parents=True, exist_ok=True)
 
-    def _is_printer(self, device) -> bool:
+    def _iter_interfaces(self, device):
+        """Yield every interface from every declared configuration."""
         try:
-            cfg = device.get_active_configuration()
-            for intf in cfg:
-                if intf.bInterfaceClass == 0x07:
-                    return True
-                ep = usb.util.find_descriptor(
-                    intf,
-                    custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress)
-                    == usb.util.ENDPOINT_OUT,
+            for cfg in device:
+                for intf in cfg:
+                    yield intf
+        except Exception as e:
+            logger.debug(
+                f"Could not inspect configurations for "
+                f"{device.idVendor:#06x}:{device.idProduct:#06x}: {e}"
+            )
+
+    def _iter_config_interfaces(self, device):
+        try:
+            for cfg in device:
+                for intf in cfg:
+                    yield cfg, intf
+        except Exception as e:
+            logger.debug(
+                f"Could not inspect configurations for "
+                f"{device.idVendor:#06x}:{device.idProduct:#06x}: {e}"
+            )
+
+    def _log_device_debug(self, device):
+        try:
+            parts = []
+            for cfg, intf in self._iter_config_interfaces(device):
+                endpoints = []
+                for ep in intf:
+                    direction = usb.util.endpoint_direction(ep.bEndpointAddress)
+                    dir_name = "OUT" if direction == usb.util.ENDPOINT_OUT else "IN"
+                    transfer_type = ep.bmAttributes & 0x03
+                    endpoints.append(
+                        f"{ep.bEndpointAddress:#04x}/{dir_name}/type={transfer_type}"
+                    )
+                endpoints_text = ", ".join(endpoints) if endpoints else "no-endpoints"
+                parts.append(
+                    f"cfg={cfg.bConfigurationValue} "
+                    f"intf={intf.bInterfaceNumber} "
+                    f"class={intf.bInterfaceClass:#04x} "
+                    f"eps=[{endpoints_text}]"
                 )
-                if ep and (ep.bmAttributes & 0x03) == 0x02:
-                    return True
-        except Exception:
-            pass
+            detail = " | ".join(parts) if parts else "no-interfaces"
+            logger.info(
+                f"USB device {device.idVendor:#06x}:{device.idProduct:#06x} -> {detail}"
+            )
+        except Exception as e:
+            logger.info(
+                f"USB device {device.idVendor:#06x}:{device.idProduct:#06x} "
+                f"could not be inspected: {e}"
+            )
+
+    def _is_printer(self, device) -> bool:
+        for intf in self._iter_interfaces(device):
+            # Accept printer class OR vendor-specific (XP-58 uses 0xFF on some fw)
+            if intf.bInterfaceClass not in (0x07, 0xFF):
+                continue
+            ep = usb.util.find_descriptor(
+                intf,
+                custom_match=lambda e: (
+                    usb.util.endpoint_direction(e.bEndpointAddress)
+                    == usb.util.ENDPOINT_OUT
+                    and (e.bmAttributes & 0x03) == 0x02
+                ),
+            )
+            if ep:
+                logger.debug(
+                    f"Matched printer interface on "
+                    f"{device.idVendor:#06x}:{device.idProduct:#06x} "
+                    f"class={intf.bInterfaceClass:#04x} "
+                    f"intf={intf.bInterfaceNumber} "
+                    f"ep_out={ep.bEndpointAddress:#04x}"
+                )
+                return True
         return False
 
     def detect_printer(self) -> Optional[dict]:
         logger.info("Scanning USB devices...")
         for device in usb.core.find(find_all=True) or []:
+            self._log_device_debug(device)
             if not self._is_printer(device):
                 continue
             try:
@@ -244,70 +389,92 @@ class PrinterManager:
                     pass
             return self._fallback(data)
 
-    def _send(self, data: dict):
-        p   = self.printer
-        now = datetime.now().strftime("%d.%m.%Y  %H:%M")
-        out = ESC_INIT + ESC_CHARSET
+def _send(self, data: dict):
+    p   = self.printer
+    now = datetime.now().strftime("%d.%m.%Y  %H:%M")
 
-        def item_amount(value: float | int) -> str:
-            return f"{float(value):,.0f} so'm"
+    COLS     = 32
+    DBL_COLS = COLS // 2
 
-        def qqs_line(item: dict) -> str | None:
-            percent = item.get("qqs_percent")
-            amount = item.get("qqs_amount")
-            if percent in (None, "", 0, 0.0) and amount in (None, "", 0, 0.0):
-                return None
-            amount_value = 0 if amount in (None, "") else float(amount)
-            return f"QQS ({float(percent or 0):g}%) {item_amount(amount_value)}"
+    SEP_THICK = "=" * COLS
+    SEP_THIN  = "-" * COLS
 
-        # Header
-        name = _safe(data.get("business_name", "POS"), LINE_WIDTH)
-        out += ESC_CENTER + ESC_DBL_ON + ESC_BOLD_ON
-        out += _enc(name + "\n")
-        out += ESC_DBL_OFF + ESC_BOLD_OFF
-        if data.get("business_phone"):
-            out += _enc(f"Tel: {data['business_phone']}\n")
-        out += ESC_LEFT
-        out += _enc(f"Sana va vaqti: {now}\n")
-        out += _enc(f"Ishchi ismi: {_safe(data.get('cashier', 'Staff'), 20)}\n")
-        out += _enc(SEP_THIN + "\n")
+    def item_amount(value: float | int) -> str:
+        return f"{float(value):,.0f} so'm"
 
-        # Items
-        for index, item in enumerate(data.get("items", []), start=1):
-            qty      = item.get("quantity", 1)
-            price    = item.get("price", 0)
-            subtotal = item.get("subtotal", qty * price)
-            name_line = f"{index}. {_safe(item.get('name', 'Item'), LINE_WIDTH - 3)}"
-            formula = f"{float(price):,.0f} x {qty}"
-            overall = item_amount(subtotal)
-            spaces = max(1, LINE_WIDTH - len(formula) - len(overall))
-            out += ESC_BOLD_ON + _enc(name_line + "\n") + ESC_BOLD_OFF
-            out += _enc(f"{formula}{' ' * spaces}{overall}\n")
-            qqs_text = qqs_line(item)
-            if qqs_text:
-                qqs_spaces = max(1, LINE_WIDTH - len(qqs_text))
-                out += _enc(f"{qqs_text.rjust(len(qqs_text) + qqs_spaces)}\n")
+    def qqs_line(item: dict) -> str | None:
+        percent = item.get("qqs_percent")
+        amount  = item.get("qqs_amount")
+        if percent in (None, "", 0, 0.0) and amount in (None, "", 0, 0.0):
+            return None
+        amount_value = 0 if amount in (None, "") else float(amount)
+        return f"QQS ({float(percent or 0):g}%) {item_amount(amount_value)}"
 
-        out += _enc(SEP_THIN + "\n")
+    out = ESC_INIT + ESC_CHARSET
 
-        # Totals
-        total = data.get("total", 0)
-        qqs_percent = data.get("qqs_percent", 0)
-        qqs_amount = data.get("qqs_amount", 0)
-        fee_percent = data.get("fee_percent", 0)
-        fee_amount = data.get("fee_amount", 0)
-        if qqs_amount:
-            out += _enc(f"QQS ({float(qqs_percent):g}%) : {item_amount(qqs_amount)}\n")
-        if fee_amount:
-            out += _enc(f"Komissiya ({float(fee_percent):g}%) : {item_amount(fee_amount)}\n")
-        out += ESC_BOLD_ON
-        out += _enc(f"Jami to'lov : {item_amount(total)}\n")
-        out += ESC_BOLD_OFF
+    # ── Header ──────────────────────────────────────────────────────────
+    name = _safe(data.get("business_name", "POS"), COLS)
+    out += ESC_CENTER + ESC_DBL_ON + ESC_BOLD_ON
+    out += _enc(name + "\n")
+    out += ESC_DBL_OFF + ESC_BOLD_OFF
+    if data.get("business_phone"):
+        out += _enc(f"Tel: {data['business_phone']}\n")
+    out += ESC_LEFT
+    out += _enc(f"Sana va vaqti: {now}\n")
+    out += _enc(f"Ishchi ismi: {_safe(data.get('cashier', 'Staff'), 20)}\n")
+    out += _enc(SEP_THICK + "\n")   # thick === after header, single line
 
-        out += ESC_FEED
-        p.write(out)
-        p.cut()
+    # ── Items ────────────────────────────────────────────────────────────
+    for index, item in enumerate(data.get("items", []), start=1):
+        qty      = item.get("quantity", 1)
+        price    = item.get("price", 0)
+        subtotal = item.get("subtotal", qty * price)
 
+        # Double-width line: "1. Name          3x"
+        qty_str  = f"{qty:g}" if isinstance(qty, (int, float)) else str(qty)
+        suffix   = f" {qty_str}x"
+        prefix   = f"{index}. "
+        name_max = max(1, DBL_COLS - len(prefix) - len(suffix))
+        item_name = _safe(item.get("name", "Item"), name_max)
+        pad      = DBL_COLS - len(prefix) - len(item_name) - len(suffix)
+        dbl_line = f"{prefix}{item_name}{' ' * max(0, pad)}{suffix}"
+
+        out += ESC_LEFT + ESC_DBL_ON + ESC_BOLD_ON
+        out += _enc(dbl_line + "\n")
+        out += ESC_BOLD_OFF + ESC_DBL_OFF
+
+        # Normal-size price line: "50,000 x 3 = 150,000 so'm"
+        formula = f"{float(price):,.0f} x {qty}"
+        overall = item_amount(subtotal)
+        spaces  = max(1, COLS - len(formula) - len(overall))
+        out += _enc(f"{formula}{' ' * spaces}{overall}\n")
+
+        # Optional QQS line
+        qqs_text = qqs_line(item)
+        if qqs_text:
+            out += _enc(qqs_text.rjust(COLS) + "\n")
+
+    out += _enc(SEP_THIN + "\n")    # thin --- after items, single line
+
+    # ── Totals ───────────────────────────────────────────────────────────
+    total       = data.get("total", 0)
+    qqs_percent = data.get("qqs_percent", 0)
+    qqs_amount  = data.get("qqs_amount", 0)
+    fee_percent = data.get("fee_percent", 0)
+    fee_amount  = data.get("fee_amount", 0)
+
+    if qqs_amount:
+        out += _enc(f"QQS ({float(qqs_percent):g}%) : {item_amount(qqs_amount)}\n")
+    if fee_amount:
+        out += _enc(f"Komissiya ({float(fee_percent):g}%) : {item_amount(fee_amount)}\n")
+
+    out += ESC_BOLD_ON
+    out += _enc(f"Jami to'lov : {item_amount(total)}\n")
+    out += ESC_BOLD_OFF
+
+    out += ESC_FEED
+    p.write(out)
+    p.cut()
     def _fallback(self, data: dict) -> dict:
         try:
             now      = datetime.now()

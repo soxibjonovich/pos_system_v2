@@ -23,18 +23,36 @@ interface PrintReceipt {
 }
 
 class PrintService {
-  private agentUrl = "http://localhost:9100";
+  private agentUrl = "http://127.0.0.1:9100";
   private isAgentAvailable: boolean | null = null;
+
+  private async fetchWithTimeout(
+    input: string,
+    init: RequestInit,
+    timeoutMs: number,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      return await fetch(input, {
+        ...init,
+        signal: controller.signal,
+      });
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
 
   async checkAgentStatus(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.agentUrl}/status`, {
+      const response = await this.fetchWithTimeout(`${this.agentUrl}/status`, {
         method: "GET",
-        signal: AbortSignal.timeout(2000),
-      });
+      }, 5000);
       this.isAgentAvailable = response.ok;
       return response.ok;
-    } catch {
+    } catch (error) {
+      console.error("PrintAgent status check failed", error);
       this.isAgentAvailable = false;
       return false;
     }
@@ -56,14 +74,13 @@ class PrintService {
         };
       }
 
-      const response = await fetch(`${this.agentUrl}/print`, {
+      const response = await this.fetchWithTimeout(`${this.agentUrl}/print`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(receiptData),
-        signal: AbortSignal.timeout(5000),
-      });
+      }, 5000);
 
       if (!response.ok) {
         throw new Error("Print request failed");
@@ -90,8 +107,8 @@ class PrintService {
           message: result.error || "Print failed",
         };
       }
-    } catch {
-      console.error("Print error");
+    } catch (error) {
+      console.error("Print error", error);
       this.isAgentAvailable = false;
       return {
         status: "error",
@@ -102,10 +119,9 @@ class PrintService {
 
   async testPrint(): Promise<{ status: string; message: string }> {
     try {
-      const response = await fetch(`${this.agentUrl}/test`, {
+      const response = await this.fetchWithTimeout(`${this.agentUrl}/test`, {
         method: "POST",
-        signal: AbortSignal.timeout(5000),
-      });
+      }, 5000);
 
       if (!response.ok) {
         throw new Error("Test print failed");
@@ -126,10 +142,9 @@ class PrintService {
 
   async reconnectPrinter(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.agentUrl}/reconnect`, {
+      const response = await this.fetchWithTimeout(`${this.agentUrl}/reconnect`, {
         method: "POST",
-        signal: AbortSignal.timeout(3000),
-      });
+      }, 5000);
 
       if (!response.ok) return false;
 

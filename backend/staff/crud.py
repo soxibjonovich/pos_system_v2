@@ -235,7 +235,7 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     FEED     = b"\x1b\x64\x04"
     CUT      = b"\x1d\x56\x41\x05"
 
-    COLS     = 32               # normal chars per line on 58mm
+    COLS     = 48               # full-width chars per line on standard 80mm
     DBL_COLS = COLS // 2        # usable chars when DBL_ON is active
 
     def enc(text: str) -> bytes:
