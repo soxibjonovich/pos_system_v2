@@ -212,8 +212,29 @@ class Order(Base):
     def fee_amount(self) -> float:
         return round(self.subtotal_amount * self.fee_percent / 100, 2)
 
+    @property
+    def qqs_percent(self) -> float:
+        return float(self._notes_meta().get("qqs_percent", 0.0) or 0.0)
+
+    @qqs_percent.setter
+    def qqs_percent(self, value) -> None:
+        qqs_value = round(float(value or 0.0), 2)
+        meta = self._notes_meta()
+        if qqs_value > 0:
+            meta["qqs_percent"] = qqs_value
+        else:
+            meta.pop("qqs_percent", None)
+        self._set_notes_meta(meta)
+
+    @property
+    def qqs_amount(self) -> float:
+        return round(self.subtotal_amount * self.qqs_percent / 100, 2)
+
     def calculate_total(self):
-        self.total = round(self.subtotal_amount + self.fee_amount, 2)
+        self.total = round(
+            self.subtotal_amount + self.qqs_amount + self.fee_amount,
+            2,
+        )
         return self.total
 
 

@@ -73,6 +73,17 @@ async def get_service_fee_percent() -> float:
 
 
 @handle_service_errors
+async def get_qqs_percent() -> float:
+    response = await service_client.db_client.get("/system-config/qqs_percent")
+    if response.status_code == 200:
+        try:
+            return float(response.json().get("value", 0) or 0)
+        except (TypeError, ValueError):
+            return 0.0
+    return 0.0
+
+
+@handle_service_errors
 async def get_business_name() -> str:
     response = await service_client.db_client.get("/system-config/business_name")
     if response.status_code == 200:
@@ -144,6 +155,7 @@ async def create_order(
             "business_type": business_type,
             "table_id": order.table_id,
             "fee_percent": order.fee_percent,
+            "qqs_percent": order.qqs_percent,
             "items": [
                 {
                     "product_id": item.product_id,

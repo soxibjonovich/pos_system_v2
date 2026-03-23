@@ -48,6 +48,8 @@ interface Order {
   user_id: number;
   table_id?: number | null;
   subtotal_amount?: number;
+  qqs_percent?: number;
+  qqs_amount?: number;
   fee_percent?: number;
   fee_amount?: number;
   total: number;
@@ -152,6 +154,7 @@ function OrdersPage() {
   const [receiptConfig, setReceiptConfig] = useState({
     business_name: "POS System",
     business_phone: "+998",
+    qqs_percent: 0,
   });
 
   const fetchOrders = useCallback(async () => {
@@ -210,6 +213,7 @@ function OrdersPage() {
       setReceiptConfig({
         business_name: data?.business_name || "POS System",
         business_phone: data?.business_phone || "+998",
+        qqs_percent: Number(data?.qqs_percent || 0),
       });
     } catch {
       // Keep defaults when config is unavailable.
@@ -475,6 +479,8 @@ function OrdersPage() {
         cashier: localStorage.getItem("userName") || `Staff #${detail.user_id}`,
         table: tableText,
         subtotal_amount: detail.subtotal_amount,
+        qqs_percent: detail.qqs_percent,
+        qqs_amount: detail.qqs_amount,
         fee_percent: detail.fee_percent,
         fee_amount: detail.fee_amount,
         items: (detail.items || []).map((item) => ({
@@ -814,6 +820,13 @@ function OrdersPage() {
                     </p>
                   </div>
                   <div>
+                    <p className="text-sm font-medium text-gray-500">QQS</p>
+                    <p className="text-sm text-gray-700">
+                      {(selectedOrder.qqs_percent || 0).toFixed(1)}% /{" "}
+                      {formatPrice(selectedOrder.qqs_amount || 0)}
+                    </p>
+                  </div>
+                  <div>
                     <p className="text-sm font-medium text-gray-500">
                       Servis haqi
                     </p>
@@ -1000,6 +1013,10 @@ function OrdersPage() {
                   <div>
                     <div className="text-sm font-semibold text-gray-600">
                       Mahsulot: {formatPrice(editingOrder.subtotal_amount || 0)}
+                    </div>
+                    <div className="text-sm font-semibold text-gray-600">
+                      QQS: {(editingOrder.qqs_percent || 0).toFixed(1)}% /{" "}
+                      {formatPrice(editingOrder.qqs_amount || 0)}
                     </div>
                     <div className="text-sm font-semibold text-gray-600">
                       Servis haqi: {(editingOrder.fee_percent || 0).toFixed(1)}%

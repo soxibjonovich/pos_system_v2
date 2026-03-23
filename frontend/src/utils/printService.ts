@@ -9,6 +9,8 @@ interface PrintReceipt {
   cashier: string;
   table?: string;
   subtotal_amount?: number;
+  qqs_percent?: number;
+  qqs_amount?: number;
   fee_percent?: number;
   fee_amount?: number;
   items: Array<{

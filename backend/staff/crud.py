@@ -224,50 +224,26 @@ def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
 
 
 def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
-    """
-    Kitchen ticket — ESC/POS bytes.
-
-    Design matches Image 2:
-
-      SHASHLYK                          Zakaz   ← bold, dept left / "Zakaz" right
-      ──────────────────────────────────────────
-           No 8215   18.03.2026 18:23           ← centered
-           Stol No K-202 - 2-ETAZH
-           Ofitsiant: Mukhammad                 ← bold centered
-      ──────────────────────────────────────────
-      +----+------------------------------+-------+
-      | 1  | Barbeky Korejka kg           | 1.5   |
-      |    | (Baranina)                   | kg.   |
-      |    | > 1.5 - iftorlikka tayor...  |       |
-      +----+------------------------------+-------+
-
-                        ***
-    """
-
-    # ── ESC/POS control bytes ─────────────────────────────────────────────────
-    INIT = b"\x1b\x40"  # initialize / reset
-    CHARSET = b"\x1b\x74\x11"  # cp866 Cyrillic
+    INIT = b"\x1b\x40"
+    CHARSET = b"\x1b\x74\x11"
     ALIGN_L = b"\x1b\x61\x00"
-    ALIGN_C = b"\x1b\x61\x01"
     BOLD_ON = b"\x1b\x45\x01"
     BOLD_OFF = b"\x1b\x45\x00"
-    FEED = b"\x1b\x64\x04"  # feed 4 lines
-    CUT = b"\x1d\x56\x41\x05"  # partial cut
+    FEED = b"\x1b\x64\x04"
+    CUT = b"\x1d\x56\x41\x05"
 
-    LINE_WIDTH = 48  # 80 mm roll ≈ 48 chars Font-A
+    LINE_WIDTH = 32
 
     def enc(text: str) -> bytes:
         return text.encode("cp866", errors="replace")
 
-    def row(text: str) -> bytes:
+    def row(text: str = "") -> bytes:
         return enc(text.rstrip()) + b"\n"
 
-    def sep() -> bytes:
-        return ALIGN_L + row("-" * LINE_WIDTH)
+    def fit_name(title: str, max_width: int) -> str:
+        return _safe_tspl_text(title)[:max_width]
 
-    # ── Header fields ─────────────────────────────────────────────────────────
     printed_time = datetime.now(UZBEKISTAN_TZ).strftime("%d.%m.%Y %H:%M")
-
     raw_table = payload.table_number or (
         str(payload.table_id) if payload.table_id else "-"
     )
@@ -276,114 +252,27 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
         if payload.table_location
         else _safe_tspl_text(raw_table)
     )
-
-    # Department / printer name — first segment before ";" is the dept label
-    department = (
-        str(payload.printer_name or "").split(";")[0].strip().upper() or "KITCHEN"
-    )
-
-    # ── Build ticket ──────────────────────────────────────────────────────────
-    out = bytearray(INIT + CHARSET)
-
-    def wrap_text(text: str, width: int) -> list[str]:
-        text = text.strip()
-        if not text:
-            return [""]
-        words = text.split()
-        lines: list[str] = []
-        current = ""
-        for word in words:
-            candidate = word if not current else f"{current} {word}"
-            if len(candidate) <= width:
-                current = candidate
-            else:
-                if current:
-                    lines.append(current)
-                while len(word) > width:
-                    lines.append(word[:width])
-                    word = word[width:]
-                current = word
-        if current:
-            lines.append(current)
-        return lines or [""]
-
-    # Row 1: "SHASHLYK                          Zakaz"
-    right = "Zakaz"
-    padding = LINE_WIDTH - len(department) - len(right)
-    out += ALIGN_L + BOLD_ON
-    out += row(department + " " * max(1, padding) + right)
-    out += BOLD_OFF
-
-    out += sep()
-
-    # Row 2-4: order №, datetime / table / waiter — all centered
-    out += ALIGN_C
-    out += row(f"No {_safe_tspl_text(str(payload.order_id))}   {printed_time}")
-    out += row(f"Stol No {table_text}")
-
     staff_name = _safe_tspl_text(payload.staff_name or "Staff")
-    out += BOLD_ON + row(f"Ofitsiant: {staff_name}") + BOLD_OFF
 
-    out += sep()
+    out = bytearray(INIT + CHARSET)
+    out += ALIGN_L
+    out += row(f"№ {payload.order_id}   {printed_time}")
+    out += row(f"stol: {table_text}")
+    out += row(f"ofitsiant: {staff_name}")
+    out += row()
 
-    # ── Item table ────────────────────────────────────────────────────────────
-    # Columns:  | NUM | name+comment | QTY |
-    NUM_W = 4  # "| 1  "
-    QTY_W = 7  # " 1.5 kg|"
-    NAME_W = LINE_WIDTH - NUM_W - QTY_W - 4  # 4 pipe chars
-
-    def border() -> bytes:
-        return ALIGN_L + row(
-            "+" + "-" * NUM_W + "+" + "-" * (NAME_W + 1) + "+" + "-" * QTY_W + "+"
-        )
-
-    out += border()
-
-    for item in payload.items:
+    for index, item in enumerate(payload.items, start=1):
         qty = item.quantity
-        title = _safe_tspl_text(item.title)
-        comment = _safe_tspl_text(getattr(item, "comment", "") or "")
-        category = _safe_tspl_text(item.category or "")
-
-        # Format quantity string: "1.5 kg." or "2"
-        qty_display = (
-            f"{qty:g} {item.unit}" if getattr(item, "unit", None) else f"{qty:g}"
-        )
-        if len(qty_display) > QTY_W:
-            qty_display = qty_display[:QTY_W]
-
-        # Wrap title on word boundaries to keep column placement stable
-        title_lines = wrap_text(title, NAME_W)
-
-        # First line: number + first title chunk + qty
+        qty_text = f"{qty:g}" if isinstance(qty, (int, float)) else str(qty)
+        name_max = max(8, LINE_WIDTH - len(qty_text) - 8)
+        name = fit_name(item.title, name_max)
+        spaces = max(1, LINE_WIDTH - len(f"{index}. ") - len(name) - len(qty_text))
         out += ALIGN_L + BOLD_ON
-        out += row(
-            f"| {int(qty) if qty == int(qty) else qty:<{NUM_W - 1}}"
-            f"| {title_lines[0]:<{NAME_W}}"
-            f"| {qty_display:>{QTY_W - 1}} |"
-        )
+        out += row(f"{index}. {name}{' ' * spaces}{qty_text}")
         out += BOLD_OFF
+        out += row()
 
-        # Continuation lines for long titles
-        for extra in title_lines[1:]:
-            out += ALIGN_L + row(f"|{' ' * NUM_W}| {extra:<{NAME_W}}|{' ' * QTY_W}|")
-
-        # Comment line(s): "> comment text"
-        if comment:
-            prefix = "> "
-            comment_lines = wrap_text(comment, NAME_W - len(prefix))
-            for idx, comment_line in enumerate(comment_lines):
-                prefix_text = prefix if idx == 0 else "  "
-                out += ALIGN_L + row(
-                    f"|{' ' * NUM_W}| {prefix_text}{comment_line:<{NAME_W - len(prefix_text)}}|{' ' * QTY_W}|"
-                )
-
-        out += border()
-
-    # ── Footer ────────────────────────────────────────────────────────────────
-    out += b"\n"
-    out += ALIGN_C + BOLD_ON + row("***") + BOLD_OFF
-
+    out += ALIGN_L + BOLD_ON + row("***") + BOLD_OFF
     out += FEED
     out += CUT
     return bytes(out)

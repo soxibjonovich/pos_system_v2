@@ -21,6 +21,10 @@ class ServiceFeeUpdate(BaseModel):
     value: float = Field(..., ge=0, le=100)
 
 
+class QqsUpdate(BaseModel):
+    value: float = Field(..., ge=0, le=100)
+
+
 class RestaurantProfileUpdate(BaseModel):
     business_name: str = Field(..., min_length=1, max_length=120)
     business_phone: str = Field(..., min_length=1, max_length=40)
@@ -69,6 +73,21 @@ async def update_service_fee_percent(
     data: ServiceFeeUpdate, db: AsyncSession = Depends(get_db)
 ):
     config = await _get_or_create_config(db, "service_fee_percent", "0")
+    config.value = str(round(float(data.value), 2))
+    await db.commit()
+    await db.refresh(config)
+    return SystemConfigResponse(key=config.key, value=config.value)
+
+
+@router.get("/qqs_percent", response_model=SystemConfigResponse)
+async def get_qqs_percent(db: AsyncSession = Depends(get_db)):
+    config = await _get_or_create_config(db, "qqs_percent", "0")
+    return SystemConfigResponse(key=config.key, value=config.value)
+
+
+@router.put("/qqs_percent", response_model=SystemConfigResponse)
+async def update_qqs_percent(data: QqsUpdate, db: AsyncSession = Depends(get_db)):
+    config = await _get_or_create_config(db, "qqs_percent", "0")
     config.value = str(round(float(data.value), 2))
     await db.commit()
     await db.refresh(config)

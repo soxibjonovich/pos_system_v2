@@ -31,6 +31,14 @@ async def get_service_fee():
     return service_fee
 
 
+@router.get("/qqs")
+async def get_qqs():
+    qqs = await crud.get_system_config("qqs_percent")
+    if not qqs:
+        return {"key": "qqs_percent", "value": "0"}
+    return qqs
+
+
 @router.put("/service-fee")
 async def update_service_fee(data: schemas.ServiceFeeUpdate):
     value = str(round(float(data.service_fee_percent), 2))
@@ -40,6 +48,17 @@ async def update_service_fee(data: schemas.ServiceFeeUpdate):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update"
         )
     return {"key": "service_fee_percent", "value": value}
+
+
+@router.put("/qqs")
+async def update_qqs(data: schemas.QqsUpdate):
+    value = str(round(float(data.qqs_percent), 2))
+    updated = await crud.update_system_config("qqs_percent", value)
+    if not updated:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to update"
+        )
+    return {"key": "qqs_percent", "value": value}
 
 
 @router.get("/restaurant-profile")

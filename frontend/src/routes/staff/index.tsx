@@ -118,6 +118,9 @@ export default function POSTerminal() {
   const [defaultFeePercent, setDefaultFeePercent] = useState(0);
   const [feePercent, setFeePercent] = useState(0);
   const [baseFeePercent, setBaseFeePercent] = useState(0);
+  const [defaultQqsPercent, setDefaultQqsPercent] = useState(0);
+  const [qqsPercent, setQqsPercent] = useState(0);
+  const [baseQqsPercent, setBaseQqsPercent] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [locationFilter, setLocationFilter] = useState<string | null>(null);
   const [tablesPage, setTablesPage] = useState(1);
@@ -181,10 +184,14 @@ export default function POSTerminal() {
         if (configRes.ok) {
           const configData = await configRes.json();
           const configuredFee = Number(configData?.service_fee_percent || 0);
+          const configuredQqs = Number(configData?.qqs_percent || 0);
           setDefaultFeePercent(configuredFee);
+          setDefaultQqsPercent(configuredQqs);
           if (!activeOrderId) {
             setFeePercent(configuredFee);
             setBaseFeePercent(configuredFee);
+            setQqsPercent(configuredQqs);
+            setBaseQqsPercent(configuredQqs);
           }
         }
       } catch (configErr) {
@@ -363,14 +370,17 @@ export default function POSTerminal() {
     setBaseOrderItems([]);
     setFeePercent(defaultFeePercent);
     setBaseFeePercent(defaultFeePercent);
-  }, [defaultFeePercent]);
+    setQqsPercent(defaultQqsPercent);
+    setBaseQqsPercent(defaultQqsPercent);
+  }, [defaultFeePercent, defaultQqsPercent]);
 
   const subtotal = cart.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0,
   );
+  const qqsAmount = Math.round(subtotal * qqsPercent) / 100;
   const feeAmount = Math.round(subtotal * feePercent) / 100;
-  const total = subtotal + feeAmount;
+  const total = subtotal + qqsAmount + feeAmount;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const baseQtyByProduct = baseOrderItems.reduce<Record<number, number>>(
     (acc, item) => {
@@ -481,6 +491,7 @@ export default function POSTerminal() {
         const order = await res.json();
         const items = Array.isArray(order?.items) ? order.items : [];
         const currentFeePercent = Number(order?.fee_percent || 0);
+        const currentQqsPercent = Number(order?.qqs_percent || 0);
 
         setBaseOrderItems(
           items.map((item: any) => ({
@@ -517,18 +528,22 @@ export default function POSTerminal() {
         setCart(Array.from(merged.values()));
         setFeePercent(currentFeePercent);
         setBaseFeePercent(currentFeePercent);
+        setQqsPercent(currentQqsPercent);
+        setBaseQqsPercent(currentQqsPercent);
         setActiveOrderId(orderId);
       } catch {
         setCart([]);
         setBaseOrderItems([]);
         setFeePercent(defaultFeePercent);
         setBaseFeePercent(defaultFeePercent);
+        setQqsPercent(defaultQqsPercent);
+        setBaseQqsPercent(defaultQqsPercent);
         setActiveOrderId(orderId);
       } finally {
         setTableOrderLoading(false);
       }
     },
-    [products, defaultFeePercent],
+    [products, defaultFeePercent, defaultQqsPercent],
   );
 
   const handleSelectTable = useCallback(
@@ -542,10 +557,12 @@ export default function POSTerminal() {
         setBaseOrderItems([]);
         setFeePercent(defaultFeePercent);
         setBaseFeePercent(defaultFeePercent);
+        setQqsPercent(defaultQqsPercent);
+        setBaseQqsPercent(defaultQqsPercent);
         setActiveOrderId(null);
       }
     },
-    [tableOrdersByTable, loadExistingOrderForTable, defaultFeePercent],
+    [tableOrdersByTable, loadExistingOrderForTable, defaultFeePercent, defaultQqsPercent],
   );
 
   const submitOrder = async () => {
@@ -728,7 +745,7 @@ export default function POSTerminal() {
           }
         }
 
-        if (feePercent !== baseFeePercent) {
+        if (feePercent !== baseFeePercent || qqsPercent !== baseQqsPercent) {
           const feeRes = await fetch(
             `${API_URL}${api.orders.base}/${api.orders.orders}/${orderIdToUpdate}`,
             {
@@ -739,6 +756,7 @@ export default function POSTerminal() {
               },
               body: JSON.stringify({
                 fee_percent: feePercent,
+                qqs_percent: qqsPercent,
               }),
             },
           );
@@ -768,6 +786,7 @@ export default function POSTerminal() {
         business_type: isRestaurant ? "restaurant" : "market",
         table_id: isRestaurant && selectedTable ? selectedTable.id : null,
         fee_percent: feePercent,
+        qqs_percent: qqsPercent,
         items: cart.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity,
@@ -1290,6 +1309,12 @@ export default function POSTerminal() {
                   <span className="font-semibold">{formatPrice(subtotal)}</span>
                 </div>
                 <div className="flex justify-between items-center mb-2 text-base">
+                  <span className="text-gray-300">QQS:</span>
+                  <span className="font-semibold text-cyan-300">
+                    {qqsPercent.toFixed(1)}% / {formatPrice(qqsAmount)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mb-2 text-base">
                   <span className="text-gray-300">Servis haqi:</span>
                   <span className="font-semibold text-orange-300">
                     {feePercent.toFixed(1)}% / {formatPrice(feeAmount)}
@@ -1334,6 +1359,9 @@ export default function POSTerminal() {
                   {selectedTableOrder
                     ? formatPrice(selectedTableOrder.total)
                     : "-"}
+                </p>
+                <p className="text-base text-slate-700 mt-2">
+                  QQS: {qqsPercent.toFixed(1)}% / {formatPrice(qqsAmount)}
                 </p>
                 <p className="text-base text-slate-700 mt-2">
                   Servis haqi: {feePercent.toFixed(1)}% /{" "}
@@ -1841,6 +1869,12 @@ export default function POSTerminal() {
                     <span className="text-gray-300">Mahsulot jami:</span>
                     <span className="font-semibold">
                       {formatPrice(subtotal)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between items-center mb-2 text-base">
+                    <span className="text-gray-300">QQS:</span>
+                    <span className="font-semibold text-cyan-300">
+                      {qqsPercent.toFixed(1)}% / {formatPrice(qqsAmount)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center mb-2 text-base">

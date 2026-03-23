@@ -36,6 +36,7 @@ class OrderBase(BaseModel):
 class OrderCreate(OrderBase):
     business_type: Literal["restaurant", "market", "retail"] | None = None
     fee_percent: float = Field(default=0, ge=0, le=100)
+    qqs_percent: float = Field(default=0, ge=0, le=100)
     items: list[OrderItemCreate] = Field(default_factory=list)
 
     @field_validator("items")
@@ -52,11 +53,14 @@ class OrderUpdate(BaseModel):
     ) = None
     table_id: int | None = None
     fee_percent: float | None = Field(None, ge=0, le=100)
+    qqs_percent: float | None = Field(None, ge=0, le=100)
 
 
 class OrderResponse(OrderBase):
     id: int
     subtotal_amount: float = 0
+    qqs_percent: float = 0
+    qqs_amount: float = 0
     fee_percent: float = 0
     fee_amount: float = 0
     total: float
@@ -116,5 +120,6 @@ class TablesResponse(BaseModel):
 class SystemConfigResponse(BaseModel):
     business_type: Literal["restaurant", "market"]
     service_fee_percent: float = 0
+    qqs_percent: float = 0
     business_name: str = "POS System"
     business_phone: str = "+998"

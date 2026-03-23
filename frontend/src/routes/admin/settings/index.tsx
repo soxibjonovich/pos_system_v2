@@ -20,6 +20,7 @@ export default function AdminSettings() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [serviceFeePercent, setServiceFeePercent] = useState(0);
+  const [qqsPercent, setQqsPercent] = useState(0);
   const [businessName, setBusinessName] = useState("POS System");
   const [businessPhone, setBusinessPhone] = useState("+998");
 
@@ -28,13 +29,18 @@ export default function AdminSettings() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const [feeRes, profileRes] = await Promise.all([
+        const [feeRes, qqsRes, profileRes] = await Promise.all([
           fetch(`${API_URL}${api.admin.base}/system-config/service-fee`),
+          fetch(`${API_URL}${api.admin.base}/system-config/qqs`),
           fetch(`${API_URL}${api.admin.base}/system-config/restaurant-profile`),
         ]);
         if (feeRes.ok) {
           const feeData = await feeRes.json();
           setServiceFeePercent(Number(feeData?.value || 0));
+        }
+        if (qqsRes.ok) {
+          const qqsData = await qqsRes.json();
+          setQqsPercent(Number(qqsData?.value || 0));
         }
         if (profileRes.ok) {
           const profileData = await profileRes.json();
@@ -94,6 +100,29 @@ export default function AdminSettings() {
       setTimeout(() => setSuccess(false), 3000);
     } catch (err) {
       console.error("Failed to update service fee:", err);
+      alert(t("common.failed"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleQqsUpdate = async () => {
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API_URL}${api.admin.base}/system-config/qqs`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ qqs_percent: qqsPercent }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update QQS");
+      }
+
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err) {
+      console.error("Failed to update QQS:", err);
       alert(t("common.failed"));
     } finally {
       setIsSubmitting(false);
@@ -345,6 +374,46 @@ export default function AdminSettings() {
                 </div>
                 <Button onClick={handleFeeUpdate} disabled={isSubmitting}>
                   Save Fee
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-white dark:bg-gray-900 rounded-xl p-5 mt-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-3">
+                <Percent className="size-5 text-indigo-600" />
+                <h4 className="font-bold text-gray-900 dark:text-gray-100">
+                  QQS
+                </h4>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                This percentage is applied automatically to new staff orders as tax.
+              </p>
+              <div className="flex items-end gap-3 flex-wrap">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    QQS Percent
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.5"
+                      value={qqsPercent}
+                      onChange={(e) =>
+                        setQqsPercent(
+                          Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                        )
+                      }
+                      className="w-32 h-12 rounded-xl border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 text-lg font-bold text-gray-900 dark:text-gray-100"
+                    />
+                    <span className="text-lg font-bold text-gray-700 dark:text-gray-300">
+                      %
+                    </span>
+                  </div>
+                </div>
+                <Button onClick={handleQqsUpdate} disabled={isSubmitting}>
+                  Save QQS
                 </Button>
               </div>
             </div>

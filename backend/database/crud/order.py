@@ -30,6 +30,8 @@ def _build_order_event_payload(order: Order) -> dict:
         "table_number": order.table.number if order.table else None,
         "status": _order_status_value(order.status),
         "subtotal_amount": float(order.subtotal_amount),
+        "qqs_percent": float(order.qqs_percent),
+        "qqs_amount": float(order.qqs_amount),
         "fee_percent": float(order.fee_percent),
         "fee_amount": float(order.fee_amount),
         "total": float(order.total),
@@ -132,6 +134,7 @@ async def create_order(db: AsyncSession, order: OrderCreate, user_id: int):
         status=OrderStatus.PENDING,
     )
     db_order.fee_percent = order.fee_percent
+    db_order.qqs_percent = order.qqs_percent
 
     total = 0.0
     for item in order.items:
@@ -237,6 +240,8 @@ async def update_order(db: AsyncSession, order_id: int, order: OrderUpdate):
 
     if "fee_percent" in update_data:
         db_order.fee_percent = update_data["fee_percent"]
+    if "qqs_percent" in update_data:
+        db_order.qqs_percent = update_data["qqs_percent"]
 
     db_order.calculate_total()
 
