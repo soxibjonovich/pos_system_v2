@@ -224,15 +224,19 @@ def _get_printer_routing_keys(printer: dict[str, Any]) -> list[str]:
 
 
 def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
-    INIT = b"\x1b\x40"
-    CHARSET = b"\x1b\x74\x11"
-    ALIGN_L = b"\x1b\x61\x00"
-    BOLD_ON = b"\x1b\x45\x01"
+    INIT     = b"\x1b\x40"
+    CHARSET  = b"\x1b\x74\x11"  # CP866 Cyrillic
+    ALIGN_L  = b"\x1b\x61\x00"
+    ALIGN_C  = b"\x1b\x61\x01"
+    BOLD_ON  = b"\x1b\x45\x01"
     BOLD_OFF = b"\x1b\x45\x00"
-    FEED = b"\x1b\x64\x04"
-    CUT = b"\x1d\x56\x41\x05"
+    DBL_ON   = b"\x1d\x21\x11"  # double width + height
+    DBL_OFF  = b"\x1d\x21\x00"
+    FEED     = b"\x1b\x64\x04"
+    CUT      = b"\x1d\x56\x41\x05"
 
-    LINE_WIDTH = 32
+    COLS     = 32               # normal chars per line on 58mm
+    DBL_COLS = COLS // 2        # usable chars when DBL_ON is active
 
     def enc(text: str) -> bytes:
         return text.encode("cp866", errors="replace")
@@ -240,10 +244,13 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
     def row(text: str = "") -> bytes:
         return enc(text.rstrip()) + b"\n"
 
-    def fit_name(title: str, max_width: int) -> str:
-        return _safe_tspl_text(title)[:max_width]
+    def sep(char: str = "-") -> bytes:
+        # Exactly COLS chars → never wraps, never double-prints
+        return row(char * COLS)
 
+    # ── Header ────────────────────────────────────────────────────────────
     printed_time = datetime.now(UZBEKISTAN_TZ).strftime("%d.%m.%Y %H:%M")
+
     raw_table = payload.table_number or (
         str(payload.table_id) if payload.table_id else "-"
     )
@@ -256,23 +263,33 @@ def _build_escpos_ticket(payload: schemas.PrinterDispatchRequest) -> bytes:
 
     out = bytearray(INIT + CHARSET)
     out += ALIGN_L
-    out += row(f"№ {payload.order_id}   {printed_time}")
+    out += row(f"# {payload.order_id}   {printed_time}")
     out += row(f"stol: {table_text}")
     out += row(f"ofitsiant: {staff_name}")
-    out += row()
+    out += sep()                # ── one clean line after ofitsiant
 
+    # ── Items ─────────────────────────────────────────────────────────────
     for index, item in enumerate(payload.items, start=1):
-        qty = item.quantity
-        qty_text = f"{qty:g}" if isinstance(qty, (int, float)) else str(qty)
-        name_max = max(8, LINE_WIDTH - len(qty_text) - 8)
-        name = fit_name(item.title, name_max)
-        spaces = max(1, LINE_WIDTH - len(f"{index}. ") - len(name) - len(qty_text))
-        out += ALIGN_L + BOLD_ON
-        out += row(f"{index}. {name}{' ' * spaces}{qty_text}")
-        out += BOLD_OFF
-        out += row()
+        qty      = item.quantity
+        qty_str  = f"{qty:g}" if isinstance(qty, (int, float)) else str(qty)
+        suffix   = f" {qty_str}x"                    # e.g. "  3x"
 
-    out += ALIGN_L + BOLD_ON + row("***") + BOLD_OFF
+        # Budget: "1. " prefix + name + " 3x" suffix must all fit in DBL_COLS
+        prefix   = f"{index}. "
+        name_max = max(1, DBL_COLS - len(prefix) - len(suffix))
+        name     = _safe_tspl_text(item.title)[:name_max]
+
+        # Pad between name and qty so qty lands at the right edge
+        pad      = DBL_COLS - len(prefix) - len(name) - len(suffix)
+        line     = f"{prefix}{name}{' ' * max(0, pad)}{suffix}"
+
+        out += ALIGN_L + DBL_ON + BOLD_ON
+        out += row(line)
+        out += BOLD_OFF + DBL_OFF
+
+    # ── Footer ────────────────────────────────────────────────────────────
+    out += sep()
+    out += ALIGN_C + BOLD_ON + row("***") + BOLD_OFF
     out += FEED
     out += CUT
     return bytes(out)
