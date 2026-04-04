@@ -41,6 +41,11 @@ import usb.core  # noqa: E402
 import usb.util  # noqa: E402
 from aiohttp import web  # noqa: E402
 
+try:  # noqa: E402
+    import win32print
+except ImportError:  # noqa: E402
+    win32print = None
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -200,8 +205,13 @@ class UniversalPrinter:
 
     def write(self, data: bytes):
         """Write with one auto-reclaim retry — XP-58 drops claim after USB suspend."""
+        logger.info(
+            f"Writing {len(data)} bytes to USB endpoint "
+            f"{self.ep_out.bEndpointAddress:#04x} on interface {self.intf_num}"
+        )
         try:
             self.ep_out.write(data, timeout=5000)
+            logger.info("USB write succeeded")
         except usb.core.USBError as e:
             logger.warning(f"Write failed ({e}), reclaiming and retrying…")
             try:
@@ -209,6 +219,7 @@ class UniversalPrinter:
             except Exception:
                 pass
             self.ep_out.write(data, timeout=5000)
+            logger.info("USB write succeeded after retry")
 
     def cut(self):
         for cmd in (b"\x1d\x56\x00", b"\x1d\x56\x01", b"\x1b\x64\x05"):
@@ -224,6 +235,45 @@ class UniversalPrinter:
                 usb.util.release_interface(self.device, self.intf_num)
         except Exception:
             pass
+
+
+class WindowsSpoolPrinter:
+    def __init__(self, printer_name: str):
+        if not win32print:
+            raise RuntimeError("win32print is not available")
+        self.printer_name = printer_name
+
+    def _write_raw(self, data: bytes):
+        handle = win32print.OpenPrinter(self.printer_name)
+        try:
+            job = win32print.StartDocPrinter(
+                handle,
+                1,
+                ("POS Receipt", None, "RAW"),
+            )
+            try:
+                win32print.StartPagePrinter(handle)
+                try:
+                    win32print.WritePrinter(handle, data)
+                finally:
+                    win32print.EndPagePrinter(handle)
+            finally:
+                win32print.EndDocPrinter(handle)
+        finally:
+            win32print.ClosePrinter(handle)
+
+    def write(self, data: bytes):
+        logger.info(
+            f"Writing {len(data)} bytes through Windows spooler "
+            f"to printer '{self.printer_name}'"
+        )
+        self._write_raw(data)
+        logger.info("Windows spooler write succeeded")
+
+    def cut(self):
+        logger.info(f"Sending cut command through Windows spooler to '{self.printer_name}'")
+        self._write_raw(b"\x1d\x56\x00")
+        logger.info("Windows spooler cut succeeded")
 # ---------------------------------------------------------------------------
 # Printer manager
 # ---------------------------------------------------------------------------
@@ -310,7 +360,53 @@ class PrinterManager:
                 return True
         return False
 
+    def _detect_windows_spooler_printer(self) -> Optional[dict]:
+        if sys.platform != "win32":
+            logger.info("Windows spooler is unavailable on this platform")
+            return None
+        if not win32print:
+            logger.info("Windows spooler is unavailable: win32print is not installed")
+            return None
+        try:
+            printer_name = win32print.GetDefaultPrinter()
+        except Exception as e:
+            logger.info(f"Windows default printer not available: {e}")
+            return None
+        if not printer_name:
+            logger.info("Windows default printer is not configured")
+            return None
+        logger.info(f"Found Windows spooler printer: {printer_name}")
+        return {
+            "vendor_id": None,
+            "product_id": None,
+            "manufacturer": "Windows",
+            "product_name": printer_name,
+            "device": None,
+            "status": "detected",
+            "connection_type": "spooler",
+            "printer_name": printer_name,
+        }
+
+    def _windows_printer_available(self, printer_name: str) -> bool:
+        if not win32print:
+            return False
+        try:
+            flags = (
+                win32print.PRINTER_ENUM_LOCAL
+                | win32print.PRINTER_ENUM_CONNECTIONS
+            )
+            printers = [p[2] for p in win32print.EnumPrinters(flags)]
+            return printer_name in printers
+        except Exception as e:
+            logger.info(f"Could not enumerate Windows printers: {e}")
+            return False
+
     def detect_printer(self) -> Optional[dict]:
+        spooler_info = self._detect_windows_spooler_printer()
+        if spooler_info:
+            self.printer_info = spooler_info
+            return spooler_info
+
         logger.info("Scanning USB devices...")
         for device in usb.core.find(find_all=True) or []:
             self._log_device_debug(device)
@@ -349,7 +445,18 @@ class PrinterManager:
         if not self.printer_info:
             return False
         try:
-            self.printer = UniversalPrinter(self.printer_info["device"])
+            if self.printer_info.get("connection_type") == "spooler":
+                printer_name = self.printer_info["printer_name"]
+                if not self._windows_printer_available(printer_name):
+                    logger.warning(f"Windows printer not found in system: {printer_name}")
+                    return False
+                logger.info(
+                    f"Connecting via Windows spooler: "
+                    f"{printer_name}"
+                )
+                self.printer = WindowsSpoolPrinter(printer_name)
+            else:
+                self.printer = UniversalPrinter(self.printer_info["device"])
             self.printer_info["status"] = "connected"
             logger.info("Printer connected")
             return True
@@ -357,6 +464,22 @@ class PrinterManager:
             logger.error(f"Connect failed: {e}")
             self.printer = None
             self.printer_info["status"] = "error"
+            if (
+                sys.platform == "win32"
+                and win32print
+                and self.printer_info.get("connection_type") != "spooler"
+            ):
+                spooler_info = self._detect_windows_spooler_printer()
+                if spooler_info:
+                    try:
+                        logger.info("USB connect failed, falling back to Windows spooler")
+                        self.printer_info = spooler_info
+                        self.printer = WindowsSpoolPrinter(spooler_info["printer_name"])
+                        self.printer_info["status"] = "connected"
+                        logger.info("Printer connected")
+                        return True
+                    except Exception as spooler_error:
+                        logger.error(f"Windows spooler fallback failed: {spooler_error}")
             return False
 
     def reconnect(self) -> bool:
@@ -364,11 +487,34 @@ class PrinterManager:
         self.printer_info = None
         return self.connect()
 
+    def _connect_windows_spooler(self) -> bool:
+        if sys.platform != "win32":
+            logger.info("Cannot switch to Windows spooler on this platform")
+            return False
+        if not win32print:
+            logger.info("Cannot switch to Windows spooler: win32print is not installed")
+            return False
+        spooler_info = self._detect_windows_spooler_printer()
+        if not spooler_info:
+            logger.info("Cannot switch to Windows spooler: no default printer found")
+            return False
+        try:
+            logger.info("Switching to Windows spooler printer")
+            self.printer_info = spooler_info
+            self.printer = WindowsSpoolPrinter(spooler_info["printer_name"])
+            self.printer_info["status"] = "connected"
+            logger.info("Printer connected")
+            return True
+        except Exception as e:
+            logger.error(f"Windows spooler connect failed: {e}")
+            return False
+
     def print_receipt(self, data: dict) -> dict:
         if self.printer is None:
             if not self.connect():
                 return self._fallback(data)
         try:
+            logger.info("Sending receipt to printer")
             self._send(data)
             return {
                 "status":    "printed",
@@ -377,104 +523,124 @@ class PrinterManager:
             }
         except Exception as e:
             logger.error(f"Print failed: {e}")
+            if self.printer_info and self.printer_info.get("connection_type") != "spooler":
+                if self._connect_windows_spooler():
+                    try:
+                        logger.info("Retrying receipt through Windows spooler")
+                        self._send(data)
+                        return {
+                            "status":    "printed_after_reconnect",
+                            "printer":   f"{self.printer_info['manufacturer']} {self.printer_info['product_name']}",
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    except Exception as spooler_error:
+                        logger.error(f"Windows spooler print failed: {spooler_error}")
             if self.reconnect():
                 try:
+                    logger.info("Retrying receipt after reconnect")
                     self._send(data)
                     return {
                         "status":    "printed_after_reconnect",
                         "printer":   f"{self.printer_info['manufacturer']} {self.printer_info['product_name']}",
                         "timestamp": datetime.now().isoformat(),
                     }
-                except Exception:
-                    pass
+                except Exception as retry_error:
+                    logger.error(f"Print retry failed: {retry_error}")
             return self._fallback(data)
 
-def _send(self, data: dict):
-    p   = self.printer
-    now = datetime.now().strftime("%d.%m.%Y  %H:%M")
+    def _send(self, data: dict):
+        p   = self.printer
+        now = datetime.now().strftime("%d.%m.%Y  %H:%M")
 
-    COLS     = 32
-    DBL_COLS = COLS // 2
+        COLS = 32
 
-    SEP_THICK = "=" * COLS
-    SEP_THIN  = "-" * COLS
+        SEP_THICK = "=" * COLS
+        SEP_THIN  = "-" * COLS
 
-    def item_amount(value: float | int) -> str:
-        return f"{float(value):,.0f} so'm"
+        def item_amount(value: float | int) -> str:
+            return f"{float(value):,.0f} so'm"
 
-    def qqs_line(item: dict) -> str | None:
-        percent = item.get("qqs_percent")
-        amount  = item.get("qqs_amount")
-        if percent in (None, "", 0, 0.0) and amount in (None, "", 0, 0.0):
-            return None
-        amount_value = 0 if amount in (None, "") else float(amount)
-        return f"QQS ({float(percent or 0):g}%) {item_amount(amount_value)}"
+        def fit(text: str, width: int) -> str:
+            return _safe(text, width).ljust(width)
 
-    out = ESC_INIT + ESC_CHARSET
+        def center(text: str) -> str:
+            return _safe(text, COLS).center(COLS)
 
-    # ── Header ──────────────────────────────────────────────────────────
-    name = _safe(data.get("business_name", "POS"), COLS)
-    out += ESC_CENTER + ESC_DBL_ON + ESC_BOLD_ON
-    out += _enc(name + "\n")
-    out += ESC_DBL_OFF + ESC_BOLD_OFF
-    if data.get("business_phone"):
-        out += _enc(f"Tel: {data['business_phone']}\n")
-    out += ESC_LEFT
-    out += _enc(f"Sana va vaqti: {now}\n")
-    out += _enc(f"Ishchi ismi: {_safe(data.get('cashier', 'Staff'), 20)}\n")
-    out += _enc(SEP_THICK + "\n")   # thick === after header, single line
+        def item_row(name: str, qty, price, subtotal) -> str:
+            qty_text = f"{float(qty):g}" if isinstance(qty, (int, float)) else str(qty)
+            price_text = f"{float(price):,.0f}"
+            subtotal_text = f"{float(subtotal):,.0f}"
+            return (
+                f"{fit(name, 12)}"
+                f"{qty_text:>6}"
+                f"{price_text:>7}"
+                f"{subtotal_text:>7}"
+            )
 
-    # ── Items ────────────────────────────────────────────────────────────
-    for index, item in enumerate(data.get("items", []), start=1):
-        qty      = item.get("quantity", 1)
-        price    = item.get("price", 0)
-        subtotal = item.get("subtotal", qty * price)
+        def qqs_line(item: dict) -> str | None:
+            percent = item.get("qqs_percent")
+            amount  = item.get("qqs_amount")
+            if percent in (None, "", 0, 0.0) and amount in (None, "", 0, 0.0):
+                return None
+            amount_value = 0 if amount in (None, "") else float(amount)
+            return f"QQS ({float(percent or 0):g}%) {item_amount(amount_value)}"
 
-        # Double-width line: "1. Name          3x"
-        qty_str  = f"{qty:g}" if isinstance(qty, (int, float)) else str(qty)
-        suffix   = f" {qty_str}x"
-        prefix   = f"{index}. "
-        name_max = max(1, DBL_COLS - len(prefix) - len(suffix))
-        item_name = _safe(item.get("name", "Item"), name_max)
-        pad      = DBL_COLS - len(prefix) - len(item_name) - len(suffix)
-        dbl_line = f"{prefix}{item_name}{' ' * max(0, pad)}{suffix}"
+        out = ESC_INIT + ESC_CHARSET
 
-        out += ESC_LEFT + ESC_DBL_ON + ESC_BOLD_ON
-        out += _enc(dbl_line + "\n")
-        out += ESC_BOLD_OFF + ESC_DBL_OFF
+        name = _safe(data.get("business_name", "POS"), COLS)
+        out += ESC_CENTER + ESC_BOLD_ON
+        out += _enc(center(name) + "\n")
+        out += ESC_BOLD_OFF
+        if data.get("business_phone"):
+            out += _enc(center(f"Tel: {data['business_phone']}") + "\n")
+        out += ESC_LEFT
+        out += _enc(f"Sana va vaqti: {now}\n")
+        out += _enc(f"Ishchi ismi: {_safe(data.get('cashier', 'Staff'), 20)}\n")
+        out += _enc(SEP_THICK + "\n")
+        out += ESC_BOLD_ON + _enc("Ism         Miqdor  Narx  Jami\n") + ESC_BOLD_OFF
+        out += _enc(SEP_THIN + "\n")
 
-        # Normal-size price line: "50,000 x 3 = 150,000 so'm"
-        formula = f"{float(price):,.0f} x {qty}"
-        overall = item_amount(subtotal)
-        spaces  = max(1, COLS - len(formula) - len(overall))
-        out += _enc(f"{formula}{' ' * spaces}{overall}\n")
+        for item in data.get("items", []):
+            qty      = item.get("quantity", 1)
+            price    = item.get("price", 0)
+            subtotal = item.get("subtotal", qty * price)
+            out += _enc(
+                item_row(item.get("name", "Item"), qty, price, subtotal) + "\n"
+            )
 
-        # Optional QQS line
-        qqs_text = qqs_line(item)
-        if qqs_text:
-            out += _enc(qqs_text.rjust(COLS) + "\n")
+            qqs_text = qqs_line(item)
+            if qqs_text:
+                out += _enc(qqs_text.rjust(COLS) + "\n")
 
-    out += _enc(SEP_THIN + "\n")    # thin --- after items, single line
+        out += _enc(SEP_THICK + "\n")
 
-    # ── Totals ───────────────────────────────────────────────────────────
-    total       = data.get("total", 0)
-    qqs_percent = data.get("qqs_percent", 0)
-    qqs_amount  = data.get("qqs_amount", 0)
-    fee_percent = data.get("fee_percent", 0)
-    fee_amount  = data.get("fee_amount", 0)
+        total       = data.get("total", 0)
+        subtotal_amount = data.get("subtotal_amount", 0)
+        qqs_percent = data.get("qqs_percent", 0)
+        qqs_amount  = data.get("qqs_amount", 0)
+        fee_percent = data.get("fee_percent", 0)
+        fee_amount  = data.get("fee_amount", 0)
 
-    if qqs_amount:
-        out += _enc(f"QQS ({float(qqs_percent):g}%) : {item_amount(qqs_amount)}\n")
-    if fee_amount:
-        out += _enc(f"Komissiya ({float(fee_percent):g}%) : {item_amount(fee_amount)}\n")
+        if subtotal_amount:
+            out += _enc(f"Mahsulot:{item_amount(subtotal_amount).rjust(COLS - 9)}\n")
+        if qqs_amount:
+            out += _enc(f"QQS ({float(qqs_percent):g}%) : {item_amount(qqs_amount)}\n")
+        if fee_amount:
+            out += _enc(f"Servis ({float(fee_percent):g}%) : {item_amount(fee_amount)}\n")
 
-    out += ESC_BOLD_ON
-    out += _enc(f"Jami to'lov : {item_amount(total)}\n")
-    out += ESC_BOLD_OFF
+        out += ESC_BOLD_ON
+        out += _enc(f"Jami:{item_amount(total).rjust(COLS - 5)}\n")
+        out += ESC_BOLD_OFF
 
-    out += ESC_FEED
-    p.write(out)
-    p.cut()
+        out += ESC_FEED
+        if self.printer_info and self.printer_info.get("connection_type") == "spooler":
+            out += b"\x1d\x56\x00"
+        logger.info(f"Built receipt payload: {len(out)} bytes")
+        p.write(out)
+        if not (self.printer_info and self.printer_info.get("connection_type") == "spooler"):
+            logger.info("Sending cut command")
+            p.cut()
+
     def _fallback(self, data: dict) -> dict:
         try:
             now      = datetime.now()
@@ -484,6 +650,23 @@ def _send(self, data: dict):
             def item_amount(value: float | int) -> str:
                 return f"{float(value):,.0f} so'm"
 
+            def fit(text: str, width: int) -> str:
+                return _safe(text, width).ljust(width)
+
+            def center(text: str) -> str:
+                return _safe(text, LINE_WIDTH).center(LINE_WIDTH)
+
+            def item_row(name: str, qty, price, subtotal) -> str:
+                qty_text = f"{float(qty):g}" if isinstance(qty, (int, float)) else str(qty)
+                price_text = f"{float(price):,.0f}"
+                subtotal_text = f"{float(subtotal):,.0f}"
+                return (
+                    f"{fit(name, 12)}"
+                    f"{qty_text:>6}"
+                    f"{price_text:>7}"
+                    f"{subtotal_text:>7}"
+                )
+
             def qqs_line(item: dict) -> str | None:
                 percent = item.get("qqs_percent")
                 amount = item.get("qqs_amount")
@@ -492,40 +675,39 @@ def _send(self, data: dict):
                 amount_value = 0 if amount in (None, "") else float(amount)
                 return f"QQS ({float(percent or 0):g}%) {item_amount(amount_value)}"
 
-            lines = [data.get("business_name", "POS")]
+            lines = [center(data.get("business_name", "POS"))]
             if data.get("business_phone"):
-                lines.append(f"Tel: {data['business_phone']}")
+                lines.append(center(f"Tel: {data['business_phone']}"))
             lines.append(f"Sana va vaqti: {now.strftime('%d.%m.%Y  %H:%M')}")
             lines.append(f"Ishchi ismi: {data.get('cashier', 'Staff')}")
+            lines.append(SEP_THICK)
+            lines.append("Ism         Miqdor  Narx  Jami")
             lines.append(SEP_THIN)
 
-            for index, item in enumerate(data.get("items", []), start=1):
+            for item in data.get("items", []):
                 qty      = item.get("quantity", 1)
                 price    = item.get("price", 0)
                 subtotal = item.get("subtotal", qty * price)
-                lines.append(f"{index}. {_safe(item.get('name', 'Item'), LINE_WIDTH - 3)}")
-                formula = f"{float(price):,.0f} x {qty}"
-                overall = item_amount(subtotal)
-                spaces = max(1, LINE_WIDTH - len(formula) - len(overall))
-                lines.append(f"{formula}{' ' * spaces}{overall}")
+                lines.append(item_row(item.get("name", "Item"), qty, price, subtotal))
                 qqs_text = qqs_line(item)
                 if qqs_text:
                     lines.append(qqs_text.rjust(LINE_WIDTH))
 
-            lines += [
-                SEP_THIN,
-            ]
+            lines.append(SEP_THICK)
+            subtotal_amount = data.get("subtotal_amount", 0)
             qqs_percent = data.get("qqs_percent", 0)
             qqs_amount = data.get("qqs_amount", 0)
             fee_percent = data.get("fee_percent", 0)
             fee_amount = data.get("fee_amount", 0)
+            if subtotal_amount:
+                lines.append(f"Mahsulot:{item_amount(subtotal_amount).rjust(LINE_WIDTH - 9)}")
             if qqs_amount:
                 lines.append(f"QQS ({float(qqs_percent):g}%) : {item_amount(qqs_amount)}")
             if fee_amount:
                 lines.append(
-                    f"Komissiya ({float(fee_percent):g}%) : {item_amount(fee_amount)}"
+                    f"Servis ({float(fee_percent):g}%) : {item_amount(fee_amount)}"
                 )
-            lines.append(f"Jami to'lov : {item_amount(data.get('total', 0))}")
+            lines.append(f"Jami:{item_amount(data.get('total', 0)).rjust(LINE_WIDTH - 5)}")
 
             filename.write_text("\n".join(lines), encoding="utf-8")
             logger.info(f"Fallback receipt saved: {filename}")

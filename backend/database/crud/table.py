@@ -18,8 +18,12 @@ async def get_table_by_id(db: AsyncSession, table_id: int):
     return result.scalar_one_or_none()
 
 
-async def get_table_by_number(db: AsyncSession, number: str):
+async def get_table_by_number(db: AsyncSession, number: str, location: str | None = None):
     stmt = select(Table).where(Table.number == number)
+    if location is not None:
+        stmt = stmt.where(Table.location == location)
+    else:
+        stmt = stmt.where(Table.location.is_(None))
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 

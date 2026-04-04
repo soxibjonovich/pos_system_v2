@@ -9,10 +9,12 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -95,6 +97,8 @@ class Product(Base):
         index=True,
     )
     quantity = Column(Integer, nullable=False, default=-1)
+    unit = Column(String(20), nullable=True)
+    capacity = Column(Float, nullable=True)
     price = Column(Numeric(10, 2), nullable=False)
     image_url = Column(String(500), nullable=True)
     image_filename = Column(String(255), nullable=True)
@@ -114,7 +118,7 @@ class Product(Base):
 class Table(Base):
     __tablename__ = "tables"
     id = Column(Integer, primary_key=True, autoincrement=True, index=True)
-    number = Column(String(20), unique=True, nullable=False, index=True)
+    number = Column(String(20), nullable=False, index=True)
     subcategory = Column(String(100), nullable=True, index=True)
     location = Column(String(100), nullable=True, index=True)
     capacity = Column(Integer, nullable=False, default=4)
@@ -126,7 +130,10 @@ class Table(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
     orders = relationship("Order", back_populates="table")
-    __table_args__ = (CheckConstraint("capacity>0", name="check_capacity_positive"),)
+    __table_args__ = (
+        CheckConstraint("capacity>0", name="check_capacity_positive"),
+        UniqueConstraint("number", "location", name="uq_table_number_location"),
+    )
 
 
 class SystemConfig(Base):
@@ -164,6 +171,8 @@ class Order(Base):
     status = Column(
         Enum(OrderStatus), default=OrderStatus.PENDING, nullable=False, index=True
     )
+    payment_method = Column(String(20), nullable=True, default="cash")
+    order_type = Column(String(20), nullable=True, default="dine_in")
     notes = Column(Text, nullable=True)
     created_at = Column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

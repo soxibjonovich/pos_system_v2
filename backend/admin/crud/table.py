@@ -94,18 +94,21 @@ async def get_table_by_id(table_id: int) -> Table | None:
         return None
 
 
-async def get_table_by_number(number: str) -> Table | None:
+async def get_table_by_number(number: str, location: str | None = None) -> Table | None:
     try:
-        response = await service_client.db_client.get(f"/tables/number/{number}")
-        
+        params = {}
+        if location is not None:
+            params["location"] = location
+        response = await service_client.db_client.get(f"/tables/number/{number}", params=params)
+
         if response.status_code == 404:
             return None
-        
+
         if response.status_code != 200:
             return None
-        
+
         return Table.model_validate_json(response.content)
-    
+
     except httpx.ConnectError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -115,9 +118,12 @@ async def get_table_by_number(number: str) -> Table | None:
         return None
 
 
-async def is_table_exists(number: str) -> bool:
+async def is_table_exists(number: str, location: str | None = None) -> bool:
     try:
-        response = await service_client.db_client.get(f"/tables/number/{number}")
+        params = {}
+        if location is not None:
+            params["location"] = location
+        response = await service_client.db_client.get(f"/tables/number/{number}", params=params)
         return response.status_code == 200
     except httpx.ConnectError:
         raise HTTPException(
@@ -129,7 +135,7 @@ async def is_table_exists(number: str) -> bool:
 
 
 async def create_table(table_in: schema.TableCreate) -> Table | None:
-    if await is_table_exists(table_in.number):
+    if await is_table_exists(table_in.number, table_in.location):
         return None
     
     try:

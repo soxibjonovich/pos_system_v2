@@ -10,14 +10,16 @@ import { api, API_URL } from "@/config";
 import { AuthGuard } from "@/middlewares/AuthGuard";
 import { createFileRoute } from "@tanstack/react-router";
 import {
+  Download,
   Edit,
   UtensilsCrossed,
   Image as ImageIcon,
   Plus,
   Search,
   Trash2,
+  Upload,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const Route = createFileRoute("/admin/products/")({
   component: () => (
@@ -27,12 +29,23 @@ export const Route = createFileRoute("/admin/products/")({
   ),
 });
 
+const UNITS = [
+  { value: "dona", label: "dona" },
+  { value: "kg", label: "kg" },
+  { value: "g", label: "g" },
+  { value: "l", label: "l" },
+  { value: "ml", label: "ml" },
+  { value: "porsi", label: "porsi" },
+];
+
 interface Product {
   id: number;
   title: string;
   description?: string;
   price: number;
   quantity: number;
+  unit?: string | null;
+  capacity?: number | null;
   category_id?: number | null;
   is_active: boolean;
   image_url?: string;
@@ -65,6 +78,8 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -72,6 +87,8 @@ export default function ProductsPage() {
     description: "",
     price: 0,
     quantity: -1,
+    unit: "" as string,
+    capacity: "" as string,
     category_id: undefined as number | null | undefined,
     is_active: true,
   });
@@ -155,6 +172,68 @@ export default function ProductsPage() {
     setRemoveImage(true);
   };
 
+  const handleExport = async () => {
+    try {
+      const response = await fetch(
+        `${API_URL}${api.admin.base}/${api.admin.products}/export`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("postoken")}`,
+          },
+        },
+      );
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "products.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export failed:", error);
+      alert("Export failed");
+    }
+  };
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+
+      const response = await fetch(
+        `${API_URL}${api.admin.base}/${api.admin.products}/import`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("postoken")}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        },
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        await fetchProducts();
+        alert(
+          `Import complete: ${result.created} created, ${result.updated} updated${result.failed ? `, ${result.failed} failed` : ""}`,
+        );
+      } else {
+        alert("Import failed");
+      }
+    } catch (error) {
+      console.error("Import failed:", error);
+      alert("Invalid JSON file or import failed");
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -165,6 +244,14 @@ export default function ProductsPage() {
       payload.append("price", String(formData.price));
       payload.append("quantity", String(formData.quantity));
       payload.append("is_active", String(formData.is_active));
+
+      if (formData.unit) {
+        payload.append("unit", formData.unit);
+      }
+
+      if (formData.capacity) {
+        payload.append("capacity", formData.capacity);
+      }
 
       if (formData.description.trim()) {
         payload.append("description", formData.description);
@@ -244,6 +331,8 @@ export default function ProductsPage() {
       description: product.description || "",
       price: product.price,
       quantity: product.quantity,
+      unit: product.unit || "",
+      capacity: product.capacity != null ? String(product.capacity) : "",
       category_id: product.category_id ?? undefined,
       is_active: product.is_active,
     });
@@ -261,6 +350,8 @@ export default function ProductsPage() {
       description: "",
       price: 0,
       quantity: -1,
+      unit: "",
+      capacity: "",
       category_id: undefined,
       is_active: true,
     });
@@ -281,10 +372,41 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold">Products</h1>
           <p className="text-gray-600 mt-1">{products.length} total products</p>
         </div>
-        <Button onClick={() => setShowForm(true)} size="lg">
-          <Plus className="mr-2 size-5" />
-          Add Product
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExport} size="lg">
+            <Download className="mr-2 size-5" />
+            Export
+          </Button>
+          <Button
+            variant="outline"
+            size="lg"
+            disabled={importing}
+            onClick={() => importInputRef.current?.click()}
+          >
+            {importing ? (
+              <>
+                <div className="size-5 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
+                Importing...
+              </>
+            ) : (
+              <>
+                <Upload className="mr-2 size-5" />
+                Import
+              </>
+            )}
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleImport}
+            className="hidden"
+          />
+          <Button onClick={() => setShowForm(true)} size="lg">
+            <Plus className="mr-2 size-5" />
+            Add Product
+          </Button>
+        </div>
       </div>
 
       {/* Search */}
@@ -367,6 +489,12 @@ export default function ProductsPage() {
                   {product.quantity === -1
                     ? "∞ Unlimited"
                     : `Stock: ${product.quantity}`}
+                  {(product.capacity != null || product.unit) && (
+                    <span className="ml-1 text-gray-400">
+                      ({product.capacity != null ? product.capacity : ""}
+                      {product.unit || ""})
+                    </span>
+                  )}
                 </span>
 
                 {product.category_id && (
@@ -495,7 +623,7 @@ export default function ProductsPage() {
               />
             </div>
 
-            {/* Price and Quantity */}
+            {/* Price, Quantity, Unit, Capacity */}
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium mb-2">
@@ -532,6 +660,45 @@ export default function ProductsPage() {
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   -1 = Unlimited stock
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Unit
+                </label>
+                <select
+                  value={formData.unit}
+                  onChange={(e) =>
+                    setFormData({ ...formData, unit: e.target.value })
+                  }
+                  className="w-full border rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">— none —</option>
+                  {UNITS.map((u) => (
+                    <option key={u.value} value={u.value}>
+                      {u.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Capacity
+                </label>
+                <Input
+                  type="number"
+                  value={formData.capacity}
+                  onChange={(e) =>
+                    setFormData({ ...formData, capacity: e.target.value })
+                  }
+                  placeholder="e.g. 1.5"
+                  min="0"
+                  step="0.01"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {formData.capacity && formData.unit
+                    ? `→ ${formData.capacity}${formData.unit}`
+                    : "e.g. 1.5 + l = 1.5l"}
                 </p>
               </div>
             </div>

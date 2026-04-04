@@ -74,6 +74,8 @@ async def create_product(
     quantity: int,
     is_active: bool,
     description: str | None = None,
+    unit: str | None = None,
+    capacity: float | None = None,
     category_id: int | None = None,
     image: UploadFile | None = None,
 ) -> schema.ProductResponse | None:
@@ -87,6 +89,10 @@ async def create_product(
 
         if description is not None:
             data["description"] = description
+        if unit is not None:
+            data["unit"] = unit
+        if capacity is not None:
+            data["capacity"] = str(capacity)
         if category_id is not None:
             data["category_id"] = str(category_id)
 
@@ -124,6 +130,8 @@ async def update_product(
     description: str | None = None,
     price: float | None = None,
     quantity: int | None = None,
+    unit: str | None = None,
+    capacity: float | None = None,
     category_id: int | None = None,
     is_active: bool | None = None,
     image: UploadFile | None = None,
@@ -139,6 +147,10 @@ async def update_product(
             data["price"] = str(price)
         if quantity is not None:
             data["quantity"] = str(quantity)
+        if unit is not None:
+            data["unit"] = unit
+        if capacity is not None:
+            data["capacity"] = str(capacity)
         if category_id is not None:
             data["category_id"] = str(category_id)
         if is_active is not None:

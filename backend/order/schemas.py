@@ -37,6 +37,8 @@ class OrderCreate(OrderBase):
     business_type: Literal["restaurant", "market", "retail"] | None = None
     fee_percent: float = Field(default=0, ge=0, le=100)
     qqs_percent: float = Field(default=0, ge=0, le=100)
+    payment_method: str | None = Field(default="cash", max_length=20)
+    order_type: str | None = Field(default="dine_in", max_length=20)
     items: list[OrderItemCreate] = Field(default_factory=list)
 
     @field_validator("items")
@@ -54,6 +56,8 @@ class OrderUpdate(BaseModel):
     table_id: int | None = None
     fee_percent: float | None = Field(None, ge=0, le=100)
     qqs_percent: float | None = Field(None, ge=0, le=100)
+    payment_method: str | None = Field(None, max_length=20)
+    order_type: str | None = Field(None, max_length=20)
 
 
 class OrderResponse(OrderBase):
@@ -65,11 +69,13 @@ class OrderResponse(OrderBase):
     fee_amount: float = 0
     total: float
     status: str
+    payment_method: str | None = "cash"
+    order_type: str | None = "dine_in"
     created_at: datetime
     updated_at: datetime | None = None
     items: list[OrderItem] = Field(default_factory=list)
-    user: dict | None = None  # ADD THIS LINE
-    table: dict | None = None  # ADD THIS LINE
+    user: dict | None = None
+    table: dict | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

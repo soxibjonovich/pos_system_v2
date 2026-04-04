@@ -1,9 +1,10 @@
 from crud import table as crud
 from database import get_db
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from models import TableStatus
 from schemas import table as schema
 from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Optional
 
 router = APIRouter(tags=["Tables"])
 
@@ -23,6 +24,21 @@ async def get_available_tables(db: AsyncSession = Depends(get_db)):
     return {"tables": tables, "total": len(tables)}
 
 
+@router.get("/number/{number}", response_model=schema.TableResponse)
+async def get_table_by_number(
+    number: str,
+    location: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    table = await crud.get_table_by_number(db, number, location)
+    if not table:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Table not found"
+        )
+    return table
+
+
 @router.get("/{table_id}", response_model=schema.TableResponse)
 async def get_table(table_id: int, db: AsyncSession = Depends(get_db)):
     table = await crud.get_table_by_id(db, table_id)
@@ -39,11 +55,11 @@ async def create_table(
     table: schema.TableCreate,
     db: AsyncSession = Depends(get_db)
 ):
-    existing = await crud.get_table_by_number(db, table.number)
+    existing = await crud.get_table_by_number(db, table.number, table.location)
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Table with this number already exists"
+            detail="A table with this number already exists in the same location"
         )
     return await crud.create_table(db, table)
 
@@ -54,14 +70,17 @@ async def update_table(
     table: schema.TableUpdate,
     db: AsyncSession = Depends(get_db)
 ):
-    if table.number:
-        existing = await crud.get_table_by_number(db, table.number)
+    if table.number is not None:
+        # Fetch current table to get its location for the uniqueness check
+        current = await crud.get_table_by_id(db, table_id)
+        check_location = table.location if table.location is not None else (current.location if current else None)
+        existing = await crud.get_table_by_number(db, table.number, check_location)
         if existing and existing.id != table_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Table with this number already exists"
+                detail="A table with this number already exists in the same location"
             )
-    
+
     updated = await crud.update_table(db, table_id, table)
     if not updated:
         raise HTTPException(
