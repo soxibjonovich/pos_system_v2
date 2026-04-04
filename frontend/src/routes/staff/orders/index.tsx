@@ -504,6 +504,55 @@ function OrdersPage() {
     }
   };
 
+  const renderOrderActions = (order: Order, compact = false) => (
+    <div
+      className={`flex flex-wrap gap-2 ${
+        compact ? "" : "justify-end"
+      }`}
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => printOrderCheck(order)}
+        disabled={printingOrderId === order.id}
+        className="border-slate-300 bg-white text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+      >
+        {printingOrderId === order.id ? (
+          <RefreshCw className="size-4 animate-spin" />
+        ) : (
+          <Printer className="size-4 mr-1" />
+        )}
+        Chek
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => viewOrder(order)}
+        className="border-blue-300 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-60"
+      >
+        Ko'rish
+      </Button>
+      {["pending", "ready"].includes(order.status) && (
+        <Button
+          size="sm"
+          onClick={() => updateStatus(order.id, "completed")}
+          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+        >
+          To'landi
+        </Button>
+      )}
+      {order.status !== "completed" && order.status !== "cancelled" && (
+        <Button
+          size="sm"
+          onClick={() => openEdit(order)}
+          className="bg-slate-700 hover:bg-slate-800 text-white"
+        >
+          Tahrirlash
+        </Button>
+      )}
+    </div>
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-50">
@@ -532,22 +581,23 @@ function OrdersPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="p-6 space-y-6 max-w-[1800px] mx-auto">
+      <div className="p-4 sm:p-6 space-y-6 max-w-[1800px] mx-auto overflow-x-hidden">
         <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 min-w-0">
             <Link to="/staff">
               <Button
                 variant="outline"
                 size="lg"
-                className="flex items-center gap-2 text-black"
+                className="flex items-center gap-2 text-black shrink-0"
               >
                 <ArrowLeft className="size-5" />
-                POS Terminal
+                <span className="hidden sm:inline">POS Terminal</span>
+                <span className="sm:hidden">POS</span>
               </Button>
             </Link>
-            <div className="flex items-center gap-3">
-              <Receipt className="size-8 text-blue-600" />
-              <h1 className="text-3xl font-black text-gray-900">
+            <div className="flex items-center gap-2 min-w-0">
+              <Receipt className="size-6 sm:size-8 text-blue-600 shrink-0" />
+              <h1 className="text-xl sm:text-3xl font-black text-gray-900 truncate">
                 Buyurtmalarim
               </h1>
             </div>
@@ -631,111 +681,129 @@ function OrdersPage() {
         </div>
 
         <div className="border rounded-lg shadow-lg overflow-hidden bg-white">
-          <Table>
-            <TableCaption className="py-4 text-gray-600">
-              {!filteredOrders.length
-                ? "Buyurtmalar topilmadi"
-                : `${filteredOrders.length} / ${orders.length} ta`}
-            </TableCaption>
-            <TableHeader>
-              <TableRow className="bg-slate-100/80">
-                <TableHead className="font-bold text-gray-900">#</TableHead>
-                <TableHead className="font-bold text-gray-900">Summa</TableHead>
-                <TableHead className="font-bold text-gray-900">Holat</TableHead>
-                <TableHead className="font-bold text-gray-900">Stol</TableHead>
-                <TableHead className="font-bold text-gray-900">
-                  Mahsulotlar
-                </TableHead>
-                <TableHead className="font-bold text-gray-900">Vaqt</TableHead>
-                <TableHead className="text-right font-bold text-gray-900">
-                  Amallar
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!filteredOrders.length ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-16">
-                    <Package className="size-16 mx-auto mb-4 text-gray-300" />
-                    <p className="text-gray-500 text-lg font-semibold">
-                      Buyurtmalar yo'q
+          {!filteredOrders.length ? (
+            <div className="px-4 py-12 text-center sm:hidden">
+              <Package className="size-16 mx-auto mb-4 text-gray-300" />
+              <p className="text-gray-500 text-lg font-semibold">
+                Buyurtmalar yo'q
+              </p>
+              <p className="text-gray-400 text-sm mt-1">
+                Hali hech qanday buyurtma berilmagan
+              </p>
+            </div>
+          ) : (
+            <div className="sm:hidden divide-y divide-slate-200">
+              {paginatedOrders.map((o) => (
+                <div key={o.id} className="p-4 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-lg font-black text-slate-900">
+                        #{o.id}
+                      </p>
+                      <p className="text-sm text-slate-500">
+                        {formatDate(o.created_at)}
+                      </p>
+                    </div>
+                    <StatusBadge status={o.status} />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-slate-500">Summa</p>
+                      <p className="mt-1 text-base font-bold text-green-600">
+                        {formatPrice(o.total)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3">
+                      <p className="text-slate-500">Stol</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {getTableLabel(o)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 p-3 col-span-2">
+                      <p className="text-slate-500">Mahsulotlar</p>
+                      <p className="mt-1 font-semibold text-slate-800">
+                        {o.items?.length || 0} ta
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200 pt-3">
+                    <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">
+                      Amallar
                     </p>
-                    <p className="text-gray-400 text-sm mt-1">
-                      Hali hech qanday buyurtma berilmagan
-                    </p>
-                  </TableCell>
+                    {renderOrderActions(o, true)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="hidden sm:block">
+            <Table>
+              <TableCaption className="py-4 text-gray-600">
+                {!filteredOrders.length
+                  ? "Buyurtmalar topilmadi"
+                  : `${filteredOrders.length} / ${orders.length} ta`}
+              </TableCaption>
+              <TableHeader>
+                <TableRow className="bg-slate-100/80">
+                  <TableHead className="font-bold text-gray-900">#</TableHead>
+                  <TableHead className="font-bold text-gray-900">Summa</TableHead>
+                  <TableHead className="font-bold text-gray-900">Holat</TableHead>
+                  <TableHead className="font-bold text-gray-900">Stol</TableHead>
+                  <TableHead className="font-bold text-gray-900">
+                    Mahsulotlar
+                  </TableHead>
+                  <TableHead className="font-bold text-gray-900">Vaqt</TableHead>
+                  <TableHead className="text-right font-bold text-gray-900">
+                    Amallar
+                  </TableHead>
                 </TableRow>
-              ) : (
-                paginatedOrders.map((o) => (
-                  <TableRow key={o.id} className="hover:bg-gray-50">
-                    <TableCell className="font-bold text-lg text-gray-900">
-                      #{o.id}
-                    </TableCell>
-                    <TableCell className="font-bold text-green-600 text-lg">
-                      {formatPrice(o.total)}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={o.status} />
-                    </TableCell>
-                    <TableCell className="font-semibold text-gray-700">
-                      {getTableLabel(o)}
-                    </TableCell>
-                    <TableCell className="font-semibold text-gray-700">
-                      {o.items?.length || 0} ta
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-500">
-                      {formatDate(o.created_at)}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="inline-flex items-center justify-end gap-2 flex-wrap">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => printOrderCheck(o)}
-                          disabled={printingOrderId === o.id}
-                          className="border-slate-300 bg-white text-slate-800 hover:bg-slate-100 disabled:opacity-60"
-                        >
-                          {printingOrderId === o.id ? (
-                            <RefreshCw className="size-4 animate-spin" />
-                          ) : (
-                            <Printer className="size-4 mr-1" />
-                          )}
-                          Chek
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => viewOrder(o)}
-                          className="border-blue-300 bg-white text-blue-700 hover:bg-blue-50 disabled:opacity-60"
-                        >
-                          Ko'rish
-                        </Button>
-                        {["pending", "ready"].includes(o.status) && (
-                          <Button
-                            size="sm"
-                            onClick={() => updateStatus(o.id, "completed")}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
-                          >
-                            To'landi
-                          </Button>
-                        )}
-                        {o.status !== "completed" &&
-                          o.status !== "cancelled" && (
-                            <Button
-                              size="sm"
-                              onClick={() => openEdit(o)}
-                              className="bg-slate-700 hover:bg-slate-800 text-white"
-                            >
-                              Tahrirlash
-                            </Button>
-                          )}
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {!filteredOrders.length ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-16">
+                      <Package className="size-16 mx-auto mb-4 text-gray-300" />
+                      <p className="text-gray-500 text-lg font-semibold">
+                        Buyurtmalar yo'q
+                      </p>
+                      <p className="text-gray-400 text-sm mt-1">
+                        Hali hech qanday buyurtma berilmagan
+                      </p>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                ) : (
+                  paginatedOrders.map((o) => (
+                    <TableRow key={o.id} className="hover:bg-gray-50">
+                      <TableCell className="font-bold text-lg text-gray-900">
+                        #{o.id}
+                      </TableCell>
+                      <TableCell className="font-bold text-green-600 text-lg">
+                        {formatPrice(o.total)}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={o.status} />
+                      </TableCell>
+                      <TableCell className="font-semibold text-gray-700">
+                        {getTableLabel(o)}
+                      </TableCell>
+                      <TableCell className="font-semibold text-gray-700">
+                        {o.items?.length || 0} ta
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {formatDate(o.created_at)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {renderOrderActions(o)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
           {filteredOrders.length > ORDERS_PER_PAGE && (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 px-4 py-4 border-t bg-slate-50">
               <p className="text-sm font-medium text-slate-600">
@@ -786,17 +854,19 @@ function OrdersPage() {
 
         {/* Detail Modal */}
         <Dialog open={detailModal} onOpenChange={setDetailModal}>
-          <DialogContent className="sm:max-w-[700px] bg-white text-slate-900 border border-slate-200">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-2xl">
-                <Receipt className="size-6 text-blue-600" />
-                Buyurtma #{selectedOrder?.id}
+          <DialogContent className="w-[calc(100vw-1rem)] max-w-[700px] max-h-[85vh] overflow-y-auto bg-white p-3 sm:p-6 text-slate-900 border border-slate-200">
+            <DialogHeader className="pr-8 sm:pr-10">
+              <DialogTitle className="flex items-center gap-2 min-w-0 pr-2 text-lg sm:text-2xl leading-tight">
+                <Receipt className="size-5 sm:size-6 text-blue-600 shrink-0" />
+                <span className="truncate">Buyurtma #{selectedOrder?.id}</span>
               </DialogTitle>
-              <DialogDescription>Tafsilotlar</DialogDescription>
+              <DialogDescription className="text-sm sm:text-base">
+                Tafsilotlar
+              </DialogDescription>
             </DialogHeader>
             {selectedOrder && (
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg">
                   <div>
                     <p className="text-sm font-medium text-gray-500">Raqam</p>
                     <p className="text-xl font-bold text-gray-900">
@@ -825,7 +895,7 @@ function OrdersPage() {
                       {selectedOrder.order_type === "takeaway" ? "🥡 Olib ketish" : selectedOrder.order_type === "delivery" ? "🛵 Yetkazish" : "🍽 Zalda"}
                     </p>
                   </div>
-                  <div className="col-span-2">
+                  <div className="sm:col-span-2">
                     <p className="text-sm font-medium text-gray-500">
                       Mahsulot jami
                     </p>
@@ -851,7 +921,7 @@ function OrdersPage() {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-gray-500">Jami</p>
-                    <p className="text-3xl font-black text-green-600">
+                    <p className="text-2xl sm:text-3xl font-black text-green-600 break-words">
                       {formatPrice(selectedOrder.total)}
                     </p>
                   </div>
@@ -876,12 +946,12 @@ function OrdersPage() {
                 </div>
 
                 <div>
-                  <div className="flex justify-end mb-3">
+                  <div className="flex justify-stretch sm:justify-end mb-3">
                     <Button
                       variant="outline"
                       onClick={() => printOrderCheck(selectedOrder)}
                       disabled={printingOrderId === selectedOrder.id}
-                      className="border-slate-300 bg-white text-slate-800 hover:bg-slate-100 disabled:opacity-60"
+                      className="w-full sm:w-auto border-slate-300 bg-white text-slate-800 hover:bg-slate-100 disabled:opacity-60"
                     >
                       {printingOrderId === selectedOrder.id ? (
                         <RefreshCw className="size-4 mr-2 animate-spin" />
@@ -892,34 +962,64 @@ function OrdersPage() {
                     </Button>
                   </div>
                   <p className="font-bold mb-3 text-gray-900">Mahsulotlar</p>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Nomi</TableHead>
-                        <TableHead>Miqdor</TableHead>
-                        <TableHead>Narx</TableHead>
-                        <TableHead className="text-right">Jami</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selectedOrder.items?.map((i) => (
-                        <TableRow key={i.id}>
-                          <TableCell className="font-medium text-gray-900">
-                            {getProductName(i.product_id)}
-                          </TableCell>
-                          <TableCell className="text-gray-700">
-                            {i.quantity} ta
-                          </TableCell>
-                          <TableCell className="text-gray-700">
-                            {formatPrice(i.price)}
-                          </TableCell>
-                          <TableCell className="text-right font-bold text-green-600">
-                            {formatPrice(i.subtotal)}
-                          </TableCell>
+                  <div className="space-y-3 sm:hidden">
+                    {selectedOrder.items?.map((i) => (
+                      <div
+                        key={i.id}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+                      >
+                        <p className="font-medium text-gray-900">
+                          {getProductName(i.product_id)}
+                        </p>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-slate-500">Miqdor</p>
+                            <p className="text-slate-800">{i.quantity} ta</p>
+                          </div>
+                          <div>
+                            <p className="text-slate-500">Narx</p>
+                            <p className="text-slate-800">{formatPrice(i.price)}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-slate-500">Jami</p>
+                            <p className="font-bold text-green-600">
+                              {formatPrice(i.subtotal)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="hidden sm:block">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nomi</TableHead>
+                          <TableHead>Miqdor</TableHead>
+                          <TableHead>Narx</TableHead>
+                          <TableHead className="text-right">Jami</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedOrder.items?.map((i) => (
+                          <TableRow key={i.id}>
+                            <TableCell className="font-medium text-gray-900">
+                              {getProductName(i.product_id)}
+                            </TableCell>
+                            <TableCell className="text-gray-700">
+                              {i.quantity} ta
+                            </TableCell>
+                            <TableCell className="text-gray-700">
+                              {formatPrice(i.price)}
+                            </TableCell>
+                            <TableCell className="text-right font-bold text-green-600">
+                              {formatPrice(i.subtotal)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
 
                 {selectedOrder.status !== "completed" &&
@@ -928,10 +1028,10 @@ function OrdersPage() {
                       <p className="text-sm font-semibold mb-3 text-gray-700">
                         Holatni o'zgartirish:
                       </p>
-                      <div className="flex gap-2 flex-wrap">
+                      <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
                         {["pending", "ready"].includes(selectedOrder.status) ? (
                           <Button
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                            className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white"
                             onClick={() =>
                               updateStatus(selectedOrder.id, "completed")
                             }
@@ -945,7 +1045,7 @@ function OrdersPage() {
                           </p>
                         )}
                         <Button
-                          className="bg-red-600 hover:bg-red-700 text-white"
+                          className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
                           onClick={() =>
                             updateStatus(selectedOrder.id, "cancelled")
                           }
