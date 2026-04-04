@@ -132,6 +132,8 @@ async def create_order(db: AsyncSession, order: OrderCreate, user_id: int):
         user_id=user_id,
         table_id=order.table_id,
         status=OrderStatus.PENDING,
+        payment_method=order.payment_method or "cash",
+        order_type=order.order_type or "dine_in",
     )
     db_order.fee_percent = order.fee_percent
     db_order.qqs_percent = order.qqs_percent

@@ -43,7 +43,7 @@ async def create_table(
     if not table:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Table number already exists"
+            detail="A table with this number already exists in the same location"
         )
     return table
 
@@ -54,12 +54,14 @@ async def update_table(
     table_in: schema.TableUpdate,
     _: User = Depends(get_current_admin),
 ):
-    if table_in.number:
-        existing = await crud.get_table_by_number(table_in.number)
+    if table_in.number is not None:
+        current = await crud.get_table_by_id(table_id)
+        check_location = table_in.location if table_in.location is not None else (current.location if current else None)
+        existing = await crud.get_table_by_number(table_in.number, check_location)
         if existing and existing.id != table_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Table number already exists"
+                detail="A table with this number already exists in the same location"
             )
     
     table = await crud.update_table(table_id, table_in)

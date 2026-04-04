@@ -21,6 +21,61 @@ from sqlalchemy import text
 from database import Base, engine
 
 
+async def _ensure_order_extra_columns() -> None:
+    if "sqlite" not in settings.DATABASE_URL:
+        return
+    async with engine.begin() as conn:
+        cols = await conn.execute(text("PRAGMA table_info(orders)"))
+        col_names = [str(row[1]) for row in cols.fetchall()]
+        if "payment_method" not in col_names:
+            await conn.execute(
+                text("ALTER TABLE orders ADD COLUMN payment_method VARCHAR(20) DEFAULT 'cash'")
+            )
+        if "order_type" not in col_names:
+            await conn.execute(
+                text("ALTER TABLE orders ADD COLUMN order_type VARCHAR(20) DEFAULT 'dine_in'")
+            )
+
+
+async def _ensure_product_unit_column() -> None:
+    if "sqlite" not in settings.DATABASE_URL:
+        return
+    async with engine.begin() as conn:
+        cols = await conn.execute(text("PRAGMA table_info(products)"))
+        col_names = [str(row[1]) for row in cols.fetchall()]
+        if "unit" not in col_names:
+            await conn.execute(
+                text("ALTER TABLE products ADD COLUMN unit VARCHAR(20)")
+            )
+        if "capacity" not in col_names:
+            await conn.execute(
+                text("ALTER TABLE products ADD COLUMN capacity FLOAT")
+            )
+
+
+async def _migrate_table_unique_constraint() -> None:
+    """Replace single-column unique index on tables.number with a composite
+    unique index on (number, COALESCE(location, '')) so the same table number
+    can exist in different locations (e.g. Indoor/1 and Outdoor/1)."""
+    if "sqlite" not in settings.DATABASE_URL:
+        return
+    async with engine.begin() as conn:
+        indexes = await conn.execute(text("PRAGMA index_list('tables')"))
+        index_names = [str(row[1]) for row in indexes.fetchall()]
+        # Drop the old single-column unique index SQLAlchemy created
+        for old_idx in ("ix_tables_number", "uq_tables_number"):
+            if old_idx in index_names:
+                await conn.execute(text(f"DROP INDEX IF EXISTS {old_idx}"))
+        # Create the composite unique index if absent
+        if "uq_table_number_location" not in index_names:
+            await conn.execute(
+                text(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_table_number_location "
+                    "ON tables(number, COALESCE(location, ''))"
+                )
+            )
+
+
 async def _ensure_table_location_column() -> None:
     # Lightweight runtime migration for existing SQLite databases.
     if "sqlite" not in settings.DATABASE_URL:
@@ -51,7 +106,10 @@ async def lifespan(_: FastAPI):
     # Startup
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    await _ensure_order_extra_columns()
+    await _ensure_product_unit_column()
     await _ensure_table_location_column()
+    await _migrate_table_unique_constraint()
 
     rabbitmq_connected = await rabbitmq_client.connect(retries=5, delay_seconds=2)
     if not rabbitmq_connected:

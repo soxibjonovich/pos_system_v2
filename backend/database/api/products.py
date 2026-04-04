@@ -88,6 +88,8 @@ async def create_product(
     description: Optional[str] = Form(None),
     price: float = Form(...),
     quantity: int = Form(-1),
+    unit: Optional[str] = Form(None),
+    capacity: Optional[float] = Form(None),
     category_id: Optional[int] = Form(None),
     is_active: bool = Form(True),
     image: Optional[UploadFile] = File(None),
@@ -143,6 +145,8 @@ async def create_product(
         description=description,
         price=price,
         quantity=quantity,
+        unit=unit,
+        capacity=capacity,
         category_id=category_id,
         is_active=is_active,
         image_url=image_url,
@@ -159,6 +163,8 @@ async def update_product(
     description: Optional[str] = Form(None),
     price: Optional[float] = Form(None),
     quantity: Optional[int] = Form(None),
+    unit: Optional[str] = Form(None),
+    capacity: Optional[float] = Form(None),
     category_id: Optional[int] = Form(None),
     is_active: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
@@ -240,6 +246,10 @@ async def update_product(
         update_data['price'] = price
     if quantity is not None:
         update_data['quantity'] = quantity
+    if unit is not None:
+        update_data['unit'] = unit
+    if capacity is not None:
+        update_data['capacity'] = capacity
     if category_id is not None:
         update_data['category_id'] = category_id
     if is_active is not None:

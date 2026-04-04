@@ -54,6 +54,8 @@ interface Order {
   fee_amount?: number;
   total: number;
   status: string;
+  payment_method?: string | null;
+  order_type?: string | null;
   created_at: string;
   updated_at: string | null;
   items: OrderItem[];
@@ -809,6 +811,18 @@ function OrdersPage() {
                     <p className="text-sm font-medium text-gray-500">Stol</p>
                     <p className="text-lg font-bold text-gray-900">
                       {getTableLabel(selectedOrder)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">To'lov</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {selectedOrder.payment_method === "card" ? "💳 Karta" : "💵 Naqd"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-500">Tur</p>
+                    <p className="text-sm font-bold text-gray-900">
+                      {selectedOrder.order_type === "takeaway" ? "🥡 Olib ketish" : selectedOrder.order_type === "delivery" ? "🛵 Yetkazish" : "🍽 Zalda"}
                     </p>
                   </div>
                   <div className="col-span-2">

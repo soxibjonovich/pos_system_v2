@@ -134,6 +134,8 @@ export default function POSTerminal() {
   const [isCompletingOrder, setIsCompletingOrder] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showKeyboard, setShowKeyboard] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("cash");
+  const [orderType, setOrderType] = useState<"dine_in" | "takeaway" | "delivery">("dine_in");
 
   // Print status
   const [printerStatus, setPrinterStatus] = useState<
@@ -757,6 +759,8 @@ export default function POSTerminal() {
               body: JSON.stringify({
                 fee_percent: feePercent,
                 qqs_percent: qqsPercent,
+                payment_method: paymentMethod,
+                order_type: orderType,
               }),
             },
           );
@@ -787,6 +791,8 @@ export default function POSTerminal() {
         table_id: isRestaurant && selectedTable ? selectedTable.id : null,
         fee_percent: feePercent,
         qqs_percent: qqsPercent,
+        payment_method: paymentMethod,
+        order_type: orderType,
         items: cart.map((item) => ({
           product_id: item.product_id,
           quantity: item.quantity,
@@ -1326,6 +1332,38 @@ export default function POSTerminal() {
                 </div>
               </div>
 
+              <div className="mb-3 space-y-2">
+                <div className="flex gap-2">
+                  {(["cash", "card"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setPaymentMethod(m)}
+                      className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${
+                        paymentMethod === m
+                          ? "bg-blue-600 text-white"
+                          : "bg-slate-500 text-gray-700 hover:bg-slate-400"
+                      }`}
+                    >
+                      {m === "cash" ? "💵 Naqd" : "💳 Karta"}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  {(["dine_in", "takeaway", "delivery"] as const).map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setOrderType(t)}
+                      className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${
+                        orderType === t
+                          ? "bg-orange-500 text-white"
+                          : "bg-slate-500 text-gray-700 hover:bg-slate-400"
+                      }`}
+                    >
+                      {t === "dine_in" ? "🍽 Zalda" : t === "takeaway" ? "🥡 Olib ketish" : "🛵 Yetkazish"}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <button
                 onClick={handleCheckout}
                 disabled={isSubmitting || cart.length === 0}
@@ -1886,6 +1924,38 @@ export default function POSTerminal() {
                   <div className="flex justify-between items-center text-3xl font-black">
                     <span>Jami:</span>
                     <span className="text-green-400">{formatPrice(total)}</span>
+                  </div>
+                </div>
+                <div className="mb-3 space-y-2">
+                  <div className="flex gap-2">
+                    {(["cash", "card"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => setPaymentMethod(m)}
+                        className={`flex-1 py-2 rounded-xl font-bold text-sm transition-all ${
+                          paymentMethod === m
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-600 text-gray-300 hover:bg-slate-500"
+                        }`}
+                      >
+                        {m === "cash" ? "💵 Naqd" : "💳 Karta"}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    {(["dine_in", "takeaway", "delivery"] as const).map((t) => (
+                      <button
+                        key={t}
+                        onClick={() => setOrderType(t)}
+                        className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${
+                          orderType === t
+                            ? "bg-orange-600 text-white"
+                            : "bg-slate-600 text-gray-300 hover:bg-slate-500"
+                        }`}
+                      >
+                        {t === "dine_in" ? "🍽 Zalda" : t === "takeaway" ? "🥡 Olib ketish" : "🛵 Yetkazish"}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <button

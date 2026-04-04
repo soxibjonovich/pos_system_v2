@@ -17,6 +17,7 @@ import { Route as ChefIndexRouteImport } from './routes/chef/index'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as StaffOrdersIndexRouteImport } from './routes/staff/orders/index'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
+import { Route as AdminTerminalIndexRouteImport } from './routes/admin/terminal/index'
 import { Route as AdminTablesIndexRouteImport } from './routes/admin/tables/index'
 import { Route as AdminSettingsIndexRouteImport } from './routes/admin/settings/index'
 import { Route as AdminReportsIndexRouteImport } from './routes/admin/reports/index'
@@ -65,6 +66,11 @@ const StaffOrdersIndexRoute = StaffOrdersIndexRouteImport.update({
 const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   id: '/users/',
   path: '/users/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminTerminalIndexRoute = AdminTerminalIndexRouteImport.update({
+  id: '/terminal/',
+  path: '/terminal/',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminTablesIndexRoute = AdminTablesIndexRouteImport.update({
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/admin/reports': typeof AdminReportsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/tables': typeof AdminTablesIndexRoute
+  '/admin/terminal': typeof AdminTerminalIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/staff/orders': typeof StaffOrdersIndexRoute
 }
@@ -148,6 +155,7 @@ export interface FileRoutesByTo {
   '/admin/reports': typeof AdminReportsIndexRoute
   '/admin/settings': typeof AdminSettingsIndexRoute
   '/admin/tables': typeof AdminTablesIndexRoute
+  '/admin/terminal': typeof AdminTerminalIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
   '/staff/orders': typeof StaffOrdersIndexRoute
 }
@@ -168,6 +176,7 @@ export interface FileRoutesById {
   '/admin/reports/': typeof AdminReportsIndexRoute
   '/admin/settings/': typeof AdminSettingsIndexRoute
   '/admin/tables/': typeof AdminTablesIndexRoute
+  '/admin/terminal/': typeof AdminTerminalIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
   '/staff/orders/': typeof StaffOrdersIndexRoute
 }
@@ -189,6 +198,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/tables'
+    | '/admin/terminal'
     | '/admin/users'
     | '/staff/orders'
   fileRoutesByTo: FileRoutesByTo
@@ -207,6 +217,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/settings'
     | '/admin/tables'
+    | '/admin/terminal'
     | '/admin/users'
     | '/staff/orders'
   id:
@@ -226,6 +237,7 @@ export interface FileRouteTypes {
     | '/admin/reports/'
     | '/admin/settings/'
     | '/admin/tables/'
+    | '/admin/terminal/'
     | '/admin/users/'
     | '/staff/orders/'
   fileRoutesById: FileRoutesById
@@ -295,6 +307,13 @@ declare module '@tanstack/react-router' {
       path: '/users'
       fullPath: '/admin/users'
       preLoaderRoute: typeof AdminUsersIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/terminal/': {
+      id: '/admin/terminal/'
+      path: '/terminal'
+      fullPath: '/admin/terminal'
+      preLoaderRoute: typeof AdminTerminalIndexRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/tables/': {
@@ -374,6 +393,7 @@ interface AdminRouteRouteChildren {
   AdminReportsIndexRoute: typeof AdminReportsIndexRoute
   AdminSettingsIndexRoute: typeof AdminSettingsIndexRoute
   AdminTablesIndexRoute: typeof AdminTablesIndexRoute
+  AdminTerminalIndexRoute: typeof AdminTerminalIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
 }
 
@@ -388,6 +408,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminReportsIndexRoute: AdminReportsIndexRoute,
   AdminSettingsIndexRoute: AdminSettingsIndexRoute,
   AdminTablesIndexRoute: AdminTablesIndexRoute,
+  AdminTerminalIndexRoute: AdminTerminalIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
 }
 

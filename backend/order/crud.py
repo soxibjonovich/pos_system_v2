@@ -156,6 +156,8 @@ async def create_order(
             "table_id": order.table_id,
             "fee_percent": order.fee_percent,
             "qqs_percent": order.qqs_percent,
+            "payment_method": order.payment_method or "cash",
+            "order_type": order.order_type or "dine_in",
             "items": [
                 {
                     "product_id": item.product_id,

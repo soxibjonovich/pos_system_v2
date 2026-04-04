@@ -51,6 +51,8 @@ class OrderCreate(OrderBase):
     business_type: BusinessType = BusinessType.MARKET
     fee_percent: float = Field(default=0, ge=0, le=100)
     qqs_percent: float = Field(default=0, ge=0, le=100)
+    payment_method: Optional[str] = Field(default="cash", max_length=20)
+    order_type: Optional[str] = Field(default="dine_in", max_length=20)
     items: list[OrderItemCreate] = Field(..., min_length=1)
 
 
@@ -59,6 +61,8 @@ class OrderUpdate(BaseModel):
     status: Optional[OrderStatus] = None
     fee_percent: Optional[float] = Field(default=None, ge=0, le=100)
     qqs_percent: Optional[float] = Field(default=None, ge=0, le=100)
+    payment_method: Optional[str] = Field(default=None, max_length=20)
+    order_type: Optional[str] = Field(default=None, max_length=20)
 
 
 class OrderResponse(OrderBase):
@@ -71,6 +75,8 @@ class OrderResponse(OrderBase):
     user_id: int
     total: float
     status: OrderStatus
+    payment_method: Optional[str] = "cash"
+    order_type: Optional[str] = "dine_in"
     created_at: datetime
     updated_at: Optional[datetime] = None
     items: list[OrderItemResponse]
