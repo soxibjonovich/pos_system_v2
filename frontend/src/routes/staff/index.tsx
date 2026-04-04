@@ -141,9 +141,7 @@ export default function POSTerminal() {
   const [printerStatus, setPrinterStatus] = useState<
     "checking" | "connected" | "disconnected"
   >("checking");
-  const [printNotification, setPrintNotification] = useState<string | null>(
-    null,
-  );
+  const [printNotification] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -1173,16 +1171,16 @@ export default function POSTerminal() {
   if (isRestaurant && selectedTable) {
     return (
       <div
-        className="h-screen flex flex-col overflow-hidden"
+        className="min-h-screen flex flex-col xl:h-screen"
         style={{
           background:
             "linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59), rgb(15, 23, 42))",
         }}
       >
-        <div className="flex-1 max-w-[2000px] mx-auto p-4 lg:p-6 w-full overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-10 gap-4 lg:gap-6 h-full">
+        <div className="flex-1 max-w-[2000px] mx-auto p-3 sm:p-4 lg:p-6 w-full xl:overflow-hidden">
+          <div className="grid grid-cols-1 xl:grid-cols-10 gap-4 lg:gap-6 xl:h-full">
             <div
-              className="lg:col-span-4 rounded-2xl shadow-2xl p-3 sm:p-4 flex flex-col text-white overflow-hidden"
+              className="order-2 xl:order-1 xl:col-span-4 rounded-2xl shadow-2xl p-3 sm:p-4 flex flex-col text-white xl:overflow-hidden"
               style={{
                 background:
                   "linear-gradient(to bottom right, rgb(30, 41, 59), rgb(15, 23, 42))",
@@ -1203,7 +1201,7 @@ export default function POSTerminal() {
                 )}
               </div>
 
-              <div className="flex-1 overflow-y-auto mb-4 space-y-3">
+              <div className="mb-4 space-y-3 xl:flex-1 xl:overflow-y-auto max-h-[45vh] overflow-y-auto xl:max-h-none">
                 {tableOrderLoading ? (
                   <div className="text-center py-16 text-gray-400">
                     <p className="text-lg">Buyurtma yuklanmoqda...</p>
@@ -1245,7 +1243,7 @@ export default function POSTerminal() {
                               <X className="size-4" />
                             </button>
                           </div>
-                          <div className="flex items-center justify-between">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                             <div className="flex items-center gap-2">
                               <button
                                 onClick={() =>
@@ -1289,7 +1287,7 @@ export default function POSTerminal() {
                               </button>
                             </div>
                             <div
-                              className={`font-black text-xl ${
+                              className={`font-black text-lg sm:text-xl sm:text-right ${
                                 isRecentlyAdded
                                   ? "text-orange-700"
                                   : "text-slate-900"
@@ -1333,7 +1331,7 @@ export default function POSTerminal() {
               </div>
 
               <div className="mb-3 space-y-2">
-                <div className="flex gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {(["cash", "card"] as const).map((m) => (
                     <button
                       key={m}
@@ -1348,7 +1346,7 @@ export default function POSTerminal() {
                     </button>
                   ))}
                 </div>
-                <div className="flex gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {(["dine_in", "takeaway", "delivery"] as const).map((t) => (
                     <button
                       key={t}
@@ -1367,7 +1365,7 @@ export default function POSTerminal() {
               <button
                 onClick={handleCheckout}
                 disabled={isSubmitting || cart.length === 0}
-                className="w-full py-4 rounded-2xl text-white font-black transition-all disabled:opacity-50 flex items-center justify-center gap-3 text-xl shadow-xl active:scale-95"
+                className="w-full py-4 rounded-2xl text-white font-black transition-all disabled:opacity-50 flex items-center justify-center gap-3 text-base sm:text-xl shadow-xl active:scale-95"
                 style={{
                   background:
                     "linear-gradient(to right, rgb(22, 163, 74), rgb(34, 197, 94))",
@@ -1378,36 +1376,38 @@ export default function POSTerminal() {
               </button>
             </div>
 
-            <div className="lg:col-span-6 bg-white rounded-2xl shadow-2xl p-4 lg:p-6 flex flex-col overflow-hidden">
-              <div className="mb-4 p-5 rounded-2xl border-2 bg-slate-50">
+            <div className="order-1 xl:order-2 xl:col-span-6 bg-white rounded-2xl shadow-2xl p-3 sm:p-4 lg:p-6 flex flex-col xl:overflow-hidden">
+              <div className="mb-4 p-4 sm:p-5 rounded-2xl border-2 bg-slate-50">
                 <p className="text-sm text-slate-500 font-semibold">
                   Stol ma'lumotlari
                 </p>
-                <p className="text-2xl font-black text-slate-900 mt-1">
+                <p className="text-xl sm:text-2xl font-black text-slate-900 mt-1">
                   Stol: {selectedTable.number}
                 </p>
-                <p className="text-base text-slate-700 mt-2">
-                  Xodim: {CURRENT_USER_NAME}
-                </p>
-                <p className="text-base text-slate-700 mt-2">
-                  Davomiyligi: {formatElapsed(selectedTableOrder?.created_at)}
-                </p>
-                <p className="text-base text-slate-700 mt-2">
-                  Joriy buyurtma:{" "}
-                  {selectedTableOrder
-                    ? formatPrice(selectedTableOrder.total)
-                    : "-"}
-                </p>
-                <p className="text-base text-slate-700 mt-2">
-                  QQS: {qqsPercent.toFixed(1)}% / {formatPrice(qqsAmount)}
-                </p>
-                <p className="text-base text-slate-700 mt-2">
-                  Servis haqi: {feePercent.toFixed(1)}% /{" "}
-                  {formatPrice(feeAmount)}
-                </p>
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-slate-700">
+                  <p>
+                    Xodim: {CURRENT_USER_NAME}
+                  </p>
+                  <p>
+                    Davomiyligi: {formatElapsed(selectedTableOrder?.created_at)}
+                  </p>
+                  <p>
+                    Joriy buyurtma:{" "}
+                    {selectedTableOrder
+                      ? formatPrice(selectedTableOrder.total)
+                      : "-"}
+                  </p>
+                  <p>
+                    QQS: {qqsPercent.toFixed(1)}% / {formatPrice(qqsAmount)}
+                  </p>
+                  <p className="sm:col-span-2">
+                    Servis haqi: {feePercent.toFixed(1)}% /{" "}
+                    {formatPrice(feeAmount)}
+                  </p>
+                </div>
               </div>
 
-              <div className="mb-4 flex gap-3">
+              <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   onClick={completeSelectedTableOrder}
                   disabled={
@@ -1415,19 +1415,19 @@ export default function POSTerminal() {
                     !selectedTableOrder ||
                     !["pending", "ready"].includes(selectedTableOrder.status)
                   }
-                  className="px-5 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-lg"
+                  className="px-5 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-base sm:text-lg"
                 >
                   {isCompletingOrder ? "Yakunlanmoqda..." : "To'landi"}
                 </button>
                 <button
                   onClick={() => setSelectedTable(null)}
-                  className="px-5 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-2xl font-bold text-lg"
+                  className="px-5 py-4 bg-slate-700 hover:bg-slate-800 text-white rounded-2xl font-bold text-base sm:text-lg"
                 >
                   Stollarga qaytish
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="px-5 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold text-lg"
+                  className="px-5 py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold text-base sm:text-lg"
                 >
                   Chiqish
                 </button>
@@ -1442,7 +1442,7 @@ export default function POSTerminal() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => setShowKeyboard(true)}
-                  className="w-full pl-10 pr-4 h-14 text-lg text-black border-2 border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
+                  className="w-full pl-10 pr-4 h-14 text-base sm:text-lg text-black border-2 border-gray-300 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
                 />
               </div>
 
@@ -1464,7 +1464,7 @@ export default function POSTerminal() {
                   ))}
               </div>
 
-              <div className="flex-1 overflow-y-auto">
+              <div className="xl:flex-1 xl:overflow-y-auto">
                 {selectedCategory === null ? (
                   <div className="text-center py-16 text-gray-400">
                     Avval kategoriya tanlang
@@ -1485,7 +1485,7 @@ export default function POSTerminal() {
                       <button
                         key={p.id}
                         onClick={() => addToCart(p)}
-                        className="w-full p-3 border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-left active:scale-[0.99] min-h-[110px]"
+                        className="w-full p-3 border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-left active:scale-[0.99] min-h-[96px] sm:min-h-[110px]"
                       >
                         <div className="pr-1">
                           <div className="font-bold text-sm text-gray-900 line-clamp-2">
@@ -1536,15 +1536,15 @@ export default function POSTerminal() {
         )}
 
         {orderSuccess && (
-          <div className="fixed top-8 right-8 bg-green-600 text-white px-8 py-6 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce z-50">
-            <Check className="size-10" />
-            <span className="font-black text-2xl">Buyurtma yaratildi!</span>
+          <div className="fixed top-4 left-4 right-4 sm:top-8 sm:left-auto sm:right-8 sm:w-auto bg-green-600 text-white px-4 sm:px-8 py-4 sm:py-6 rounded-2xl shadow-2xl flex items-center gap-3 sm:gap-4 animate-bounce z-50">
+            <Check className="size-7 sm:size-10" />
+            <span className="font-black text-lg sm:text-2xl">Buyurtma yaratildi!</span>
           </div>
         )}
 
         {printNotification && (
-          <div className="fixed top-24 right-8 bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50">
-            <Printer className="size-6" />
+          <div className="fixed top-20 left-4 right-4 sm:top-24 sm:left-auto sm:right-8 sm:w-auto bg-slate-800 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50">
+            <Printer className="size-5 sm:size-6" />
             <span className="font-bold">{printNotification}</span>
           </div>
         )}
@@ -1554,16 +1554,16 @@ export default function POSTerminal() {
 
   return (
     <div
-      className="h-screen flex flex-col overflow-hidden"
+      className="min-h-screen flex flex-col xl:h-screen"
       style={{
         background:
           "linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59), rgb(15, 23, 42))",
       }}
     >
-      <div className="flex-1 max-w-[2000px] mx-auto p-4 lg:p-6 w-full overflow-hidden">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6 h-full">
-          <div className="lg:col-span-2 bg-white rounded-2xl shadow-2xl p-4 lg:p-6 flex flex-col overflow-hidden">
-            <div className="mb-4 flex gap-3">
+      <div className="flex-1 max-w-[2000px] mx-auto p-3 sm:p-4 lg:p-6 w-full xl:overflow-hidden">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6 xl:h-full">
+          <div className="xl:col-span-2 bg-white rounded-2xl shadow-2xl p-3 sm:p-4 lg:p-6 flex flex-col xl:overflow-hidden">
+            <div className="mb-4 flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-6 text-gray-400" />
                 <input
@@ -1573,7 +1573,7 @@ export default function POSTerminal() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => setShowKeyboard(true)}
-                  className="w-full pl-14 pr-16 py-5 text-xl text-black border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 focus:outline-none font-medium"
+                  className="w-full pl-14 pr-16 py-4 sm:py-5 text-base sm:text-xl text-black border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 focus:outline-none font-medium"
                   autoComplete="off"
                 />
                 {searchQuery && (
@@ -1587,38 +1587,40 @@ export default function POSTerminal() {
               </div>
 
               {/* Printer status indicator */}
-              <button
-                onClick={checkPrinterStatus}
-                className={`px-4 py-5 rounded-2xl font-bold flex items-center gap-2 shadow-lg transition-all ${
-                  printerStatus === "connected"
-                    ? "bg-green-600 hover:bg-green-700 text-white"
-                    : printerStatus === "disconnected"
-                      ? "bg-red-600 hover:bg-red-700 text-white"
-                      : "bg-gray-600 text-white"
-                }`}
-                title={
-                  printerStatus === "connected"
-                    ? "Printer ulangan"
-                    : "Printer ulanmagan"
-                }
-              >
-                <Printer className="size-6" />
-              </button>
+              <div className="grid grid-cols-3 sm:flex gap-3">
+                <button
+                  onClick={checkPrinterStatus}
+                  className={`px-4 py-4 sm:py-5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all ${
+                    printerStatus === "connected"
+                      ? "bg-green-600 hover:bg-green-700 text-white"
+                      : printerStatus === "disconnected"
+                        ? "bg-red-600 hover:bg-red-700 text-white"
+                        : "bg-gray-600 text-white"
+                  }`}
+                  title={
+                    printerStatus === "connected"
+                      ? "Printer ulangan"
+                      : "Printer ulanmagan"
+                  }
+                >
+                  <Printer className="size-5 sm:size-6" />
+                </button>
 
-              <Link
-                to="/staff/orders"
-                className="px-6 py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg active:scale-95 transition-all"
-              >
-                <Receipt className="size-6" />
-                Buyurtmalar
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="px-6 py-5 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold flex items-center gap-3 shadow-lg active:scale-95 transition-all"
-              >
-                <LogOut className="size-6" />
-                Chiqish
-              </button>
+                <Link
+                  to="/staff/orders"
+                  className="px-4 sm:px-6 py-4 sm:py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 sm:gap-3 shadow-lg active:scale-95 transition-all"
+                >
+                  <Receipt className="size-5 sm:size-6" />
+                  <span className="hidden sm:inline">Buyurtmalar</span>
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="px-4 sm:px-6 py-4 sm:py-5 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 sm:gap-3 shadow-lg active:scale-95 transition-all"
+                >
+                  <LogOut className="size-5 sm:size-6" />
+                  <span className="hidden sm:inline">Chiqish</span>
+                </button>
+              </div>
             </div>
 
             <div className="mb-4 flex items-center gap-3 overflow-x-auto pb-2">
@@ -1645,8 +1647,8 @@ export default function POSTerminal() {
                 ))}
             </div>
 
-            <div className="mb-4 flex items-center justify-between">
-              <p className="text-base font-semibold text-gray-700">
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-sm sm:text-base font-semibold text-gray-700">
                 {selectedCategory === null
                   ? "Kategoriya tanlanmagan"
                   : `${filteredProducts.length} ta mahsulot`}
@@ -1667,7 +1669,7 @@ export default function POSTerminal() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="xl:flex-1 xl:overflow-y-auto">
               {selectedCategory === null ? (
                 <div className="text-center py-32 text-gray-400 text-xl">
                   Avval kategoriya tanlang
@@ -1737,7 +1739,7 @@ export default function POSTerminal() {
                     <button
                       key={p.id}
                       onClick={() => addToCart(p)}
-                      className="w-full p-4 border-2 border-gray-200 rounded-2xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left flex items-center gap-4 group active:scale-[0.98]"
+                      className="w-full p-4 border-2 border-gray-200 rounded-2xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left flex flex-col sm:flex-row sm:items-center gap-4 group active:scale-[0.98]"
                     >
                       {/* Product Image - Compact */}
                       {p.image_url && !brokenImageIds[p.id] ? (
@@ -1770,7 +1772,7 @@ export default function POSTerminal() {
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-6">
+                      <div className="w-full sm:w-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
                         {p.quantity !== -1 && (
                           <span
                             className={`text-sm font-medium ${p.quantity === 0 ? "text-red-600" : "text-gray-600"}`}
@@ -1780,7 +1782,7 @@ export default function POSTerminal() {
                               : `Ombor: ${p.quantity}`}
                           </span>
                         )}
-                        <span className="text-2xl font-black text-green-600 min-w-[140px] text-right">
+                        <span className="text-xl sm:text-2xl font-black text-green-600 sm:min-w-[140px] sm:text-right">
                           {formatPrice(p.price)}
                         </span>
                       </div>
@@ -1792,15 +1794,15 @@ export default function POSTerminal() {
           </div>
 
           <div
-            className="rounded-2xl shadow-2xl p-6 flex flex-col text-white overflow-hidden"
+            className="rounded-2xl shadow-2xl p-4 sm:p-6 flex flex-col text-white xl:overflow-hidden"
             style={{
               background:
                 "linear-gradient(to bottom right, rgb(30, 41, 59), rgb(15, 23, 42))",
             }}
           >
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-2xl font-black flex items-center gap-3">
-                <ShoppingCart className="size-7" />
+              <h2 className="text-xl sm:text-2xl font-black flex items-center gap-3">
+                <ShoppingCart className="size-6 sm:size-7" />
                 Savat ({itemCount})
               </h2>
               {cart.length > 0 && (
@@ -1837,7 +1839,7 @@ export default function POSTerminal() {
               </div>
             )}
 
-            <div className="flex-1 overflow-y-auto mb-4 space-y-3">
+            <div className="mb-4 space-y-3 xl:flex-1 xl:overflow-y-auto max-h-[40vh] overflow-y-auto xl:max-h-none">
               {!cart.length ? (
                 <div className="text-center py-16 text-gray-400">
                   <ShoppingCart className="size-16 mx-auto mb-4 opacity-20" />
@@ -1860,7 +1862,7 @@ export default function POSTerminal() {
                         <X className="size-5" />
                       </button>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => updateQuantity(item.product_id, -1)}
@@ -1887,7 +1889,7 @@ export default function POSTerminal() {
                           <Plus className="size-5" />
                         </button>
                       </div>
-                      <div className="font-black text-xl text-green-400">
+                      <div className="font-black text-lg sm:text-xl text-green-400 sm:text-right">
                         {formatPrice(item.price * item.quantity)}
                       </div>
                     </div>
@@ -1927,7 +1929,7 @@ export default function POSTerminal() {
                   </div>
                 </div>
                 <div className="mb-3 space-y-2">
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {(["cash", "card"] as const).map((m) => (
                       <button
                         key={m}
@@ -1942,7 +1944,7 @@ export default function POSTerminal() {
                       </button>
                     ))}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {(["dine_in", "takeaway", "delivery"] as const).map((t) => (
                       <button
                         key={t}
@@ -1961,7 +1963,7 @@ export default function POSTerminal() {
                 <button
                   onClick={handleCheckout}
                   disabled={isSubmitting}
-                  className="w-full py-5 rounded-2xl text-white font-black transition-all disabled:opacity-50 flex items-center justify-center gap-3 text-xl shadow-xl active:scale-95"
+                  className="w-full py-4 sm:py-5 rounded-2xl text-white font-black transition-all disabled:opacity-50 flex items-center justify-center gap-3 text-base sm:text-xl shadow-xl active:scale-95"
                   style={{
                     background:
                       "linear-gradient(to right, rgb(22, 163, 74), rgb(34, 197, 94))",
@@ -1978,10 +1980,10 @@ export default function POSTerminal() {
 
       {showTableSelect && isRestaurant && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[80vh] overflow-hidden flex flex-col">
-            <div className="p-6 border-b flex items-center justify-between">
-              <h2 className="text-2xl font-black flex items-center gap-3 text-black">
-                <Users className="size-7 text-blue-600" />
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="p-4 sm:p-6 border-b flex items-center justify-between gap-3">
+              <h2 className="text-xl sm:text-2xl font-black flex items-center gap-3 text-black">
+                <Users className="size-6 sm:size-7 text-blue-600" />
                 Stolni tanlang
               </h2>
               <button
@@ -1992,19 +1994,19 @@ export default function POSTerminal() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
               {!availableTables.length ? (
                 <div className="text-center py-16 text-gray-400">
                   <Users className="size-16 mx-auto mb-4 opacity-20" />
                   <p className="text-xl">Bo'sh stol yo'q</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
                   {availableTables.map((table) => (
                     <button
                       key={table.id}
                       onClick={() => setSelectedTable(table)}
-                      className={`p-6 rounded-2xl border-2 transition-all ${
+                      className={`p-4 sm:p-6 rounded-2xl border-2 transition-all ${
                         selectedTable?.id === table.id
                           ? "border-blue-600 bg-blue-50 shadow-lg"
                           : "border-gray-200 hover:border-blue-400 hover:bg-blue-50"
@@ -2012,9 +2014,9 @@ export default function POSTerminal() {
                     >
                       <div className="text-center">
                         <Users
-                          className={`size-12 mx-auto mb-3 ${selectedTable?.id === table.id ? "text-blue-600" : "text-gray-400"}`}
+                          className={`size-10 sm:size-12 mx-auto mb-3 ${selectedTable?.id === table.id ? "text-blue-600" : "text-gray-400"}`}
                         />
-                        <div className="text-2xl font-black mb-1">
+                        <div className="text-xl sm:text-2xl font-black mb-1">
                           {table.number}
                         </div>
                         {table.capacity && (
@@ -2030,11 +2032,11 @@ export default function POSTerminal() {
             </div>
 
             {selectedTable && (
-              <div className="p-6 border-t bg-gray-50">
+              <div className="p-4 sm:p-6 border-t bg-gray-50">
                 <button
                   onClick={submitOrder}
                   disabled={isSubmitting}
-                  className="w-full py-5 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black text-xl transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-xl active:scale-95"
+                  className="w-full py-4 sm:py-5 rounded-2xl bg-green-600 hover:bg-green-700 text-white font-black text-base sm:text-xl transition-all disabled:opacity-50 flex items-center justify-center gap-3 shadow-xl active:scale-95"
                 >
                   {isSubmitting ? (
                     "Yuklanmoqda..."
@@ -2083,7 +2085,7 @@ export default function POSTerminal() {
       )}
 
       {showKeyboard && (
-        <div className="fixed inset-x-0 bottom-0 z-[100] bg-slate-800/98 border-t-4 border-slate-700 p-4 shadow-2xl backdrop-blur">
+        <div className="fixed inset-x-0 bottom-0 z-[100] bg-slate-800/98 border-t-4 border-slate-700 p-3 sm:p-4 shadow-2xl backdrop-blur max-h-[55vh] overflow-y-auto">
           <div className="max-w-[2000px] mx-auto">
             <div className="flex justify-between items-center mb-2">
               <span className="text-white font-bold">Virtual Keyboard</span>
@@ -2096,34 +2098,34 @@ export default function POSTerminal() {
             </div>
             <div className="space-y-2">
               {keyboardLayout.map((row, i) => (
-                <div key={i} className="flex gap-2 justify-center">
+                <div key={i} className="flex gap-1.5 sm:gap-2 justify-center">
                   {row.map((key) => (
                     <button
                       key={key}
                       onClick={() => handleKeyInput(key)}
-                      className="min-w-[52px] h-12 bg-slate-700 hover:bg-slate-600 active:bg-blue-600 rounded-lg shadow-lg font-bold text-white transition-all active:scale-95"
+                      className="min-w-[32px] sm:min-w-[52px] px-2 h-10 sm:h-12 bg-slate-700 hover:bg-slate-600 active:bg-blue-600 rounded-lg shadow-lg font-bold text-xs sm:text-base text-white transition-all active:scale-95"
                     >
                       {key.toUpperCase()}
                     </button>
                   ))}
                 </div>
               ))}
-              <div className="flex gap-2 justify-center">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_auto] gap-2 justify-center">
                 <button
                   onClick={() => handleKeyInput("space")}
-                  className="flex-1 max-w-md h-12 bg-slate-700 hover:bg-slate-600 active:bg-blue-600 rounded-lg shadow-lg font-bold text-white transition-all active:scale-95"
+                  className="w-full sm:flex-1 sm:max-w-md h-10 sm:h-12 bg-slate-700 hover:bg-slate-600 active:bg-blue-600 rounded-lg shadow-lg font-bold text-sm sm:text-base text-white transition-all active:scale-95"
                 >
                   BO'SH JOY
                 </button>
                 <button
                   onClick={() => handleKeyInput("backspace")}
-                  className="min-w-[120px] h-12 bg-amber-600 hover:bg-amber-500 text-white rounded-lg shadow-lg font-bold transition-all active:scale-95"
+                  className="w-full sm:min-w-[120px] h-10 sm:h-12 bg-amber-600 hover:bg-amber-500 text-white rounded-lg shadow-lg font-bold text-sm sm:text-base transition-all active:scale-95"
                 >
                   O'CHIRISH
                 </button>
                 <button
                   onClick={() => handleKeyInput("clear")}
-                  className="min-w-[100px] h-12 bg-red-600 hover:bg-red-500 text-white rounded-lg shadow-lg font-bold transition-all active:scale-95"
+                  className="w-full sm:min-w-[100px] h-10 sm:h-12 bg-red-600 hover:bg-red-500 text-white rounded-lg shadow-lg font-bold text-sm sm:text-base transition-all active:scale-95"
                 >
                   TOZALASH
                 </button>
@@ -2134,15 +2136,15 @@ export default function POSTerminal() {
       )}
 
       {orderSuccess && (
-        <div className="fixed top-8 right-8 bg-green-600 text-white px-8 py-6 rounded-2xl shadow-2xl flex items-center gap-4 animate-bounce z-50">
-          <Check className="size-10" />
-          <span className="font-black text-2xl">Buyurtma yaratildi!</span>
+        <div className="fixed top-4 left-4 right-4 sm:top-8 sm:left-auto sm:right-8 sm:w-auto bg-green-600 text-white px-4 sm:px-8 py-4 sm:py-6 rounded-2xl shadow-2xl flex items-center gap-3 sm:gap-4 animate-bounce z-50">
+          <Check className="size-7 sm:size-10" />
+          <span className="font-black text-lg sm:text-2xl">Buyurtma yaratildi!</span>
         </div>
       )}
 
       {printNotification && (
-        <div className="fixed top-24 right-8 bg-slate-800 text-white px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50">
-          <Printer className="size-6" />
+        <div className="fixed top-20 left-4 right-4 sm:top-24 sm:left-auto sm:right-8 sm:w-auto bg-slate-800 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-2xl flex items-center gap-3 z-50">
+          <Printer className="size-5 sm:size-6" />
           <span className="font-bold">{printNotification}</span>
         </div>
       )}
