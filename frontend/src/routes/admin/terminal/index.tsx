@@ -765,6 +765,12 @@ function AdminTerminal() {
 
             {/* categories */}
             <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-1">
+              <button
+                onClick={() => setSelectedCat(null)}
+                className={`px-4 py-2 rounded-xl text-sm font-bold whitespace-nowrap transition-all ${selectedCat === null ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+              >
+                Hammasi
+              </button>
               {categories.filter((c) => c.is_active).map((cat) => (
                 <button
                   key={cat.id} onClick={() => setSelectedCat(cat.id)}
@@ -777,9 +783,7 @@ function AdminTerminal() {
 
             {/* product grid */}
             <div className="flex-1 overflow-y-auto">
-              {selectedCat === null ? (
-                <div className="text-center py-12 text-gray-400">Avval kategoriya tanlang</div>
-              ) : !filteredProducts.length ? (
+              {!filteredProducts.length ? (
                 <div className="text-center py-12 text-gray-400">Mahsulot topilmadi</div>
               ) : (
                 <div className="grid gap-2 pb-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))" }}>
