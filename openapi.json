@@ -1,0 +1,1581 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "POS System v2 — All Services",
+    "version": "2.0.0",
+    "description": "Complete API collection for POS System v2 microservices.\n\n| Service | Base URL |\n|---------|----------|\n| Admin API | http://localhost:8001 |\n| Database API | http://localhost:8002 |\n| Auth API | http://localhost:8003 |\n| Order API | http://localhost:8004 |"
+  },
+  "servers": [
+    { "url": "http://localhost:8001", "description": "Admin API" },
+    { "url": "http://localhost:8002", "description": "Database API" },
+    { "url": "http://localhost:8003", "description": "Auth API" },
+    { "url": "http://localhost:8004", "description": "Order API" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "UserCreate": {
+        "type": "object",
+        "required": ["username", "full_name", "pin"],
+        "properties": {
+          "username": { "type": "string" },
+          "full_name": { "type": "string" },
+          "pin": { "type": "string", "minLength": 4, "maxLength": 6, "description": "4–6 digit PIN" },
+          "role": { "type": "string", "enum": ["admin", "staff", "chef"] }
+        }
+      },
+      "UserUpdate": {
+        "type": "object",
+        "properties": {
+          "full_name": { "type": "string" },
+          "pin": { "type": "string", "minLength": 4, "maxLength": 6 },
+          "role": { "type": "string", "enum": ["admin", "staff", "chef"] },
+          "status": { "type": "string" }
+        }
+      },
+      "UserRoleUpdate": {
+        "type": "object",
+        "required": ["role"],
+        "properties": {
+          "role": { "type": "string", "enum": ["admin", "staff", "chef"] }
+        }
+      },
+      "UserLogin": {
+        "type": "object",
+        "required": ["pin"],
+        "properties": {
+          "pin": { "type": "string", "minLength": 4, "maxLength": 6 }
+        }
+      },
+      "CategoryCreate": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "is_active": { "type": "boolean", "default": true }
+        }
+      },
+      "CategoryUpdate": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "is_active": { "type": "boolean" }
+        }
+      },
+      "TableCreate": {
+        "type": "object",
+        "required": ["number"],
+        "properties": {
+          "number": { "type": "string", "minLength": 1, "maxLength": 20 },
+          "location": { "type": "string", "maxLength": 100 },
+          "capacity": { "type": "integer", "default": 4 }
+        }
+      },
+      "TableUpdate": {
+        "type": "object",
+        "properties": {
+          "number": { "type": "string" },
+          "location": { "type": "string" },
+          "capacity": { "type": "integer" },
+          "status": { "type": "string", "enum": ["available", "occupied", "reserved"] },
+          "is_active": { "type": "boolean" }
+        }
+      },
+      "TableStatusUpdate": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["available", "occupied", "reserved"] }
+        }
+      },
+      "PrinterCreate": {
+        "type": "object",
+        "required": ["name", "host", "port"],
+        "properties": {
+          "name": { "type": "string" },
+          "host": { "type": "string" },
+          "port": { "type": "integer", "default": 9100 },
+          "categories": { "type": "array", "items": { "type": "integer" } },
+          "is_active": { "type": "boolean", "default": true }
+        }
+      },
+      "PrinterUpdate": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "host": { "type": "string" },
+          "port": { "type": "integer" },
+          "categories": { "type": "array", "items": { "type": "integer" } },
+          "is_active": { "type": "boolean" }
+        }
+      },
+      "OrderCreate": {
+        "type": "object",
+        "required": ["user_id", "business_type", "fee_percent", "qqs_percent", "payment_method", "order_type", "items"],
+        "properties": {
+          "user_id": { "type": "integer" },
+          "table_id": { "type": "integer", "nullable": true },
+          "business_type": { "type": "string", "enum": ["restaurant", "market"] },
+          "fee_percent": { "type": "number", "format": "float" },
+          "qqs_percent": { "type": "number", "format": "float" },
+          "payment_method": { "type": "string", "enum": ["cash", "card", "mixed"] },
+          "order_type": { "type": "string", "enum": ["dine_in", "takeaway"] },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["product_id", "quantity", "price"],
+              "properties": {
+                "product_id": { "type": "integer" },
+                "quantity": { "type": "number" },
+                "price": { "type": "number" }
+              }
+            }
+          }
+        }
+      },
+      "OrderUpdate": {
+        "type": "object",
+        "properties": {
+          "status": { "type": "string", "enum": ["pending", "preparing", "ready", "completed", "cancelled"] },
+          "table_id": { "type": "integer", "nullable": true },
+          "fee_percent": { "type": "number" },
+          "qqs_percent": { "type": "number" },
+          "payment_method": { "type": "string", "enum": ["cash", "card", "mixed"] },
+          "order_type": { "type": "string", "enum": ["dine_in", "takeaway"] },
+          "notes": { "type": "string" }
+        }
+      },
+      "OrderStatusUpdate": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": { "type": "string", "enum": ["pending", "preparing", "ready", "completed", "cancelled"] }
+        }
+      },
+      "OrderItemCreate": {
+        "type": "object",
+        "required": ["product_id", "quantity", "price"],
+        "properties": {
+          "product_id": { "type": "integer" },
+          "quantity": { "type": "number" },
+          "price": { "type": "number" }
+        }
+      },
+      "OrderItemUpdate": {
+        "type": "object",
+        "properties": {
+          "quantity": { "type": "number" },
+          "price": { "type": "number" }
+        }
+      },
+      "BusinessTypeUpdate": {
+        "type": "object",
+        "required": ["business_type"],
+        "properties": {
+          "business_type": { "type": "string", "enum": ["restaurant", "market"] }
+        }
+      },
+      "ServiceFeeUpdate": {
+        "type": "object",
+        "required": ["service_fee_percent"],
+        "properties": {
+          "service_fee_percent": { "type": "number", "format": "float", "minimum": 0, "maximum": 100 }
+        }
+      },
+      "QqsUpdate": {
+        "type": "object",
+        "required": ["qqs_percent"],
+        "properties": {
+          "qqs_percent": { "type": "number", "format": "float", "minimum": 0, "maximum": 100 }
+        }
+      },
+      "RestaurantProfileUpdate": {
+        "type": "object",
+        "required": ["business_name", "business_phone"],
+        "properties": {
+          "business_name": { "type": "string", "minLength": 1, "maxLength": 120 },
+          "business_phone": { "type": "string", "minLength": 1, "maxLength": 40 }
+        }
+      },
+      "ReportRequest": {
+        "type": "object",
+        "properties": {
+          "start_date": { "type": "string", "format": "date-time" },
+          "end_date": { "type": "string", "format": "date-time" }
+        }
+      },
+      "SystemConfigUpdate": {
+        "type": "object",
+        "required": ["value"],
+        "properties": {
+          "value": { "type": "string" }
+        }
+      },
+      "ProductImportRequest": {
+        "type": "object",
+        "required": ["products"],
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["title", "price"],
+              "properties": {
+                "title": { "type": "string" },
+                "description": { "type": "string" },
+                "price": { "type": "number" },
+                "quantity": { "type": "number" },
+                "unit": { "type": "string" },
+                "capacity": { "type": "number" },
+                "category_id": { "type": "integer" },
+                "is_active": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [{ "BearerAuth": [] }],
+  "tags": [
+    { "name": "Auth — Authentication", "description": "Auth API (port 8003) — login, register, verify, logout" },
+    { "name": "Admin — Products", "description": "Admin API (port 8001) — product management" },
+    { "name": "Admin — Categories", "description": "Admin API (port 8001) — category management" },
+    { "name": "Admin — Users", "description": "Admin API (port 8001) — user management" },
+    { "name": "Admin — Orders", "description": "Admin API (port 8001) — order management" },
+    { "name": "Admin — Tables", "description": "Admin API (port 8001) — table management" },
+    { "name": "Admin — Printers", "description": "Admin API (port 8001) — printer management" },
+    { "name": "Admin — System Config", "description": "Admin API (port 8001) — system configuration" },
+    { "name": "Admin — Reports", "description": "Admin API (port 8001) — sales & inventory reports" },
+    { "name": "Order — Orders", "description": "Order API (port 8004) — POS order operations" },
+    { "name": "DB — Users", "description": "Database API (port 8002) — internal user data" },
+    { "name": "DB — Products", "description": "Database API (port 8002) — internal product data" },
+    { "name": "DB — Categories", "description": "Database API (port 8002) — internal category data" },
+    { "name": "DB — Orders", "description": "Database API (port 8002) — internal order data" },
+    { "name": "DB — Tables", "description": "Database API (port 8002) — internal table data" },
+    { "name": "DB — Printers", "description": "Database API (port 8002) — internal printer data" },
+    { "name": "DB — System Config", "description": "Database API (port 8002) — internal system config" },
+    { "name": "DB — Reports", "description": "Database API (port 8002) — internal report queries" },
+    { "name": "Health", "description": "Health check endpoints" }
+  ],
+  "paths": {
+
+    "http://localhost:8003/users/login-options": {
+      "get": {
+        "tags": ["Auth — Authentication"],
+        "summary": "Get login options (active users list)",
+        "security": [],
+        "responses": {
+          "200": { "description": "List of active users for PIN login" }
+        }
+      }
+    },
+    "http://localhost:8003/register": {
+      "post": {
+        "tags": ["Auth — Authentication"],
+        "summary": "Register a new user",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserCreate" } } }
+        },
+        "responses": {
+          "201": { "description": "User created successfully" }
+        }
+      }
+    },
+    "http://localhost:8003/login": {
+      "post": {
+        "tags": ["Auth — Authentication"],
+        "summary": "Login with PIN — returns JWT token",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserLogin" } } }
+        },
+        "responses": {
+          "200": { "description": "access_token, role, user_id, token_type, expires_at" }
+        }
+      }
+    },
+    "http://localhost:8003/verify": {
+      "post": {
+        "tags": ["Auth — Authentication"],
+        "summary": "Verify JWT token",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "{ valid, username, role }" }
+        }
+      }
+    },
+    "http://localhost:8003/logout": {
+      "post": {
+        "tags": ["Auth — Authentication"],
+        "summary": "Logout current user",
+        "security": [{ "BearerAuth": [] }],
+        "responses": {
+          "200": { "description": "{ status: ok }" }
+        }
+      }
+    },
+    "http://localhost:8003/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Auth API health check",
+        "security": [],
+        "responses": {
+          "200": { "description": "{ status, service, redis }" }
+        }
+      }
+    },
+
+    "http://localhost:8001/products": {
+      "get": {
+        "tags": ["Admin — Products"],
+        "summary": "Get all products",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "ProductsResponse (products, total)" } }
+      },
+      "post": {
+        "tags": ["Admin — Products"],
+        "summary": "Create product (with optional image)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "price"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price": { "type": "number" },
+                  "quantity": { "type": "number" },
+                  "unit": { "type": "string" },
+                  "capacity": { "type": "number" },
+                  "category_id": { "type": "integer" },
+                  "is_active": { "type": "boolean", "default": true },
+                  "image": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "ProductResponse" } }
+      }
+    },
+    "http://localhost:8001/products/export": {
+      "get": {
+        "tags": ["Admin — Products"],
+        "summary": "Export all products as JSON file",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "JSON file download" } }
+      }
+    },
+    "http://localhost:8001/products/import": {
+      "post": {
+        "tags": ["Admin — Products"],
+        "summary": "Batch import products",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductImportRequest" } } }
+        },
+        "responses": { "200": { "description": "ProductImportResult (created, updated, failed, errors)" } }
+      }
+    },
+    "http://localhost:8001/products/{product_id}": {
+      "get": {
+        "tags": ["Admin — Products"],
+        "summary": "Get product by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ProductResponse" } }
+      },
+      "put": {
+        "tags": ["Admin — Products"],
+        "summary": "Update product",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price": { "type": "number" },
+                  "quantity": { "type": "number" },
+                  "unit": { "type": "string" },
+                  "capacity": { "type": "number" },
+                  "category_id": { "type": "integer" },
+                  "is_active": { "type": "boolean" },
+                  "remove_image": { "type": "boolean", "default": false },
+                  "image": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ProductResponse" } }
+      },
+      "delete": {
+        "tags": ["Admin — Products"],
+        "summary": "Delete product",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+
+    "http://localhost:8001/categories": {
+      "get": {
+        "tags": ["Admin — Categories"],
+        "summary": "Get all categories",
+        "responses": { "200": { "description": "CategoriesResponse (categories, total)" } }
+      },
+      "post": {
+        "tags": ["Admin — Categories"],
+        "summary": "Create category",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryCreate" } } }
+        },
+        "responses": { "201": { "description": "CategoryResponse" } }
+      }
+    },
+    "http://localhost:8001/categories/{category_id}": {
+      "get": {
+        "tags": ["Admin — Categories"],
+        "summary": "Get category by ID",
+        "parameters": [{ "name": "category_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "CategoryResponse" } }
+      },
+      "put": {
+        "tags": ["Admin — Categories"],
+        "summary": "Update category",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "category_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryUpdate" } } }
+        },
+        "responses": { "200": { "description": "CategoryResponse" } }
+      },
+      "delete": {
+        "tags": ["Admin — Categories"],
+        "summary": "Delete category",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "category_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+
+    "http://localhost:8001/users": {
+      "get": {
+        "tags": ["Admin — Users"],
+        "summary": "Get all users",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Users list" } }
+      },
+      "post": {
+        "tags": ["Admin — Users"],
+        "summary": "Create user (staff/chef)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserCreate" } } }
+        },
+        "responses": { "201": { "description": "User" } }
+      }
+    },
+    "http://localhost:8001/users/admin": {
+      "post": {
+        "tags": ["Admin — Users"],
+        "summary": "Create admin account",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserCreate" } } }
+        },
+        "responses": { "201": { "description": "User" } }
+      }
+    },
+    "http://localhost:8001/users/{user_id}": {
+      "get": {
+        "tags": ["Admin — Users"],
+        "summary": "Get user by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "User" } }
+      },
+      "put": {
+        "tags": ["Admin — Users"],
+        "summary": "Update user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserUpdate" } } }
+        },
+        "responses": { "200": { "description": "User" } }
+      },
+      "delete": {
+        "tags": ["Admin — Users"],
+        "summary": "Delete user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+    "http://localhost:8001/users/{user_id}/role": {
+      "patch": {
+        "tags": ["Admin — Users"],
+        "summary": "Update user role",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserRoleUpdate" } } }
+        },
+        "responses": { "200": { "description": "User" } }
+      }
+    },
+
+    "http://localhost:8001/orders": {
+      "get": {
+        "tags": ["Admin — Orders"],
+        "summary": "Get all orders",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "OrdersResponse (orders, total)" } }
+      }
+    },
+    "http://localhost:8001/orders/status/{order_status}": {
+      "get": {
+        "tags": ["Admin — Orders"],
+        "summary": "Get orders by status",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_status", "in": "path", "required": true, "schema": { "type": "string", "enum": ["pending", "preparing", "ready", "completed", "cancelled"] } }],
+        "responses": { "200": { "description": "OrdersResponse" } }
+      }
+    },
+    "http://localhost:8001/orders/user/{user_id}": {
+      "get": {
+        "tags": ["Admin — Orders"],
+        "summary": "Get orders by user",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OrdersResponse" } }
+      }
+    },
+    "http://localhost:8001/orders/{order_id}": {
+      "get": {
+        "tags": ["Admin — Orders"],
+        "summary": "Get order by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "put": {
+        "tags": ["Admin — Orders"],
+        "summary": "Update order",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "delete": {
+        "tags": ["Admin — Orders"],
+        "summary": "Delete order",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+    "http://localhost:8001/orders/{order_id}/status": {
+      "patch": {
+        "tags": ["Admin — Orders"],
+        "summary": "Update order status",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderStatusUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      }
+    },
+    "http://localhost:8001/orders/{order_id}/items/{item_id}": {
+      "put": {
+        "tags": ["Admin — Orders"],
+        "summary": "Update order item",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderItemUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "delete": {
+        "tags": ["Admin — Orders"],
+        "summary": "Remove order item",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "OrderResponse" } }
+      }
+    },
+
+    "http://localhost:8001/tables": {
+      "get": {
+        "tags": ["Admin — Tables"],
+        "summary": "Get all tables",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "active_only", "in": "query", "schema": { "type": "boolean", "default": false } }],
+        "responses": { "200": { "description": "Tables list" } }
+      },
+      "post": {
+        "tags": ["Admin — Tables"],
+        "summary": "Create table",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TableCreate" } } }
+        },
+        "responses": { "201": { "description": "Table" } }
+      }
+    },
+    "http://localhost:8001/tables/available": {
+      "get": {
+        "tags": ["Admin — Tables"],
+        "summary": "Get available tables",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "Tables list" } }
+      }
+    },
+    "http://localhost:8001/tables/{table_id}": {
+      "get": {
+        "tags": ["Admin — Tables"],
+        "summary": "Get table by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Table" } }
+      },
+      "put": {
+        "tags": ["Admin — Tables"],
+        "summary": "Update table",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TableUpdate" } } }
+        },
+        "responses": { "200": { "description": "Table" } }
+      },
+      "delete": {
+        "tags": ["Admin — Tables"],
+        "summary": "Delete table",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+    "http://localhost:8001/tables/{table_id}/status": {
+      "patch": {
+        "tags": ["Admin — Tables"],
+        "summary": "Update table status",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TableStatusUpdate" } } }
+        },
+        "responses": { "200": { "description": "Table" } }
+      }
+    },
+
+    "http://localhost:8001/printers": {
+      "get": {
+        "tags": ["Admin — Printers"],
+        "summary": "Get all printers",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "active_only", "in": "query", "schema": { "type": "boolean", "default": false } }],
+        "responses": { "200": { "description": "PrintersResponse (printers, total)" } }
+      },
+      "post": {
+        "tags": ["Admin — Printers"],
+        "summary": "Create printer",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PrinterCreate" } } }
+        },
+        "responses": { "201": { "description": "PrinterResponse" } }
+      }
+    },
+    "http://localhost:8001/printers/{printer_id}": {
+      "get": {
+        "tags": ["Admin — Printers"],
+        "summary": "Get printer by ID",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "printer_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "PrinterResponse" } }
+      },
+      "put": {
+        "tags": ["Admin — Printers"],
+        "summary": "Update printer",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "printer_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PrinterUpdate" } } }
+        },
+        "responses": { "200": { "description": "PrinterResponse" } }
+      },
+      "delete": {
+        "tags": ["Admin — Printers"],
+        "summary": "Delete printer",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "printer_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+
+    "http://localhost:8001/system-config/business-type": {
+      "get": {
+        "tags": ["Admin — System Config"],
+        "summary": "Get business type",
+        "responses": { "200": { "description": "{ key: business_type, value }" } }
+      },
+      "put": {
+        "tags": ["Admin — System Config"],
+        "summary": "Update business type",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BusinessTypeUpdate" } } }
+        },
+        "responses": { "200": { "description": "{ key, value }" } }
+      }
+    },
+    "http://localhost:8001/system-config/service-fee": {
+      "get": {
+        "tags": ["Admin — System Config"],
+        "summary": "Get service fee percent",
+        "responses": { "200": { "description": "{ key: service_fee_percent, value }" } }
+      },
+      "put": {
+        "tags": ["Admin — System Config"],
+        "summary": "Update service fee percent",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServiceFeeUpdate" } } }
+        },
+        "responses": { "200": { "description": "{ key, value }" } }
+      }
+    },
+    "http://localhost:8001/system-config/qqs": {
+      "get": {
+        "tags": ["Admin — System Config"],
+        "summary": "Get QQS (VAT) percent",
+        "responses": { "200": { "description": "{ key: qqs_percent, value }" } }
+      },
+      "put": {
+        "tags": ["Admin — System Config"],
+        "summary": "Update QQS (VAT) percent",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QqsUpdate" } } }
+        },
+        "responses": { "200": { "description": "{ key, value }" } }
+      }
+    },
+    "http://localhost:8001/system-config/restaurant-profile": {
+      "get": {
+        "tags": ["Admin — System Config"],
+        "summary": "Get restaurant profile",
+        "responses": { "200": { "description": "{ business_name, business_phone }" } }
+      },
+      "put": {
+        "tags": ["Admin — System Config"],
+        "summary": "Update restaurant profile",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RestaurantProfileUpdate" } } }
+        },
+        "responses": { "200": { "description": "{ business_name, business_phone }" } }
+      }
+    },
+
+    "http://localhost:8001/reports/sales": {
+      "get": {
+        "tags": ["Admin — Reports"],
+        "summary": "Get sales summary",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "start_date", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "end_date", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": { "200": { "description": "SalesSummaryResponse (total_sales, total_orders, top_products, sales_by_day, sales_by_hour)" } }
+      }
+    },
+    "http://localhost:8001/reports/inventory": {
+      "get": {
+        "tags": ["Admin — Reports"],
+        "summary": "Get inventory report",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "InventoryReportResponse (total_products, low_stock_count, out_of_stock_count, total_value, products)" } }
+      }
+    },
+    "http://localhost:8001/reports/sales/excel": {
+      "post": {
+        "tags": ["Admin — Reports"],
+        "summary": "Generate Excel sales report (download)",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ReportRequest" } } }
+        },
+        "responses": { "200": { "description": "Excel file (.xlsx) download" } }
+      }
+    },
+
+    "http://localhost:8004/orders/config": {
+      "get": {
+        "tags": ["Order — Orders"],
+        "summary": "Get system configuration (business type, fees)",
+        "security": [],
+        "responses": { "200": { "description": "SystemConfigResponse (business_type, service_fee_percent, qqs_percent, business_name, business_phone)" } }
+      }
+    },
+    "http://localhost:8004/orders/tables": {
+      "get": {
+        "tags": ["Order — Orders"],
+        "summary": "Get active tables",
+        "security": [],
+        "responses": { "200": { "description": "TablesResponse (tables, total)" } }
+      }
+    },
+    "http://localhost:8004/orders": {
+      "get": {
+        "tags": ["Order — Orders"],
+        "summary": "Get all orders",
+        "security": [{ "BearerAuth": [] }],
+        "responses": { "200": { "description": "OrdersResponse" } }
+      },
+      "post": {
+        "tags": ["Order — Orders"],
+        "summary": "Create a new order",
+        "security": [{ "BearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderCreate" } } }
+        },
+        "responses": { "201": { "description": "OrderResponse" } }
+      }
+    },
+    "http://localhost:8004/orders/status/{order_status}": {
+      "get": {
+        "tags": ["Order — Orders"],
+        "summary": "Get orders by status",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_status", "in": "path", "required": true, "schema": { "type": "string", "enum": ["pending", "preparing", "ready", "completed", "cancelled"] } }],
+        "responses": { "200": { "description": "OrdersResponse" } }
+      }
+    },
+    "http://localhost:8004/orders/user/{user_id}": {
+      "get": {
+        "tags": ["Order — Orders"],
+        "summary": "Get orders by user",
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OrdersResponse" } }
+      }
+    },
+    "http://localhost:8004/orders/{order_id}": {
+      "get": {
+        "tags": ["Order — Orders"],
+        "summary": "Get order by ID",
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "put": {
+        "tags": ["Order — Orders"],
+        "summary": "Update order",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "delete": {
+        "tags": ["Order — Orders"],
+        "summary": "Delete order",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+    "http://localhost:8004/orders/{order_id}/status": {
+      "patch": {
+        "tags": ["Order — Orders"],
+        "summary": "Update order status",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderStatusUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      }
+    },
+    "http://localhost:8004/orders/{order_id}/items": {
+      "post": {
+        "tags": ["Order — Orders"],
+        "summary": "Add item to order",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderItemCreate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      }
+    },
+    "http://localhost:8004/orders/{order_id}/items/{item_id}": {
+      "put": {
+        "tags": ["Order — Orders"],
+        "summary": "Update order item",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderItemUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "delete": {
+        "tags": ["Order — Orders"],
+        "summary": "Remove order item",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [
+          { "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "OrderResponse" } }
+      }
+    },
+    "http://localhost:8004/orders/{order_id}/total": {
+      "get": {
+        "tags": ["Order — Orders"],
+        "summary": "Get order total",
+        "security": [{ "BearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OrderTotalResponse (order_id, total, items_count)" } }
+      }
+    },
+    "http://localhost:8004/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Order API health check",
+        "security": [],
+        "responses": { "200": { "description": "{ status: ok, service: order }" } }
+      }
+    },
+
+    "http://localhost:8002/users": {
+      "get": {
+        "tags": ["DB — Users"],
+        "summary": "Get all users",
+        "parameters": [{ "name": "status", "in": "query", "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "UsersResponse" } }
+      },
+      "post": {
+        "tags": ["DB — Users"],
+        "summary": "Create user",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserCreate" } } }
+        },
+        "responses": { "201": { "description": "UserResponse" } }
+      }
+    },
+    "http://localhost:8002/users/username/{username}": {
+      "get": {
+        "tags": ["DB — Users"],
+        "summary": "Get user by username",
+        "parameters": [{ "name": "username", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "UserResponse" } }
+      }
+    },
+    "http://localhost:8002/users/pin/{pin}": {
+      "get": {
+        "tags": ["DB — Users"],
+        "summary": "Get user by PIN",
+        "parameters": [{ "name": "pin", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "UserResponse" } }
+      }
+    },
+    "http://localhost:8002/users/{id}": {
+      "get": {
+        "tags": ["DB — Users"],
+        "summary": "Get user by ID",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "UserResponse" } }
+      },
+      "put": {
+        "tags": ["DB — Users"],
+        "summary": "Update user",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserUpdate" } } }
+        },
+        "responses": { "200": { "description": "UserResponse" } }
+      },
+      "delete": {
+        "tags": ["DB — Users"],
+        "summary": "Delete user",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+
+    "http://localhost:8002/products": {
+      "get": {
+        "tags": ["DB — Products"],
+        "summary": "Get all products",
+        "responses": { "200": { "description": "ProductsResponse (products, total)" } }
+      },
+      "post": {
+        "tags": ["DB — Products"],
+        "summary": "Create product",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "price"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price": { "type": "number" },
+                  "quantity": { "type": "number" },
+                  "unit": { "type": "string" },
+                  "capacity": { "type": "number" },
+                  "category_id": { "type": "integer" },
+                  "is_active": { "type": "boolean" },
+                  "image": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "ProductResponse" } }
+      }
+    },
+    "http://localhost:8002/products/{product_id}": {
+      "get": {
+        "tags": ["DB — Products"],
+        "summary": "Get product by ID",
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ProductResponse" } }
+      },
+      "put": {
+        "tags": ["DB — Products"],
+        "summary": "Update product",
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": { "type": "string" },
+                  "description": { "type": "string" },
+                  "price": { "type": "number" },
+                  "quantity": { "type": "number" },
+                  "unit": { "type": "string" },
+                  "capacity": { "type": "number" },
+                  "category_id": { "type": "integer" },
+                  "is_active": { "type": "boolean" },
+                  "remove_image": { "type": "boolean" },
+                  "image": { "type": "string", "format": "binary" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "ProductResponse" } }
+      },
+      "delete": {
+        "tags": ["DB — Products"],
+        "summary": "Delete product",
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+    "http://localhost:8002/products/images/{filename}": {
+      "get": {
+        "tags": ["DB — Products"],
+        "summary": "Serve product image",
+        "security": [],
+        "parameters": [{ "name": "filename", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "JPEG image file" } }
+      }
+    },
+
+    "http://localhost:8002/categories": {
+      "get": {
+        "tags": ["DB — Categories"],
+        "summary": "Get all categories",
+        "responses": { "200": { "description": "CategoriesResponse (categories, total)" } }
+      },
+      "post": {
+        "tags": ["DB — Categories"],
+        "summary": "Create category",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryCreate" } } }
+        },
+        "responses": { "201": { "description": "CategoryResponse" } }
+      }
+    },
+    "http://localhost:8002/categories/{category_id}": {
+      "get": {
+        "tags": ["DB — Categories"],
+        "summary": "Get category by ID",
+        "parameters": [{ "name": "category_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "CategoryResponse" } }
+      },
+      "put": {
+        "tags": ["DB — Categories"],
+        "summary": "Update category",
+        "parameters": [{ "name": "category_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryUpdate" } } }
+        },
+        "responses": { "200": { "description": "CategoryResponse" } }
+      },
+      "delete": {
+        "tags": ["DB — Categories"],
+        "summary": "Delete category",
+        "parameters": [{ "name": "category_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+
+    "http://localhost:8002/orders": {
+      "get": {
+        "tags": ["DB — Orders"],
+        "summary": "Get all orders",
+        "parameters": [
+          { "name": "status", "in": "query", "schema": { "type": "string", "enum": ["pending", "preparing", "ready", "completed", "cancelled"] } },
+          { "name": "user_id", "in": "query", "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "OrdersResponse (orders, total)" } }
+      },
+      "post": {
+        "tags": ["DB — Orders"],
+        "summary": "Create order",
+        "parameters": [{ "name": "user_id", "in": "query", "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderCreate" } } }
+        },
+        "responses": { "201": { "description": "OrderResponse" } }
+      }
+    },
+    "http://localhost:8002/orders/user/{user_id}": {
+      "get": {
+        "tags": ["DB — Orders"],
+        "summary": "Get orders by user",
+        "parameters": [{ "name": "user_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OrdersResponse" } }
+      }
+    },
+    "http://localhost:8002/orders/status/{order_status}": {
+      "get": {
+        "tags": ["DB — Orders"],
+        "summary": "Get orders by status",
+        "parameters": [{ "name": "order_status", "in": "path", "required": true, "schema": { "type": "string", "enum": ["pending", "preparing", "ready", "completed", "cancelled"] } }],
+        "responses": { "200": { "description": "OrdersResponse" } }
+      }
+    },
+    "http://localhost:8002/orders/table/{table_id}": {
+      "get": {
+        "tags": ["DB — Orders"],
+        "summary": "Get orders by table",
+        "parameters": [{ "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OrdersResponse" } }
+      }
+    },
+    "http://localhost:8002/orders/{order_id}": {
+      "get": {
+        "tags": ["DB — Orders"],
+        "summary": "Get order by ID",
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "put": {
+        "tags": ["DB — Orders"],
+        "summary": "Update order",
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "delete": {
+        "tags": ["DB — Orders"],
+        "summary": "Delete order",
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+    "http://localhost:8002/orders/{order_id}/status": {
+      "patch": {
+        "tags": ["DB — Orders"],
+        "summary": "Update order status",
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderStatusUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      }
+    },
+    "http://localhost:8002/orders/{order_id}/items": {
+      "post": {
+        "tags": ["DB — Orders"],
+        "summary": "Add item to order",
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderItemCreate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      }
+    },
+    "http://localhost:8002/orders/{order_id}/items/{item_id}": {
+      "put": {
+        "tags": ["DB — Orders"],
+        "summary": "Update order item",
+        "parameters": [
+          { "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderItemUpdate" } } }
+        },
+        "responses": { "200": { "description": "OrderResponse" } }
+      },
+      "delete": {
+        "tags": ["DB — Orders"],
+        "summary": "Remove order item",
+        "parameters": [
+          { "name": "order_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "integer" } }
+        ],
+        "responses": { "200": { "description": "OrderResponse" } }
+      }
+    },
+
+    "http://localhost:8002/tables": {
+      "get": {
+        "tags": ["DB — Tables"],
+        "summary": "Get all tables",
+        "parameters": [{ "name": "active_only", "in": "query", "schema": { "type": "boolean", "default": false } }],
+        "responses": { "200": { "description": "TablesResponse (tables, total)" } }
+      },
+      "post": {
+        "tags": ["DB — Tables"],
+        "summary": "Create table",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TableCreate" } } }
+        },
+        "responses": { "201": { "description": "TableResponse" } }
+      }
+    },
+    "http://localhost:8002/tables/available": {
+      "get": {
+        "tags": ["DB — Tables"],
+        "summary": "Get available tables",
+        "responses": { "200": { "description": "TablesResponse" } }
+      }
+    },
+    "http://localhost:8002/tables/number/{number}": {
+      "get": {
+        "tags": ["DB — Tables"],
+        "summary": "Get table by number",
+        "parameters": [
+          { "name": "number", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "location", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "TableResponse" } }
+      }
+    },
+    "http://localhost:8002/tables/{table_id}": {
+      "get": {
+        "tags": ["DB — Tables"],
+        "summary": "Get table by ID",
+        "parameters": [{ "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "TableResponse" } }
+      },
+      "put": {
+        "tags": ["DB — Tables"],
+        "summary": "Update table",
+        "parameters": [{ "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TableUpdate" } } }
+        },
+        "responses": { "200": { "description": "TableResponse" } }
+      },
+      "delete": {
+        "tags": ["DB — Tables"],
+        "summary": "Delete table",
+        "parameters": [{ "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+    "http://localhost:8002/tables/{table_id}/status": {
+      "patch": {
+        "tags": ["DB — Tables"],
+        "summary": "Update table status",
+        "parameters": [
+          { "name": "table_id", "in": "path", "required": true, "schema": { "type": "integer" } },
+          { "name": "status", "in": "query", "required": true, "schema": { "type": "string", "enum": ["available", "occupied", "reserved"] } }
+        ],
+        "responses": { "200": { "description": "TableResponse" } }
+      }
+    },
+
+    "http://localhost:8002/printers": {
+      "get": {
+        "tags": ["DB — Printers"],
+        "summary": "Get all printers",
+        "parameters": [{ "name": "active_only", "in": "query", "schema": { "type": "boolean", "default": false } }],
+        "responses": { "200": { "description": "PrintersResponse (printers, total)" } }
+      },
+      "post": {
+        "tags": ["DB — Printers"],
+        "summary": "Create printer",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PrinterCreate" } } }
+        },
+        "responses": { "201": { "description": "PrinterResponse" } }
+      }
+    },
+    "http://localhost:8002/printers/{printer_id}": {
+      "get": {
+        "tags": ["DB — Printers"],
+        "summary": "Get printer by ID",
+        "parameters": [{ "name": "printer_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "PrinterResponse" } }
+      },
+      "put": {
+        "tags": ["DB — Printers"],
+        "summary": "Update printer",
+        "parameters": [{ "name": "printer_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PrinterUpdate" } } }
+        },
+        "responses": { "200": { "description": "PrinterResponse" } }
+      },
+      "delete": {
+        "tags": ["DB — Printers"],
+        "summary": "Delete printer",
+        "parameters": [{ "name": "printer_id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "204": { "description": "No Content" } }
+      }
+    },
+
+    "http://localhost:8002/system-config/business_type": {
+      "get": {
+        "tags": ["DB — System Config"],
+        "summary": "Get business type",
+        "responses": { "200": { "description": "SystemConfigResponse (key, value)" } }
+      },
+      "put": {
+        "tags": ["DB — System Config"],
+        "summary": "Update business type",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SystemConfigUpdate" } } }
+        },
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      }
+    },
+    "http://localhost:8002/system-config/service_fee_percent": {
+      "get": {
+        "tags": ["DB — System Config"],
+        "summary": "Get service fee percent",
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      },
+      "put": {
+        "tags": ["DB — System Config"],
+        "summary": "Update service fee percent",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SystemConfigUpdate" } } }
+        },
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      }
+    },
+    "http://localhost:8002/system-config/qqs_percent": {
+      "get": {
+        "tags": ["DB — System Config"],
+        "summary": "Get QQS (VAT) percent",
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      },
+      "put": {
+        "tags": ["DB — System Config"],
+        "summary": "Update QQS (VAT) percent",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SystemConfigUpdate" } } }
+        },
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      }
+    },
+    "http://localhost:8002/system-config/business_name": {
+      "get": {
+        "tags": ["DB — System Config"],
+        "summary": "Get business name",
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      },
+      "put": {
+        "tags": ["DB — System Config"],
+        "summary": "Update business name",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SystemConfigUpdate" } } }
+        },
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      }
+    },
+    "http://localhost:8002/system-config/business_phone": {
+      "get": {
+        "tags": ["DB — System Config"],
+        "summary": "Get business phone",
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      },
+      "put": {
+        "tags": ["DB — System Config"],
+        "summary": "Update business phone",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SystemConfigUpdate" } } }
+        },
+        "responses": { "200": { "description": "SystemConfigResponse" } }
+      }
+    },
+
+    "http://localhost:8002/reports/sales/summary": {
+      "get": {
+        "tags": ["DB — Reports"],
+        "summary": "Get sales summary stats",
+        "parameters": [
+          { "name": "start_date", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "end_date", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": { "200": { "description": "Sales summary" } }
+      }
+    },
+    "http://localhost:8002/reports/sales/top-products": {
+      "get": {
+        "tags": ["DB — Reports"],
+        "summary": "Get top selling products",
+        "parameters": [
+          { "name": "start_date", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "end_date", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 50, "default": 10 } }
+        ],
+        "responses": { "200": { "description": "Top products list" } }
+      }
+    },
+    "http://localhost:8002/reports/sales/by-day": {
+      "get": {
+        "tags": ["DB — Reports"],
+        "summary": "Get daily sales breakdown",
+        "parameters": [
+          { "name": "start_date", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "end_date", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": { "200": { "description": "Daily sales totals" } }
+      }
+    },
+    "http://localhost:8002/reports/sales/by-hour": {
+      "get": {
+        "tags": ["DB — Reports"],
+        "summary": "Get hourly sales distribution",
+        "parameters": [
+          { "name": "start_date", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "end_date", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": { "200": { "description": "Hourly distribution" } }
+      }
+    },
+    "http://localhost:8002/reports/inventory": {
+      "get": {
+        "tags": ["DB — Reports"],
+        "summary": "Get inventory report",
+        "responses": { "200": { "description": "Inventory status" } }
+      }
+    },
+    "http://localhost:8002/reports/orders": {
+      "get": {
+        "tags": ["DB — Reports"],
+        "summary": "Get orders for reporting",
+        "parameters": [
+          { "name": "start_date", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "end_date", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": { "200": { "description": "{ orders, total }" } }
+      }
+    },
+    "http://localhost:8002/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Database API health check",
+        "security": [],
+        "responses": { "200": { "description": "{ status: ok, service: database }" } }
+      }
+    }
+  }
+}
