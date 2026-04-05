@@ -1815,7 +1815,7 @@ export default function POSTerminal() {
                         )}
                       </div>
                     </button>
-                  ))}
+                  )})}
                 </div>
               ) : (
                 <div className="space-y-3 pb-4">
