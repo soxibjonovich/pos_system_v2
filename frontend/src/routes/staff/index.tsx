@@ -134,8 +134,15 @@ export default function POSTerminal() {
   const [isCompletingOrder, setIsCompletingOrder] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [showKeyboard, setShowKeyboard] = useState(false);
+  const [mobileTab, setMobileTab] = useState<"products" | "cart">("products");
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card">("cash");
+  const [basePaymentMethod, setBasePaymentMethod] = useState<"cash" | "card">(
+    "cash",
+  );
   const [orderType, setOrderType] = useState<"dine_in" | "takeaway" | "delivery">("dine_in");
+  const [baseOrderType, setBaseOrderType] = useState<
+    "dine_in" | "takeaway" | "delivery"
+  >("dine_in");
 
   // Print status
   const [printerStatus, setPrinterStatus] = useState<
@@ -372,6 +379,10 @@ export default function POSTerminal() {
     setBaseFeePercent(defaultFeePercent);
     setQqsPercent(defaultQqsPercent);
     setBaseQqsPercent(defaultQqsPercent);
+    setPaymentMethod("cash");
+    setBasePaymentMethod("cash");
+    setOrderType("dine_in");
+    setBaseOrderType("dine_in");
   }, [defaultFeePercent, defaultQqsPercent]);
 
   const subtotal = cart.reduce(
@@ -379,8 +390,12 @@ export default function POSTerminal() {
     0,
   );
   const qqsAmount = Math.round(subtotal * qqsPercent) / 100;
-  const feeAmount = Math.round(subtotal * feePercent) / 100;
+  const effectiveFeePercent =
+    orderType === "takeaway" || orderType === "delivery" ? 0 : feePercent;
+  const feeAmount = Math.round(subtotal * effectiveFeePercent) / 100;
   const total = subtotal + qqsAmount + feeAmount;
+  const serviceFeeDisabled =
+    orderType === "takeaway" || orderType === "delivery";
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
   const baseQtyByProduct = baseOrderItems.reduce<Record<number, number>>(
     (acc, item) => {
@@ -530,6 +545,16 @@ export default function POSTerminal() {
         setBaseFeePercent(currentFeePercent);
         setQqsPercent(currentQqsPercent);
         setBaseQqsPercent(currentQqsPercent);
+        const nextPaymentMethod =
+          order?.payment_method === "card" ? "card" : "cash";
+        const nextOrderType =
+          order?.order_type === "takeaway" || order?.order_type === "delivery"
+            ? order.order_type
+            : "dine_in";
+        setPaymentMethod(nextPaymentMethod);
+        setBasePaymentMethod(nextPaymentMethod);
+        setOrderType(nextOrderType);
+        setBaseOrderType(nextOrderType);
         setActiveOrderId(orderId);
       } catch {
         setCart([]);
@@ -538,6 +563,10 @@ export default function POSTerminal() {
         setBaseFeePercent(defaultFeePercent);
         setQqsPercent(defaultQqsPercent);
         setBaseQqsPercent(defaultQqsPercent);
+        setPaymentMethod("cash");
+        setBasePaymentMethod("cash");
+        setOrderType("dine_in");
+        setBaseOrderType("dine_in");
         setActiveOrderId(orderId);
       } finally {
         setTableOrderLoading(false);
@@ -559,6 +588,10 @@ export default function POSTerminal() {
         setBaseFeePercent(defaultFeePercent);
         setQqsPercent(defaultQqsPercent);
         setBaseQqsPercent(defaultQqsPercent);
+        setPaymentMethod("cash");
+        setBasePaymentMethod("cash");
+        setOrderType("dine_in");
+        setBaseOrderType("dine_in");
         setActiveOrderId(null);
       }
     },
@@ -745,7 +778,12 @@ export default function POSTerminal() {
           }
         }
 
-        if (feePercent !== baseFeePercent || qqsPercent !== baseQqsPercent) {
+        if (
+          feePercent !== baseFeePercent ||
+          qqsPercent !== baseQqsPercent ||
+          paymentMethod !== basePaymentMethod ||
+          orderType !== baseOrderType
+        ) {
           const feeRes = await fetch(
             `${API_URL}${api.orders.base}/${api.orders.orders}/${orderIdToUpdate}`,
             {
@@ -755,7 +793,7 @@ export default function POSTerminal() {
                 Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
-                fee_percent: feePercent,
+                fee_percent: effectiveFeePercent,
                 qqs_percent: qqsPercent,
                 payment_method: paymentMethod,
                 order_type: orderType,
@@ -787,7 +825,7 @@ export default function POSTerminal() {
         user_id: CURRENT_USER_ID,
         business_type: isRestaurant ? "restaurant" : "market",
         table_id: isRestaurant && selectedTable ? selectedTable.id : null,
-        fee_percent: feePercent,
+        fee_percent: effectiveFeePercent,
         qqs_percent: qqsPercent,
         payment_method: paymentMethod,
         order_type: orderType,
@@ -1171,16 +1209,17 @@ export default function POSTerminal() {
   if (isRestaurant && selectedTable) {
     return (
       <div
-        className="min-h-screen flex flex-col xl:h-screen"
+        className="h-[100dvh] flex flex-col overflow-hidden"
         style={{
           background:
             "linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59), rgb(15, 23, 42))",
         }}
       >
-        <div className="flex-1 max-w-[2000px] mx-auto p-3 sm:p-4 lg:p-6 w-full xl:overflow-hidden">
-          <div className="grid grid-cols-1 xl:grid-cols-10 gap-4 lg:gap-6 xl:h-full">
+        <div className="flex-1 max-w-[2000px] mx-auto p-2 sm:p-3 lg:p-6 w-full overflow-hidden">
+          <div className="grid grid-cols-1 xl:grid-cols-10 gap-3 lg:gap-6 h-full">
+            {/* ── CART PANEL ── hidden on mobile when products tab active */}
             <div
-              className="order-2 xl:order-1 xl:col-span-4 rounded-2xl shadow-2xl p-3 sm:p-4 flex flex-col text-white xl:overflow-hidden"
+              className={`xl:col-span-4 rounded-2xl shadow-2xl p-3 sm:p-4 flex-col text-white overflow-hidden ${mobileTab === "cart" ? "flex" : "hidden xl:flex"}`}
               style={{
                 background:
                   "linear-gradient(to bottom right, rgb(30, 41, 59), rgb(15, 23, 42))",
@@ -1201,7 +1240,7 @@ export default function POSTerminal() {
                 )}
               </div>
 
-              <div className="mb-4 space-y-3 xl:flex-1 xl:overflow-y-auto max-h-[45vh] overflow-y-auto xl:max-h-none">
+              <div className="mb-4 space-y-3 flex-1 overflow-y-auto">
                 {tableOrderLoading ? (
                   <div className="text-center py-16 text-gray-400">
                     <p className="text-lg">Buyurtma yuklanmoqda...</p>
@@ -1304,6 +1343,23 @@ export default function POSTerminal() {
               </div>
 
               <div className="border-t-2 border-slate-600 pt-3 mb-3">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <span className="rounded-full bg-slate-600/80 px-3 py-1 text-xs font-bold text-slate-100">
+                    {paymentMethod === "cash" ? "Naqd" : "Karta"}
+                  </span>
+                  <span className="rounded-full bg-slate-600/80 px-3 py-1 text-xs font-bold text-slate-100">
+                    {orderType === "dine_in"
+                      ? "Zalda"
+                      : orderType === "takeaway"
+                        ? "Olib ketish"
+                        : "Yetkazish"}
+                  </span>
+                  {serviceFeeDisabled && (
+                    <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+                      Servis haqi olinmaydi
+                    </span>
+                  )}
+                </div>
                 <div className="flex justify-between items-center mb-2 text-lg">
                   <span className="text-gray-300">Mahsulotlar:</span>
                   <span className="font-bold">{itemCount} ta</span>
@@ -1321,7 +1377,7 @@ export default function POSTerminal() {
                 <div className="flex justify-between items-center mb-2 text-base">
                   <span className="text-gray-300">Servis haqi:</span>
                   <span className="font-semibold text-orange-300">
-                    {feePercent.toFixed(1)}% / {formatPrice(feeAmount)}
+                    {effectiveFeePercent.toFixed(1)}% / {formatPrice(feeAmount)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-2xl font-black">
@@ -1376,7 +1432,8 @@ export default function POSTerminal() {
               </button>
             </div>
 
-            <div className="order-1 xl:order-2 xl:col-span-6 bg-white rounded-2xl shadow-2xl p-3 sm:p-4 lg:p-6 flex flex-col xl:overflow-hidden">
+            {/* ── PRODUCTS PANEL ── hidden on mobile when cart tab active */}
+            <div className={`xl:col-span-6 bg-white rounded-2xl shadow-2xl p-3 sm:p-4 lg:p-6 flex-col overflow-hidden ${mobileTab === "products" ? "flex" : "hidden xl:flex"}`}>
               <div className="mb-4 p-4 sm:p-5 rounded-2xl border-2 bg-slate-50">
                 <p className="text-sm text-slate-500 font-semibold">
                   Stol ma'lumotlari
@@ -1401,7 +1458,7 @@ export default function POSTerminal() {
                     QQS: {qqsPercent.toFixed(1)}% / {formatPrice(qqsAmount)}
                   </p>
                   <p className="sm:col-span-2">
-                    Servis haqi: {feePercent.toFixed(1)}% /{" "}
+                    Servis haqi: {effectiveFeePercent.toFixed(1)}% /{" "}
                     {formatPrice(feeAmount)}
                   </p>
                 </div>
@@ -1464,7 +1521,7 @@ export default function POSTerminal() {
                   ))}
               </div>
 
-              <div className="xl:flex-1 xl:overflow-y-auto">
+              <div className="flex-1 overflow-y-auto">
                 {selectedCategory === null ? (
                   <div className="text-center py-16 text-gray-400">
                     Avval kategoriya tanlang
@@ -1478,30 +1535,51 @@ export default function POSTerminal() {
                     className="grid gap-2 pb-3"
                     style={{
                       gridTemplateColumns:
-                        "repeat(auto-fill, minmax(135px, 1fr))",
+                        "repeat(auto-fill, minmax(120px, 1fr))",
                     }}
                   >
-                    {filteredProducts.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => addToCart(p)}
-                        className="w-full p-3 border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition-all text-left active:scale-[0.99] min-h-[96px] sm:min-h-[110px]"
-                      >
-                        <div className="pr-1">
-                          <div className="font-bold text-sm text-gray-900 line-clamp-2">
-                            {p.title}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {formatPrice(p.price)}
-                          </div>
-                        </div>
-                      </button>
-                    ))}
+                    {filteredProducts.map((p) => {
+                      const cartQty = cart.find((i) => i.product_id === p.id)?.quantity || 0;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => addToCart(p)}
+                          className="w-full p-3 border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 active:bg-orange-100 transition-all text-left active:scale-[0.97] min-h-[90px] relative"
+                        >
+                          <div className="font-bold text-sm text-gray-900 line-clamp-2 leading-tight">{p.title}</div>
+                          <div className="text-xs text-gray-500 mt-1">{formatPrice(p.price)}</div>
+                          {cartQty > 0 && (
+                            <span className="absolute top-1.5 right-1.5 bg-orange-500 text-white text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">{cartQty}</span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </div>
           </div>
+        </div>
+
+        {/* ── Mobile bottom tab bar (restaurant + table) ── */}
+        <div className="xl:hidden shrink-0 bg-slate-900 border-t border-slate-700 grid grid-cols-2">
+          <button
+            onClick={() => setMobileTab("products")}
+            className={`py-4 flex flex-col items-center gap-1 text-xs font-bold transition-colors ${mobileTab === "products" ? "text-orange-400 bg-slate-800" : "text-slate-400"}`}
+          >
+            <Search className="size-5" />
+            Mahsulotlar
+          </button>
+          <button
+            onClick={() => setMobileTab("cart")}
+            className={`py-4 flex flex-col items-center gap-1 text-xs font-bold transition-colors relative ${mobileTab === "cart" ? "text-green-400 bg-slate-800" : "text-slate-400"}`}
+          >
+            <ShoppingCart className="size-5" />
+            Savat
+            {itemCount > 0 && (
+              <span className="absolute top-2 right-[calc(50%-20px)] bg-orange-500 text-white text-[10px] font-black rounded-full w-4 h-4 flex items-center justify-center">{itemCount}</span>
+            )}
+          </button>
         </div>
 
         {showLogoutConfirm && (
@@ -1554,18 +1632,19 @@ export default function POSTerminal() {
 
   return (
     <div
-      className="min-h-screen flex flex-col xl:h-screen"
+      className="h-[100dvh] flex flex-col overflow-hidden"
       style={{
         background:
           "linear-gradient(to bottom right, rgb(15, 23, 42), rgb(30, 41, 59), rgb(15, 23, 42))",
       }}
     >
-      <div className="flex-1 max-w-[2000px] mx-auto p-3 sm:p-4 lg:p-6 w-full xl:overflow-hidden">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6 xl:h-full">
-          <div className="xl:col-span-2 bg-white rounded-2xl shadow-2xl p-3 sm:p-4 lg:p-6 flex flex-col xl:overflow-hidden">
-            <div className="mb-4 flex flex-col sm:flex-row gap-3">
+      <div className="flex-1 max-w-[2000px] mx-auto p-2 sm:p-3 lg:p-6 w-full overflow-hidden">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-3 lg:gap-6 h-full">
+          {/* ── PRODUCTS PANEL (market) ── */}
+          <div className={`xl:col-span-2 bg-white rounded-2xl shadow-2xl p-3 sm:p-4 lg:p-6 flex-col overflow-hidden ${mobileTab === "products" ? "flex" : "hidden xl:flex"}`}>
+            <div className="mb-3 flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-6 text-gray-400" />
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 size-5 text-gray-400" />
                 <input
                   ref={searchInputRef}
                   type="text"
@@ -1573,7 +1652,7 @@ export default function POSTerminal() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   onFocus={() => setShowKeyboard(true)}
-                  className="w-full pl-14 pr-16 py-4 sm:py-5 text-base sm:text-xl text-black border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 focus:outline-none font-medium"
+                  className="w-full pl-12 pr-14 py-3.5 sm:py-4 text-sm sm:text-lg text-black border-2 border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-500 focus:border-blue-500 focus:outline-none font-medium"
                   autoComplete="off"
                 />
                 {searchQuery && (
@@ -1587,10 +1666,10 @@ export default function POSTerminal() {
               </div>
 
               {/* Printer status indicator */}
-              <div className="grid grid-cols-3 sm:flex gap-3">
+              <div className="grid grid-cols-3 sm:flex gap-2">
                 <button
                   onClick={checkPrinterStatus}
-                  className={`px-4 py-4 sm:py-5 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all ${
+                  className={`px-3 py-3.5 sm:py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg transition-all ${
                     printerStatus === "connected"
                       ? "bg-green-600 hover:bg-green-700 text-white"
                       : printerStatus === "disconnected"
@@ -1608,14 +1687,14 @@ export default function POSTerminal() {
 
                 <Link
                   to="/staff/orders"
-                  className="px-4 sm:px-6 py-4 sm:py-5 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 sm:gap-3 shadow-lg active:scale-95 transition-all"
+                  className="px-3 sm:px-5 py-3.5 sm:py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 sm:gap-3 shadow-lg active:scale-95 transition-all"
                 >
                   <Receipt className="size-5 sm:size-6" />
                   <span className="hidden sm:inline">Buyurtmalar</span>
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="px-4 sm:px-6 py-4 sm:py-5 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 sm:gap-3 shadow-lg active:scale-95 transition-all"
+                  className="px-3 sm:px-5 py-3.5 sm:py-4 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold flex items-center justify-center gap-2 sm:gap-3 shadow-lg active:scale-95 transition-all"
                 >
                   <LogOut className="size-5 sm:size-6" />
                   <span className="hidden sm:inline">Chiqish</span>
@@ -1623,14 +1702,14 @@ export default function POSTerminal() {
               </div>
             </div>
 
-            <div className="mb-4 flex items-center gap-3 overflow-x-auto pb-2">
+            <div className="mb-3 flex items-center gap-2 overflow-x-auto pb-2">
               {categories
                 .filter((c) => c.is_active)
                 .map((cat) => (
                   <button
                     key={cat.id}
                     onClick={() => setSelectedCategory(cat.id)}
-                    className={`px-6 py-3 rounded-xl font-bold whitespace-nowrap transition-all ${
+                    className={`px-3 py-2 sm:px-4 sm:py-2.5 rounded-lg sm:rounded-xl text-xs sm:text-base font-bold whitespace-nowrap transition-all ${
                       selectedCategory === cat.id
                         ? "bg-blue-600 text-white shadow-lg"
                         : "bg-gray-100 text-gray-700 hover:bg-gray-200"
@@ -1647,7 +1726,7 @@ export default function POSTerminal() {
                 ))}
             </div>
 
-            <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <p className="text-sm sm:text-base font-semibold text-gray-700">
                 {selectedCategory === null
                   ? "Kategoriya tanlanmagan"
@@ -1656,26 +1735,26 @@ export default function POSTerminal() {
               <div className="flex gap-2 bg-gray-100 p-2 rounded-xl">
                 <button
                   onClick={() => setViewMode("grid")}
-                  className={`p-3 rounded-lg transition-all ${viewMode === "grid" ? "bg-white shadow-md text-black" : "text-gray-300"}`}
+                  className={`p-2.5 rounded-lg transition-all ${viewMode === "grid" ? "bg-white shadow-md text-black" : "text-gray-300"}`}
                 >
                   <Grid3x3 className="size-5" />
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  className={`p-3 rounded-lg transition-all ${viewMode === "list" ? "bg-white shadow-md text-black" : "text-gray-300"}`}
+                  className={`p-2.5 rounded-lg transition-all ${viewMode === "list" ? "bg-white shadow-md text-black" : "text-gray-300"}`}
                 >
                   <List className="size-5" />
                 </button>
               </div>
             </div>
 
-            <div className="xl:flex-1 xl:overflow-y-auto">
+            <div className="flex-1 overflow-y-auto">
               {selectedCategory === null ? (
-                <div className="text-center py-32 text-gray-400 text-xl">
+                <div className="text-center py-16 text-gray-400 text-xl">
                   Avval kategoriya tanlang
                 </div>
               ) : !filteredProducts.length ? (
-                <div className="text-center py-32 text-gray-400 text-xl">
+                <div className="text-center py-16 text-gray-400 text-xl">
                   Mahsulot topilmadi
                 </div>
               ) : viewMode === "grid" ? (
@@ -1683,18 +1762,23 @@ export default function POSTerminal() {
                   className="grid gap-2 pb-4"
                   style={{
                     gridTemplateColumns:
-                      "repeat(auto-fill, minmax(150px, 1fr))",
+                      "repeat(auto-fill, minmax(120px, 1fr))",
                   }}
                 >
-                  {filteredProducts.map((p) => (
+                  {filteredProducts.map((p) => {
+                    const cartQty = cart.find((i) => i.product_id === p.id)?.quantity || 0;
+                    return (
                     <button
                       key={p.id}
                       onClick={() => addToCart(p)}
-                      className="border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left group active:scale-95 overflow-hidden"
+                      className="border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left group active:scale-95 overflow-hidden relative"
                     >
+                      {cartQty > 0 && (
+                        <span className="absolute top-1.5 right-1.5 z-10 bg-orange-500 text-white text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">{cartQty}</span>
+                      )}
                       {/* Product Image */}
                       {p.image_url && !brokenImageIds[p.id] ? (
-                        <div className="w-full h-24 overflow-hidden bg-gray-50">
+                        <div className="w-full h-20 sm:h-24 overflow-hidden bg-gray-50">
                           <img
                             src={resolveProductImageUrl(p.image_url)}
                             alt={p.title}
@@ -1708,21 +1792,21 @@ export default function POSTerminal() {
                           />
                         </div>
                       ) : (
-                        <div className="w-full h-24 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
-                          <UtensilsCrossed className="size-8 text-amber-500/80" />
+                        <div className="w-full h-20 sm:h-24 bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center">
+                          <UtensilsCrossed className="size-7 sm:size-8 text-amber-500/80" />
                         </div>
                       )}
 
-                      <div className="p-3">
-                        <div className="font-bold text-sm mb-2 line-clamp-2 min-h-10 text-gray-800">
+                      <div className="p-2 sm:p-3">
+                        <div className="font-bold text-[13px] sm:text-sm mb-1 line-clamp-2 min-h-9 sm:min-h-10 text-gray-800">
                           {p.title}
                         </div>
-                        <div className="text-lg font-black text-green-600 mb-2">
+                        <div className="text-sm sm:text-lg font-black text-green-600 mb-1">
                           {formatPrice(p.price)}
                         </div>
                         {p.quantity !== -1 && (
                           <div
-                            className={`text-[11px] font-medium ${p.quantity === 0 ? "text-red-600" : "text-gray-600"}`}
+                            className={`text-[10px] sm:text-[11px] font-medium ${p.quantity === 0 ? "text-red-600" : "text-gray-600"}`}
                           >
                             {p.quantity === 0
                               ? "Tugagan"
@@ -1739,7 +1823,7 @@ export default function POSTerminal() {
                     <button
                       key={p.id}
                       onClick={() => addToCart(p)}
-                      className="w-full p-4 border-2 border-gray-200 rounded-2xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left flex flex-col sm:flex-row sm:items-center gap-4 group active:scale-[0.98]"
+                      className="w-full p-3 border-2 border-gray-200 rounded-2xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left flex flex-col sm:flex-row sm:items-center gap-3 group active:scale-[0.98]"
                     >
                       {/* Product Image - Compact */}
                       {p.image_url && !brokenImageIds[p.id] ? (
@@ -1763,7 +1847,7 @@ export default function POSTerminal() {
                       )}
 
                       <div className="flex-1">
-                        <div className="font-bold text-lg mb-1 text-gray-800">
+                        <div className="font-bold text-base sm:text-lg mb-1 text-gray-800">
                           {p.title}
                         </div>
                         {p.description && (
@@ -1793,14 +1877,15 @@ export default function POSTerminal() {
             </div>
           </div>
 
+          {/* ── CART PANEL (market) ── */}
           <div
-            className="rounded-2xl shadow-2xl p-4 sm:p-6 flex flex-col text-white xl:overflow-hidden"
+            className={`rounded-2xl shadow-2xl p-4 sm:p-5 flex-col text-white xl:overflow-hidden ${mobileTab === "cart" ? "flex" : "hidden xl:flex"}`}
             style={{
               background:
                 "linear-gradient(to bottom right, rgb(30, 41, 59), rgb(15, 23, 42))",
             }}
           >
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <h2 className="text-xl sm:text-2xl font-black flex items-center gap-3">
                 <ShoppingCart className="size-6 sm:size-7" />
                 Savat ({itemCount})
@@ -1839,7 +1924,7 @@ export default function POSTerminal() {
               </div>
             )}
 
-            <div className="mb-4 space-y-3 xl:flex-1 xl:overflow-y-auto max-h-[40vh] overflow-y-auto xl:max-h-none">
+            <div className="mb-3 space-y-2.5 xl:flex-1 xl:overflow-y-auto max-h-[40vh] overflow-y-auto xl:max-h-none">
               {!cart.length ? (
                 <div className="text-center py-16 text-gray-400">
                   <ShoppingCart className="size-16 mx-auto mb-4 opacity-20" />
@@ -1849,7 +1934,7 @@ export default function POSTerminal() {
                 cart.map((item) => (
                   <div
                     key={item.product_id}
-                    className="bg-slate-700/50 rounded-xl p-4"
+                    className="bg-slate-700/50 rounded-xl p-3"
                   >
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1 font-bold text-base pr-3">
@@ -1866,7 +1951,7 @@ export default function POSTerminal() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => updateQuantity(item.product_id, -1)}
-                          className="p-3 rounded-xl bg-slate-600 hover:bg-slate-500 active:scale-95"
+                          className="p-2.5 rounded-xl bg-slate-600 hover:bg-slate-500 active:scale-95"
                         >
                           <Minus className="size-5" />
                         </button>
@@ -1880,11 +1965,11 @@ export default function POSTerminal() {
                               parseInt(e.target.value) || 1,
                             )
                           }
-                          className="w-16 text-center font-black text-xl border-2 border-slate-500 rounded-xl px-2 py-2 bg-slate-600 text-white"
+                          className="w-14 text-center font-black text-lg border-2 border-slate-500 rounded-xl px-2 py-2 bg-slate-600 text-white"
                         />
                         <button
                           onClick={() => updateQuantity(item.product_id, 1)}
-                          className="p-3 rounded-xl bg-slate-600 hover:bg-slate-500 active:scale-95"
+                          className="p-2.5 rounded-xl bg-slate-600 hover:bg-slate-500 active:scale-95"
                         >
                           <Plus className="size-5" />
                         </button>
@@ -1901,6 +1986,23 @@ export default function POSTerminal() {
             {cart.length > 0 && (
               <>
                 <div className="border-t-2 border-slate-600 pt-4 mb-4">
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    <span className="rounded-full bg-slate-600/80 px-3 py-1 text-xs font-bold text-slate-100">
+                      {paymentMethod === "cash" ? "Naqd" : "Karta"}
+                    </span>
+                    <span className="rounded-full bg-slate-600/80 px-3 py-1 text-xs font-bold text-slate-100">
+                      {orderType === "dine_in"
+                        ? "Zalda"
+                        : orderType === "takeaway"
+                          ? "Olib ketish"
+                          : "Yetkazish"}
+                    </span>
+                    {serviceFeeDisabled && (
+                      <span className="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-300">
+                        Servis haqi olinmaydi
+                      </span>
+                    )}
+                  </div>
                   <div className="flex justify-between items-center mb-2 text-lg">
                     <span className="text-gray-300">Mahsulotlar:</span>
                     <span className="font-bold">{itemCount} ta</span>
@@ -1920,7 +2022,7 @@ export default function POSTerminal() {
                   <div className="flex justify-between items-center mb-2 text-base">
                     <span className="text-gray-300">Servis haqi:</span>
                     <span className="font-semibold text-orange-300">
-                      {feePercent.toFixed(1)}% / {formatPrice(feeAmount)}
+                      {effectiveFeePercent.toFixed(1)}% / {formatPrice(feeAmount)}
                     </span>
                   </div>
                   <div className="flex justify-between items-center text-3xl font-black">
@@ -1945,11 +2047,11 @@ export default function POSTerminal() {
                     ))}
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                    {(["dine_in", "takeaway", "delivery"] as const).map((t) => (
-                      <button
-                        key={t}
-                        onClick={() => setOrderType(t)}
-                        className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${
+                      {(["dine_in", "takeaway", "delivery"] as const).map((t) => (
+                        <button
+                          key={t}
+                          onClick={() => setOrderType(t)}
+                          className={`flex-1 py-2 rounded-xl font-bold text-xs transition-all ${
                           orderType === t
                             ? "bg-orange-600 text-white"
                             : "bg-slate-600 text-gray-300 hover:bg-slate-500"
@@ -1976,6 +2078,27 @@ export default function POSTerminal() {
             )}
           </div>
         </div>
+      </div>
+
+      {/* ── Mobile bottom tab bar (market / restaurant without table) ── */}
+      <div className="xl:hidden shrink-0 bg-slate-900 border-t border-slate-700 grid grid-cols-2">
+        <button
+          onClick={() => setMobileTab("products")}
+          className={`py-4 flex flex-col items-center gap-1 text-xs font-bold transition-colors ${mobileTab === "products" ? "text-orange-400 bg-slate-800" : "text-slate-400"}`}
+        >
+          <Search className="size-5" />
+          Mahsulotlar
+        </button>
+        <button
+          onClick={() => setMobileTab("cart")}
+          className={`py-4 flex flex-col items-center gap-1 text-xs font-bold transition-colors relative ${mobileTab === "cart" ? "text-green-400 bg-slate-800" : "text-slate-400"}`}
+        >
+          <ShoppingCart className="size-5" />
+          Savat
+          {itemCount > 0 && (
+            <span className="absolute top-2 right-[calc(50%-20px)] bg-orange-500 text-white text-[10px] font-black rounded-full w-4 h-4 flex items-center justify-center">{itemCount}</span>
+          )}
+        </button>
       </div>
 
       {showTableSelect && isRestaurant && (

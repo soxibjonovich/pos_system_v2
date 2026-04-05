@@ -21,7 +21,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useI18n } from "@/i18n/i18nContext"
 import { AuthGuard } from "@/middlewares/AuthGuard"
 import { createFileRoute } from "@tanstack/react-router"
-import { Minus, Plus, Receipt, RefreshCw, Search, Trash2, X } from "lucide-react"
+import { Minus, Plus, Receipt, RefreshCw, Search, X } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 
 const ORDERS_API = `${API_URL}/api/admin/orders`
@@ -277,24 +277,6 @@ function RouteComponent() {
     }
   }
 
-  const deleteOrder = async (orderId: number) => {
-    const order = orders.find((o) => o.id === orderId)
-    const confirmMsg = t("adminOrders.deleteOrderConfirm").replace("{{id}}", String(orderId))
-    if (!window.confirm(confirmMsg)) return
-    try {
-      const res = await fetch(`${ORDERS_API}/${orderId}`, {
-        method: "DELETE",
-        headers: authHeaders,
-      })
-      if (!res.ok) throw new Error("Failed")
-      await fetchOrders()
-      setDetailModal(false)
-      setEditModal(false)
-    } catch {
-      alert("Failed to delete order")
-    }
-  }
-
   const getUserName = (userId: number) =>
     users.find((u) => u.id === userId)?.full_name || `User #${userId}`
 
@@ -528,14 +510,6 @@ function RouteComponent() {
                           {t("adminOrders.edit")}
                         </Button>
                       )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => deleteOrder(order.id)}
-                        className="border-red-300 text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -660,18 +634,6 @@ function RouteComponent() {
                 </div>
               )}
 
-              {/* Delete */}
-              <div className="pt-2 flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => deleteOrder(selectedOrder.id)}
-                  className="border-red-300 text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="size-4 mr-2" />
-                  {t("adminOrders.deleteOrder")}
-                </Button>
-              </div>
             </div>
           )}
         </DialogContent>
@@ -778,32 +740,21 @@ function RouteComponent() {
               </div>
 
               {/* Actions */}
-              <div className="flex justify-between pt-2 border-t">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => deleteOrder(editingOrder.id)}
-                  className="border-red-300 text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="size-4 mr-2" />
-                  {t("adminOrders.deleteOrder")}
+              <div className="flex justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={() => setEditModal(false)} disabled={saving}>
+                  <X className="size-4 mr-2" />
+                  Cancel
                 </Button>
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setEditModal(false)} disabled={saving}>
-                    <X className="size-4 mr-2" />
-                    Cancel
-                  </Button>
-                  <Button onClick={saveItemChanges} disabled={saving}>
-                    {saving ? (
-                      <>
-                        <RefreshCw className="size-4 mr-2 animate-spin" />
-                        {t("adminOrders.saving")}
-                      </>
-                    ) : (
-                      "Save"
-                    )}
-                  </Button>
-                </div>
+                <Button onClick={saveItemChanges} disabled={saving}>
+                  {saving ? (
+                    <>
+                      <RefreshCw className="size-4 mr-2 animate-spin" />
+                      {t("adminOrders.saving")}
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </Button>
               </div>
             </div>
           )}

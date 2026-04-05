@@ -1062,9 +1062,9 @@ function OrdersPage() {
 
         {/* Edit Modal */}
         <Dialog open={editModal} onOpenChange={setEditModal}>
-          <DialogContent className="sm:max-w-[800px] bg-white text-slate-900 border border-slate-200">
-            <DialogHeader>
-              <DialogTitle className="text-2xl">
+          <DialogContent className="w-[calc(100vw-1rem)] max-w-[800px] max-h-[85vh] overflow-y-auto bg-white text-slate-900 border border-slate-200">
+            <DialogHeader className="pr-8">
+              <DialogTitle className="text-lg sm:text-2xl">
                 Tahrirlash #{editingOrder?.id}
               </DialogTitle>
               <DialogDescription>

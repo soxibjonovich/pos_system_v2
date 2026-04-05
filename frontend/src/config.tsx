@@ -1,5 +1,5 @@
-// export const API_URL = "http://localhost";
-export const API_URL = "http://192.168.1.50";
+export const API_URL = "http://localhost";
+// export const API_URL = "http://192.168.1.50";
 
 export const api = {
   auth: {

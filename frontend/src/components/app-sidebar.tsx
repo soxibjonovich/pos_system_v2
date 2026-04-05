@@ -43,6 +43,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       ],
     },
     { title: t("sidebar.orders"), url: "/admin/orders" },
+    { title: t("sidebar.terminal"), url: "/admin/terminal" },
     { title: t("sidebar.tables"), url: "/admin/tables" },
     { title: t("sidebar.printers"), url: "/admin/printers" },
     { title: t("sidebar.reports"), url: "/admin/reports" },
