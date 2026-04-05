@@ -1563,17 +1563,35 @@ export default function POSTerminal() {
                     {filteredProducts.map((p) => {
                       const cartQty = cart.find((i) => i.product_id === p.id)?.quantity || 0;
                       return (
-                        <button
+                        <div
                           key={p.id}
-                          onClick={() => addToCart(p)}
-                          className="w-full p-3 border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 active:bg-orange-100 transition-all text-left active:scale-[0.97] min-h-[90px] relative"
+                          className={`border-2 rounded-xl transition-all flex flex-col min-h-[90px] overflow-hidden ${cartQty > 0 ? "border-orange-400 bg-orange-50" : "border-gray-200 bg-white"}`}
                         >
-                          <div className="font-bold text-sm text-gray-900 line-clamp-2 leading-tight">{p.title}</div>
-                          <div className="text-xs text-gray-500 mt-1">{formatPrice(p.price)}</div>
-                          {cartQty > 0 && (
-                            <span className="absolute top-1.5 right-1.5 bg-orange-500 text-white text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">{cartQty}</span>
-                          )}
-                        </button>
+                          <button
+                            onClick={() => addToCart(p)}
+                            className="flex-1 p-3 text-left w-full active:bg-orange-100"
+                          >
+                            <div className="font-bold text-sm text-gray-900 line-clamp-2 leading-tight">{p.title}</div>
+                            <div className="text-xs text-gray-500 mt-1">{formatPrice(p.price)}</div>
+                          </button>
+                          {cartQty > 0 ? (
+                            <div className="flex items-center justify-between px-2 pb-2 gap-1">
+                              <button
+                                onClick={() => updateQuantity(p.id, -1)}
+                                className="w-8 h-8 rounded-lg bg-orange-200 hover:bg-orange-300 text-orange-900 flex items-center justify-center font-black text-lg active:scale-95"
+                              >
+                                <Minus className="size-3.5" />
+                              </button>
+                              <span className="font-black text-orange-700 text-base">{cartQty}</span>
+                              <button
+                                onClick={() => addToCart(p)}
+                                className="w-8 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center active:scale-95"
+                              >
+                                <Plus className="size-3.5" />
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
                       );
                     })}
                   </div>
@@ -1790,15 +1808,12 @@ export default function POSTerminal() {
                   {filteredProducts.map((p) => {
                     const cartQty = cart.find((i) => i.product_id === p.id)?.quantity || 0;
                     return (
-                    <button
+                    <div
                       key={p.id}
-                      onClick={() => addToCart(p)}
-                      className="border-2 border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left group active:scale-95 overflow-hidden relative"
+                      className={`border-2 rounded-xl transition-all text-left overflow-hidden flex flex-col ${cartQty > 0 ? "border-orange-400 bg-orange-50" : "border-gray-200 bg-white"}`}
                     >
-                      {cartQty > 0 && (
-                        <span className="absolute top-1.5 right-1.5 z-10 bg-orange-500 text-white text-[10px] font-black rounded-full w-5 h-5 flex items-center justify-center">{cartQty}</span>
-                      )}
                       {/* Product Image */}
+                      <button onClick={() => addToCart(p)} className="w-full">
                       {p.image_url && !brokenImageIds[p.id] ? (
                         <div className="w-full h-20 sm:h-24 overflow-hidden bg-gray-50">
                           <img
@@ -1836,64 +1851,70 @@ export default function POSTerminal() {
                           </div>
                         )}
                       </div>
-                    </button>
+                      </button>
+                      {cartQty > 0 && (
+                        <div className="flex items-center justify-between px-2 pb-2 gap-1">
+                          <button onClick={() => updateQuantity(p.id, -1)} className="w-8 h-8 rounded-lg bg-orange-200 hover:bg-orange-300 text-orange-900 flex items-center justify-center active:scale-95">
+                            <Minus className="size-3.5" />
+                          </button>
+                          <span className="font-black text-orange-700 text-base">{cartQty}</span>
+                          <button onClick={() => addToCart(p)} className="w-8 h-8 rounded-lg bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center active:scale-95">
+                            <Plus className="size-3.5" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )})}
                 </div>
               ) : (
                 <div className="space-y-3 pb-4">
-                  {filteredProducts.map((p) => (
-                    <button
+                  {filteredProducts.map((p) => {
+                    const cartQty = cart.find((i) => i.product_id === p.id)?.quantity || 0;
+                    return (
+                    <div
                       key={p.id}
-                      onClick={() => addToCart(p)}
-                      className="w-full p-3 border-2 border-gray-200 rounded-2xl hover:border-orange-400 hover:bg-orange-50 hover:shadow-xl transition-all text-left flex flex-col sm:flex-row sm:items-center gap-3 group active:scale-[0.98]"
+                      className={`border-2 rounded-2xl transition-all flex flex-row items-center gap-3 overflow-hidden ${cartQty > 0 ? "border-orange-400 bg-orange-50" : "border-gray-200 bg-white"}`}
                     >
-                      {/* Product Image - Compact */}
-                      {p.image_url && !brokenImageIds[p.id] ? (
-                        <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
-                          <img
-                            src={resolveProductImageUrl(p.image_url)}
-                            alt={p.title}
-                            className="w-full h-full object-cover"
-                            onError={() =>
-                              setBrokenImageIds((prev) => ({
-                                ...prev,
-                                [p.id]: true,
-                              }))
-                            }
-                          />
-                        </div>
-                      ) : (
-                        <div className="w-20 h-20 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0">
-                          <UtensilsCrossed className="size-7 text-amber-500/80" />
-                        </div>
-                      )}
-
-                      <div className="flex-1">
-                        <div className="font-bold text-base sm:text-lg mb-1 text-gray-800">
-                          {p.title}
-                        </div>
-                        {p.description && (
-                          <div className="text-sm text-gray-600 line-clamp-1">
-                            {p.description}
+                      {/* Tappable image + info */}
+                      <button onClick={() => addToCart(p)} className="flex items-center gap-3 flex-1 p-3 text-left min-w-0">
+                        {p.image_url && !brokenImageIds[p.id] ? (
+                          <div className="w-14 h-14 rounded-lg overflow-hidden bg-gray-50 flex-shrink-0">
+                            <img
+                              src={resolveProductImageUrl(p.image_url)}
+                              alt={p.title}
+                              className="w-full h-full object-cover"
+                              onError={() => setBrokenImageIds((prev) => ({ ...prev, [p.id]: true }))}
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center flex-shrink-0">
+                            <UtensilsCrossed className="size-6 text-amber-500/80" />
                           </div>
                         )}
-                      </div>
-                      <div className="w-full sm:w-auto flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
-                        {p.quantity !== -1 && (
-                          <span
-                            className={`text-sm font-medium ${p.quantity === 0 ? "text-red-600" : "text-gray-600"}`}
-                          >
-                            {p.quantity === 0
-                              ? "Tugagan"
-                              : `Ombor: ${p.quantity}`}
-                          </span>
-                        )}
-                        <span className="text-xl sm:text-2xl font-black text-green-600 sm:min-w-[140px] sm:text-right">
-                          {formatPrice(p.price)}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-sm sm:text-base text-gray-800 line-clamp-2">{p.title}</div>
+                          <div className="font-black text-base text-green-600">{formatPrice(p.price)}</div>
+                          {p.quantity !== -1 && (
+                            <div className={`text-xs font-medium ${p.quantity === 0 ? "text-red-600" : "text-gray-500"}`}>
+                              {p.quantity === 0 ? "Tugagan" : `Ombor: ${p.quantity}`}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                      {cartQty > 0 && (
+                        <div className="flex items-center gap-2 px-3 pb-3 sm:pb-0 sm:pr-3">
+                          <button onClick={() => updateQuantity(p.id, -1)} className="w-9 h-9 rounded-lg bg-orange-200 hover:bg-orange-300 text-orange-900 flex items-center justify-center active:scale-95 shrink-0">
+                            <Minus className="size-4" />
+                          </button>
+                          <span className="font-black text-orange-700 text-lg w-8 text-center">{cartQty}</span>
+                          <button onClick={() => addToCart(p)} className="w-9 h-9 rounded-lg bg-orange-500 hover:bg-orange-600 text-white flex items-center justify-center active:scale-95 shrink-0">
+                            <Plus className="size-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
