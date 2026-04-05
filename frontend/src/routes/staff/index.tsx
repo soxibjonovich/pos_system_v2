@@ -1430,11 +1430,50 @@ export default function POSTerminal() {
                 <Check className="size-6" />
                 Buyurtmani tasdiqlash
               </button>
+
+              {/* Mobile-only action row under confirm button */}
+              <div className="xl:hidden mt-3 grid grid-cols-3 gap-2">
+                <button
+                  onClick={completeSelectedTableOrder}
+                  disabled={isCompletingOrder || !selectedTableOrder || !["pending", "ready"].includes(selectedTableOrder.status)}
+                  className="py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-xs"
+                >
+                  {isCompletingOrder ? "..." : "To'landi"}
+                </button>
+                <button
+                  onClick={() => setSelectedTable(null)}
+                  className="py-3 bg-slate-600 hover:bg-slate-700 text-white rounded-2xl font-bold text-xs"
+                >
+                  Stollar
+                </button>
+                <button
+                  onClick={handleLogout}
+                  className="py-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl font-bold text-xs"
+                >
+                  Chiqish
+                </button>
+              </div>
             </div>
 
             {/* ── PRODUCTS PANEL ── hidden on mobile when cart tab active */}
             <div className={`xl:col-span-6 bg-white rounded-2xl shadow-2xl p-3 sm:p-4 lg:p-6 flex-col overflow-hidden ${mobileTab === "products" ? "flex" : "hidden xl:flex"}`}>
-              <div className="mb-4 p-4 sm:p-5 rounded-2xl border-2 bg-slate-50">
+              {/* Compact mobile header — table name + back button */}
+              <div className="xl:hidden flex items-center justify-between mb-3 gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-xs text-slate-500 font-semibold shrink-0">Stol:</span>
+                  <span className="font-black text-slate-900 truncate">{selectedTable.number}{selectedTable.location ? ` (${selectedTable.location})` : ""}</span>
+                  {selectedTableOrder && <span className="text-xs text-emerald-600 font-bold shrink-0">{formatPrice(selectedTableOrder.total)}</span>}
+                </div>
+                <button
+                  onClick={() => setSelectedTable(null)}
+                  className="shrink-0 h-9 px-3 bg-slate-700 hover:bg-slate-800 text-white rounded-xl font-bold text-xs"
+                >
+                  ← Stollar
+                </button>
+              </div>
+
+              {/* Full info card — desktop only */}
+              <div className="hidden xl:block mb-4 p-4 sm:p-5 rounded-2xl border-2 bg-slate-50">
                 <p className="text-sm text-slate-500 font-semibold">
                   Stol ma'lumotlari
                 </p>
@@ -1442,36 +1481,19 @@ export default function POSTerminal() {
                   Stol: {selectedTable.number}
                 </p>
                 <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm sm:text-base text-slate-700">
-                  <p>
-                    Xodim: {CURRENT_USER_NAME}
-                  </p>
-                  <p>
-                    Davomiyligi: {formatElapsed(selectedTableOrder?.created_at)}
-                  </p>
-                  <p>
-                    Joriy buyurtma:{" "}
-                    {selectedTableOrder
-                      ? formatPrice(selectedTableOrder.total)
-                      : "-"}
-                  </p>
-                  <p>
-                    QQS: {qqsPercent.toFixed(1)}% / {formatPrice(qqsAmount)}
-                  </p>
-                  <p className="sm:col-span-2">
-                    Servis haqi: {effectiveFeePercent.toFixed(1)}% /{" "}
-                    {formatPrice(feeAmount)}
-                  </p>
+                  <p>Xodim: {CURRENT_USER_NAME}</p>
+                  <p>Davomiyligi: {formatElapsed(selectedTableOrder?.created_at)}</p>
+                  <p>Joriy buyurtma: {selectedTableOrder ? formatPrice(selectedTableOrder.total) : "-"}</p>
+                  <p>QQS: {qqsPercent.toFixed(1)}% / {formatPrice(qqsAmount)}</p>
+                  <p className="sm:col-span-2">Servis haqi: {effectiveFeePercent.toFixed(1)}% / {formatPrice(feeAmount)}</p>
                 </div>
               </div>
 
-              <div className="mb-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Action buttons — desktop only */}
+              <div className="hidden xl:grid mb-4 grid-cols-3 gap-3">
                 <button
                   onClick={completeSelectedTableOrder}
-                  disabled={
-                    isCompletingOrder ||
-                    !selectedTableOrder ||
-                    !["pending", "ready"].includes(selectedTableOrder.status)
-                  }
+                  disabled={isCompletingOrder || !selectedTableOrder || !["pending", "ready"].includes(selectedTableOrder.status)}
                   className="px-5 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold text-base sm:text-lg"
                 >
                   {isCompletingOrder ? "Yakunlanmoqda..." : "To'landi"}
