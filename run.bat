@@ -64,7 +64,7 @@ echo   - Admin API:    http://localhost:8001/docs
 echo   - Database API: http://localhost:8002/docs
 echo   - Auth API:     http://localhost:8003/docs
 echo   - Order API:    http://localhost:8004/docs
-echo   - RabbitMQ UI:  http://localhost:15672 (admin/pos_password_2024)
+echo   - RabbitMQ UI:  http://localhost:15672 (login from .env)
 echo.
 pause
 goto menu
